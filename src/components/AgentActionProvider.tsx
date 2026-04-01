@@ -35,8 +35,7 @@ export function AgentActionProvider({
       !existing ||
       existing.description !== action.description ||
       existing.disabled !== action.disabled ||
-      existing.disabledReason !== action.disabledReason ||
-      existing.parameters !== action.parameters
+      existing.disabledReason !== action.disabledReason
     ) {
       setVersion((v) => v + 1);
     }

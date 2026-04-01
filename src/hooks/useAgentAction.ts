@@ -43,6 +43,8 @@ export function useAgentAction({
 
   const onExecuteRef = useRef(onExecute);
   onExecuteRef.current = onExecute;
+  const parametersRef = useRef(parameters);
+  parametersRef.current = parameters;
 
   const stableOnExecute = useCallback((params: Record<string, unknown>) => {
     return onExecuteRef.current?.(params);
@@ -50,16 +52,18 @@ export function useAgentAction({
 
   const getExecutionTargets = useCallback((): ExecutionTarget[] => [], []);
 
+  const { registerAction, unregisterAction } = context;
+
   useEffect(() => {
-    context.registerAction({
+    registerAction({
       name,
       description,
-      parameters,
+      parameters: parametersRef.current,
       onExecute: onExecuteRef.current ? stableOnExecute : undefined,
       disabled,
       disabledReason,
       getExecutionTargets,
     });
-    return () => context.unregisterAction(name);
-  }, [name, description, parameters, disabled, disabledReason, stableOnExecute, getExecutionTargets, context]);
+    return () => unregisterAction(name);
+  }, [name, description, disabled, disabledReason, stableOnExecute, getExecutionTargets, registerAction, unregisterAction]);
 }

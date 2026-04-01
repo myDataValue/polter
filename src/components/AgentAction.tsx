@@ -36,10 +36,10 @@ export function AgentAction({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stepsRef = useRef<Map<string, { label: string; element: HTMLElement | null }>>(new Map());
 
-  // Keep onExecute in a ref so the registered action always calls the latest version
-  // without re-triggering the registration effect
   const onExecuteRef = useRef(onExecute);
   onExecuteRef.current = onExecute;
+  const parametersRef = useRef(parameters);
+  parametersRef.current = parameters;
 
   const stableOnExecute = useCallback((params: Record<string, unknown>) => {
     return onExecuteRef.current?.(params);
@@ -62,18 +62,20 @@ export function AgentAction({
     return el ? [{ label: description, element: el }] : [];
   }, [description]);
 
+  const { registerAction, unregisterAction } = context;
+
   useEffect(() => {
-    context.registerAction({
+    registerAction({
       name,
       description,
-      parameters,
+      parameters: parametersRef.current,
       onExecute: onExecuteRef.current ? stableOnExecute : undefined,
       disabled,
       disabledReason,
       getExecutionTargets,
     });
-    return () => context.unregisterAction(name);
-  }, [name, description, parameters, disabled, disabledReason, stableOnExecute, getExecutionTargets, context]);
+    return () => unregisterAction(name);
+  }, [name, description, disabled, disabledReason, stableOnExecute, getExecutionTargets, registerAction, unregisterAction]);
 
   const registerStep = useCallback(
     (id: string, data: { label: string; element: HTMLElement | null }) => {
