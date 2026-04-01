@@ -1,5 +1,4 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
-import type { ZodType } from 'zod';
 import type { ExecutionTarget } from '../core/types';
 import { AgentActionContext } from './AgentActionProvider';
 
@@ -13,7 +12,7 @@ export const AgentStepContext = createContext<AgentStepContextValue | null>(null
 interface AgentActionProps {
   name: string;
   description: string;
-  parameters?: ZodType;
+  parameters?: unknown;
   onExecute?: (params: Record<string, unknown>) => void | Promise<void>;
   disabled?: boolean;
   disabledReason?: string;

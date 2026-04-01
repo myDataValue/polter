@@ -1,12 +1,11 @@
-import type { ZodType } from 'zod';
 import type { RegisteredAction, ToolSchema, OpenAITool, AnthropicTool } from './types';
 
 type JsonSchema = Record<string, unknown>;
 
-export function zodToJsonSchema(schema: ZodType): JsonSchema {
+export function zodToJsonSchema(schema: unknown): JsonSchema {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const def = (schema as any)._def;
-  const description = schema.description;
+  const description = (schema as any).description;
 
   switch (def.typeName) {
     case 'ZodString': {
@@ -61,9 +60,8 @@ export function zodToJsonSchema(schema: ZodType): JsonSchema {
       const required: string[] = [];
 
       for (const [key, value] of Object.entries(shape)) {
-        const zodValue = value as ZodType;
-        properties[key] = zodToJsonSchema(zodValue);
-        if (!zodValue.isOptional()) {
+        properties[key] = zodToJsonSchema(value);
+        if (!(value as any).isOptional()) {
           required.push(key);
         }
       }
@@ -88,7 +86,7 @@ export function zodToJsonSchema(schema: ZodType): JsonSchema {
 
     case 'ZodUnion':
     case 'ZodDiscriminatedUnion': {
-      const options = def.options as ZodType[];
+      const options = def.options as unknown[];
       const result: JsonSchema = { anyOf: options.map((o) => zodToJsonSchema(o)) };
       if (description) result.description = description;
       return result;

@@ -1,5 +1,3 @@
-import type { ZodType } from 'zod';
-
 export type ExecutionMode = 'guided' | 'instant';
 
 export interface ExecutionTarget {
@@ -10,7 +8,7 @@ export interface ExecutionTarget {
 export interface RegisteredAction {
   name: string;
   description: string;
-  parameters?: ZodType;
+  parameters?: unknown;
   onExecute?: (params: Record<string, unknown>) => void | Promise<void>;
   disabled: boolean;
   disabledReason?: string;
