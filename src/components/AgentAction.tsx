@@ -17,7 +17,7 @@ interface AgentActionProps {
   onExecute?: (params: Record<string, unknown>) => void | Promise<void>;
   disabled?: boolean;
   disabledReason?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export function AgentAction({
@@ -91,6 +91,8 @@ export function AgentAction({
     () => ({ registerStep, unregisterStep }),
     [registerStep, unregisterStep],
   );
+
+  if (!children) return null;
 
   return (
     <AgentStepContext.Provider value={stepContextValue}>

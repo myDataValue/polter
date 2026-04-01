@@ -5,12 +5,10 @@ export { AgentStep } from './components/AgentStep';
 
 // Hooks
 export { useAgentActions } from './hooks/useAgentActions';
+export { useAgentCommandRouter } from './hooks/useAgentCommandRouter';
 
 // Schema utilities
 export { zodToJsonSchema, generateToolSchemas, toOpenAITools, toAnthropicTools } from './core/schemaGenerator';
-
-// Adapters
-export { createWebSocketAdapter, useWebSocketAdapter } from './adapters/websocket';
 
 // Types
 export type {
@@ -26,5 +24,3 @@ export type {
   AgentActionProviderProps,
   AgentActionContextValue,
 } from './core/types';
-
-export type { ToolCall, WebSocketAdapterOptions, WebSocketAdapter } from './adapters/websocket';
