@@ -3,10 +3,8 @@ import { useAgentActions } from '../hooks/useAgentActions';
 import type { AvailableAction, ExecutionResult } from '../core/types';
 
 interface AgentDevToolsProps {
-  /** Initial position. Default: bottom-right. */
-  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
-  /** Default collapsed state. */
-  defaultCollapsed?: boolean;
+  /** Default open state. */
+  defaultOpen?: boolean;
 }
 
 interface LogEntry {
@@ -19,27 +17,28 @@ interface LogEntry {
 
 let logId = 0;
 
-export function AgentDevTools({
-  position = 'bottom-right',
-  defaultCollapsed = true,
-}: AgentDevToolsProps) {
+const PANEL_WIDTH = 440;
+
+export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
   const { availableActions, execute, isExecuting, mode } = useAgentActions();
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const [open, setOpen] = useState(defaultOpen);
   const [log, setLog] = useState<LogEntry[]>([]);
+  const [expandedAction, setExpandedAction] = useState<string | null>(null);
   const [paramInputs, setParamInputs] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState('');
+  const [tab, setTab] = useState<'actions' | 'log'>('actions');
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [log]);
+    if (tab === 'log') logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [log, tab]);
 
   const handleExecute = useCallback(async (action: AvailableAction) => {
     const entryId = ++logId;
     let params: Record<string, unknown> | undefined;
 
     const raw = paramInputs[action.name];
-    if (raw) {
+    if (raw?.trim()) {
       try {
         params = JSON.parse(raw);
       } catch {
@@ -47,178 +46,339 @@ export function AgentDevTools({
           id: entryId, action: action.name, timestamp: Date.now(),
           result: { success: false, actionName: action.name, error: 'Invalid JSON params' },
         }]);
+        setTab('log');
         return;
       }
     }
 
     setLog(prev => [...prev, { id: entryId, action: action.name, params, timestamp: Date.now() }]);
+    setTab('log');
     const result = await execute(action.name, params);
     setLog(prev => prev.map(e => e.id === entryId ? { ...e, result } : e));
   }, [execute, paramInputs]);
-
-  const positionStyle = {
-    'bottom-right': { bottom: 12, right: 12 } as const,
-    'bottom-left': { bottom: 12, left: 12 } as const,
-    'top-right': { top: 12, right: 12 } as const,
-    'top-left': { top: 12, left: 12 } as const,
-  }[position];
 
   const filtered = filter
     ? availableActions.filter(a => a.name.includes(filter) || a.description.includes(filter))
     : availableActions;
 
-  if (collapsed) {
+  const visualActions = filtered.filter(a => a.name === 'search' || a.name === 'export_csv' || a.name === 'open_sisi_discount' || a.name === 'push_changes');
+  const programmaticActions = filtered.filter(a => !visualActions.includes(a));
+
+  // Toggle button
+  if (!open) {
     return (
       <button
-        onClick={() => setCollapsed(false)}
+        onClick={() => setOpen(true)}
         style={{
-          position: 'fixed', ...positionStyle, zIndex: 99990,
-          width: 40, height: 40, borderRadius: '50%',
-          background: '#3b82f6', color: 'white', border: 'none',
-          cursor: 'pointer', fontSize: 18, fontWeight: 700,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'fixed', bottom: 16, right: 16, zIndex: 99990,
+          height: 36, paddingLeft: 12, paddingRight: 14,
+          borderRadius: 18, border: 'none', cursor: 'pointer',
+          background: '#3b82f6', color: 'white',
+          fontSize: 13, fontWeight: 600, fontFamily: 'system-ui, sans-serif',
+          boxShadow: '0 2px 12px rgba(59,130,246,0.4)',
+          display: 'flex', alignItems: 'center', gap: 6,
         }}
-        title="Agent DevTools"
       >
-        A
+        <span style={{ fontSize: 16 }}>&#9881;</span>
+        Agent · {availableActions.length}
       </button>
     );
   }
 
   return (
-    <div style={{
-      position: 'fixed', ...positionStyle, zIndex: 99990,
-      width: 380, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-      background: '#0f172a', color: '#e2e8f0', borderRadius: 10,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.3)', fontSize: 12,
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={() => setOpen(false)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 99989,
+          background: 'rgba(0,0,0,0.15)',
+        }}
+      />
+
+      {/* Side panel */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 12px', background: '#1e293b', borderBottom: '1px solid #334155',
+        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 99990,
+        width: PANEL_WIDTH, display: 'flex', flexDirection: 'column',
+        background: '#0f172a', color: '#e2e8f0',
+        boxShadow: '-4px 0 24px rgba(0,0,0,0.3)',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: 13,
       }}>
-        <span style={{ fontWeight: 600, fontSize: 13 }}>
-          Agent DevTools
-          <span style={{ marginLeft: 8, fontSize: 10, color: '#94a3b8' }}>
-            {availableActions.length} actions | {mode}
-          </span>
-        </span>
-        <div style={{ display: 'flex', gap: 6 }}>
+        {/* Header */}
+        <div style={{
+          padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          borderBottom: '1px solid #1e293b',
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Agent DevTools</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+              {availableActions.length} actions registered · {mode} mode
+            </div>
+          </div>
+          <button onClick={() => setOpen(false)} style={closeBtnStyle}>✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid #1e293b' }}>
           <button
-            onClick={() => setLog([])}
-            style={headerBtnStyle}
-            title="Clear log"
+            onClick={() => setTab('actions')}
+            style={tabStyle(tab === 'actions')}
           >
-            Clear
+            Actions
           </button>
           <button
-            onClick={() => setCollapsed(true)}
-            style={headerBtnStyle}
-            title="Collapse"
+            onClick={() => setTab('log')}
+            style={tabStyle(tab === 'log')}
           >
-            _
+            Log {log.length > 0 && `(${log.length})`}
           </button>
         </div>
-      </div>
 
-      {/* Filter */}
-      <div style={{ padding: '6px 12px', borderBottom: '1px solid #334155' }}>
-        <input
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          placeholder="Filter actions..."
-          style={{
-            width: '100%', background: '#1e293b', border: '1px solid #475569',
-            borderRadius: 4, padding: '4px 8px', color: '#e2e8f0', fontSize: 11,
-            outline: 'none',
-          }}
-        />
-      </div>
-
-      {/* Actions list */}
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, maxHeight: 280 }}>
-        {filtered.map(action => (
-          <div key={action.name} style={{
-            padding: '6px 12px', borderBottom: '1px solid #1e293b',
-            opacity: action.disabled ? 0.5 : 1,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, color: '#93c5fd', fontSize: 11 }}>{action.name}</div>
-                <div style={{ color: '#94a3b8', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {action.disabled ? `[disabled] ${action.disabledReason ?? ''}` : action.description}
-                </div>
-              </div>
-              <button
-                onClick={() => handleExecute(action)}
-                disabled={action.disabled || isExecuting}
-                style={{
-                  padding: '3px 10px', borderRadius: 4, border: 'none', fontSize: 10,
-                  fontWeight: 600, cursor: action.disabled ? 'not-allowed' : 'pointer',
-                  background: action.disabled ? '#475569' : '#3b82f6', color: 'white',
-                  flexShrink: 0,
-                }}
-              >
-                {isExecuting ? '...' : 'Run'}
-              </button>
-            </div>
-            {action.hasParameters && (
+        {/* Content */}
+        {tab === 'actions' ? (
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            {/* Filter */}
+            <div style={{ padding: '12px 20px' }}>
               <input
-                value={paramInputs[action.name] ?? ''}
-                onChange={e => setParamInputs(prev => ({ ...prev, [action.name]: e.target.value }))}
-                placeholder='{"key": "value"}'
-                style={{
-                  width: '100%', marginTop: 4, background: '#1e293b', border: '1px solid #475569',
-                  borderRadius: 3, padding: '3px 6px', color: '#e2e8f0', fontSize: 10,
-                  outline: 'none',
-                }}
+                value={filter}
+                onChange={e => setFilter(e.target.value)}
+                placeholder="Filter actions..."
+                style={filterInputStyle}
               />
+            </div>
+
+            {/* Visual actions */}
+            {visualActions.length > 0 && (
+              <>
+                <SectionLabel>Visual (spotlight + click)</SectionLabel>
+                {visualActions.map(action => (
+                  <ActionRow
+                    key={action.name}
+                    action={action}
+                    expanded={expandedAction === action.name}
+                    onToggle={() => setExpandedAction(expandedAction === action.name ? null : action.name)}
+                    paramValue={paramInputs[action.name] ?? ''}
+                    onParamChange={v => setParamInputs(prev => ({ ...prev, [action.name]: v }))}
+                    onExecute={() => handleExecute(action)}
+                    isExecuting={isExecuting}
+                    badge="visual"
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Programmatic actions */}
+            {programmaticActions.length > 0 && (
+              <>
+                <SectionLabel>Programmatic</SectionLabel>
+                {programmaticActions.map(action => (
+                  <ActionRow
+                    key={action.name}
+                    action={action}
+                    expanded={expandedAction === action.name}
+                    onToggle={() => setExpandedAction(expandedAction === action.name ? null : action.name)}
+                    paramValue={paramInputs[action.name] ?? ''}
+                    onParamChange={v => setParamInputs(prev => ({ ...prev, [action.name]: v }))}
+                    onExecute={() => handleExecute(action)}
+                    isExecuting={isExecuting}
+                  />
+                ))}
+              </>
+            )}
+
+            {filtered.length === 0 && (
+              <div style={{ padding: 20, color: '#475569', textAlign: 'center' }}>
+                {filter ? 'No matching actions' : 'No actions registered'}
+              </div>
             )}
           </div>
-        ))}
-        {filtered.length === 0 && (
-          <div style={{ padding: 12, color: '#64748b', textAlign: 'center' }}>
-            {filter ? 'No matching actions' : 'No actions registered'}
+        ) : (
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            {log.length === 0 ? (
+              <div style={{ padding: 20, color: '#475569', textAlign: 'center' }}>
+                No executions yet. Run an action to see results here.
+              </div>
+            ) : (
+              <>
+                <div style={{ padding: '8px 20px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={() => setLog([])} style={clearBtnStyle}>Clear</button>
+                </div>
+                {log.map(entry => (
+                  <div key={entry.id} style={{
+                    padding: '10px 20px', borderBottom: '1px solid #1e293b',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <StatusDot result={entry.result} />
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{entry.action}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>
+                        {new Date(entry.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    {entry.params && (
+                      <pre style={logParamsStyle}>{JSON.stringify(entry.params, null, 2)}</pre>
+                    )}
+                    {entry.result && !entry.result.success && (
+                      <div style={{ marginTop: 4, fontSize: 12, color: '#f87171' }}>
+                        {entry.result.error}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div ref={logEndRef} />
+              </>
+            )}
           </div>
         )}
       </div>
+    </>
+  );
+}
 
-      {/* Log */}
-      {log.length > 0 && (
-        <div style={{
-          borderTop: '1px solid #334155', maxHeight: 150, overflowY: 'auto',
-          background: '#020617',
-        }}>
-          {log.map(entry => (
-            <div key={entry.id} style={{
-              padding: '4px 12px', fontSize: 10, borderBottom: '1px solid #0f172a',
-              color: entry.result
-                ? entry.result.success ? '#4ade80' : '#f87171'
-                : '#fbbf24',
-            }}>
-              <span style={{ color: '#64748b' }}>
-                {new Date(entry.timestamp).toLocaleTimeString()}
+function ActionRow({ action, expanded, onToggle, paramValue, onParamChange, onExecute, isExecuting, badge }: {
+  action: AvailableAction;
+  expanded: boolean;
+  onToggle: () => void;
+  paramValue: string;
+  onParamChange: (v: string) => void;
+  onExecute: () => void;
+  isExecuting: boolean;
+  badge?: string;
+}) {
+  return (
+    <div style={{
+      padding: '10px 20px', borderBottom: '1px solid #1e293b',
+      opacity: action.disabled ? 0.5 : 1,
+      cursor: 'pointer',
+    }}>
+      <div
+        onClick={onToggle}
+        style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+      >
+        <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>
+          {expanded ? '▼' : '▶'}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontWeight: 600, color: '#93c5fd' }}>{action.name}</span>
+            {badge && (
+              <span style={{
+                fontSize: 9, padding: '1px 5px', borderRadius: 3,
+                background: '#1e3a5f', color: '#60a5fa', fontWeight: 600,
+              }}>
+                {badge}
               </span>
-              {' '}{entry.action}
-              {entry.params && <span style={{ color: '#64748b' }}> {JSON.stringify(entry.params)}</span>}
-              {entry.result && (
-                <span>
-                  {' '}{entry.result.success ? 'OK' : `ERR: ${entry.result.error}`}
-                </span>
-              )}
-            </div>
-          ))}
-          <div ref={logEndRef} />
+            )}
+            {action.disabled && (
+              <span style={{
+                fontSize: 9, padding: '1px 5px', borderRadius: 3,
+                background: '#3f1d1d', color: '#f87171', fontWeight: 600,
+              }}>
+                disabled
+              </span>
+            )}
+          </div>
+          <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 2 }}>
+            {action.disabled && action.disabledReason
+              ? action.disabledReason
+              : action.description}
+          </div>
+        </div>
+        <button
+          onClick={e => { e.stopPropagation(); onExecute(); }}
+          disabled={action.disabled || isExecuting}
+          style={{
+            padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: 12,
+            fontWeight: 600, cursor: action.disabled ? 'not-allowed' : 'pointer',
+            background: action.disabled ? '#334155' : '#3b82f6', color: 'white',
+            flexShrink: 0,
+          }}
+        >
+          {isExecuting ? '···' : 'Run'}
+        </button>
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 10, marginLeft: 18 }}>
+          {action.hasParameters ? (
+            <>
+              <label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 4 }}>
+                Parameters (JSON)
+              </label>
+              <textarea
+                value={paramValue}
+                onChange={e => onParamChange(e.target.value)}
+                placeholder='{ "property_id": 12345 }'
+                rows={3}
+                style={textareaStyle}
+              />
+            </>
+          ) : (
+            <div style={{ fontSize: 12, color: '#475569' }}>No parameters</div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-const headerBtnStyle: React.CSSProperties = {
-  padding: '2px 8px', borderRadius: 3, border: '1px solid #475569',
-  background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: 10,
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      padding: '8px 20px', fontSize: 11, fontWeight: 700, color: '#475569',
+      textTransform: 'uppercase', letterSpacing: '0.05em',
+      background: '#0f172a', borderBottom: '1px solid #1e293b',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function StatusDot({ result }: { result?: ExecutionResult }) {
+  const color = !result ? '#fbbf24' : result.success ? '#4ade80' : '#f87171';
+  return (
+    <span style={{
+      width: 8, height: 8, borderRadius: '50%', background: color,
+      display: 'inline-block', flexShrink: 0,
+    }} />
+  );
+}
+
+const closeBtnStyle: React.CSSProperties = {
+  width: 28, height: 28, borderRadius: 6, border: '1px solid #334155',
+  background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: 14,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
+
+const tabStyle = (active: boolean): React.CSSProperties => ({
+  flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
+  fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+  background: active ? '#1e293b' : 'transparent',
+  color: active ? '#e2e8f0' : '#64748b',
+  borderBottom: active ? '2px solid #3b82f6' : '2px solid transparent',
+});
+
+const filterInputStyle: React.CSSProperties = {
+  width: '100%', background: '#1e293b', border: '1px solid #334155',
+  borderRadius: 6, padding: '8px 12px', color: '#e2e8f0', fontSize: 13,
+  outline: 'none', fontFamily: 'inherit',
+};
+
+const clearBtnStyle: React.CSSProperties = {
+  padding: '4px 10px', borderRadius: 4, border: '1px solid #334155',
+  background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: 11,
+  fontFamily: 'inherit',
+};
+
+const textareaStyle: React.CSSProperties = {
+  width: '100%', background: '#1e293b', border: '1px solid #334155',
+  borderRadius: 6, padding: '8px 10px', color: '#e2e8f0', fontSize: 12,
+  outline: 'none', resize: 'vertical',
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+};
+
+const logParamsStyle: React.CSSProperties = {
+  marginTop: 4, padding: '6px 8px', background: '#1e293b', borderRadius: 4,
+  fontSize: 11, color: '#94a3b8', overflow: 'auto', maxHeight: 80,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
 };
