@@ -2,6 +2,7 @@
 export { AgentActionProvider } from './components/AgentActionProvider';
 export { AgentAction } from './components/AgentAction';
 export { AgentStep } from './components/AgentStep';
+export { AgentTarget } from './components/AgentTarget';
 export { AgentDevTools } from './components/AgentDevTools';
 
 // Hooks
@@ -16,6 +17,7 @@ export { zodToJsonSchema, generateToolSchemas, toOpenAITools, toAnthropicTools }
 export type {
   ExecutionMode,
   ExecutionTarget,
+  AgentTargetEntry,
   RegisteredAction,
   ToolSchema,
   OpenAITool,

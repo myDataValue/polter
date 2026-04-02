@@ -3,6 +3,22 @@ export type ExecutionMode = 'guided' | 'instant';
 export interface ExecutionTarget {
   label: string;
   element: HTMLElement | null;
+  /** Resolve element from AgentTarget registry by matching this param's value. */
+  fromParam?: string;
+  /** Simulate typing the value of this param into the element. */
+  setParam?: string;
+  /** Set a value programmatically via onSetValue callback. */
+  setValue?: string;
+  onSetValue?: (value: unknown) => void;
+  /** Run a callback to prepare the DOM (e.g. scroll virtualized list) before resolving. */
+  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+}
+
+export interface AgentTargetEntry {
+  action: string;
+  param: string;
+  value: string;
+  element: HTMLElement;
 }
 
 export interface RegisteredAction {
@@ -57,6 +73,13 @@ export interface ExecutorConfig {
   spotlightPadding: number;
   tooltipEnabled: boolean;
   signal?: AbortSignal;
+  /** Resolve an element from the AgentTarget registry. Used by fromParam steps. */
+  resolveTarget?: (
+    actionName: string,
+    param: string,
+    value: string,
+    signal?: AbortSignal,
+  ) => Promise<HTMLElement | null>;
 }
 
 export interface AgentActionProviderProps {
@@ -73,6 +96,8 @@ export interface AgentActionProviderProps {
 export interface AgentActionContextValue {
   registerAction: (action: RegisteredAction) => void;
   unregisterAction: (name: string) => void;
+  registerTarget: (id: string, entry: AgentTargetEntry) => void;
+  unregisterTarget: (id: string) => void;
   execute: (actionName: string, params?: Record<string, unknown>) => Promise<ExecutionResult>;
   availableActions: AvailableAction[];
   schemas: ToolSchema[];

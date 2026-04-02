@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useMemo, useRef, useState } from 're
 import type {
   AgentActionContextValue,
   AgentActionProviderProps,
+  AgentTargetEntry,
   AvailableAction,
   ExecutionResult,
   RegisteredAction,
@@ -22,6 +23,7 @@ export function AgentActionProvider({
   onExecutionComplete,
 }: AgentActionProviderProps) {
   const actionsRef = useRef<Map<string, RegisteredAction>>(new Map());
+  const targetsRef = useRef<Map<string, AgentTargetEntry>>(new Map());
   const [version, setVersion] = useState(0);
   const [isExecuting, setIsExecuting] = useState(false);
   const currentExecutionRef = useRef<AbortController | null>(null);
@@ -46,6 +48,48 @@ export function AgentActionProvider({
       setVersion((v) => v + 1);
     }
   }, []);
+
+  const registerTarget = useCallback((id: string, entry: AgentTargetEntry) => {
+    targetsRef.current.set(id, entry);
+  }, []);
+
+  const unregisterTarget = useCallback((id: string) => {
+    targetsRef.current.delete(id);
+  }, []);
+
+  const resolveTarget = useCallback(
+    async (
+      actionName: string,
+      param: string,
+      value: string,
+      signal?: AbortSignal,
+    ): Promise<HTMLElement | null> => {
+      const normalizedValue = value.toLowerCase();
+      const maxWait = 3000;
+      const pollInterval = 50;
+      const start = Date.now();
+
+      while (Date.now() - start < maxWait) {
+        if (signal?.aborted) return null;
+
+        for (const entry of targetsRef.current.values()) {
+          if (
+            entry.action === actionName &&
+            entry.param === param &&
+            entry.value.toLowerCase() === normalizedValue &&
+            entry.element.isConnected
+          ) {
+            return entry.element;
+          }
+        }
+
+        await new Promise((r) => setTimeout(r, pollInterval));
+      }
+
+      return null;
+    },
+    [],
+  );
 
   const execute = useCallback(
     async (actionName: string, params?: Record<string, unknown>): Promise<ExecutionResult> => {
@@ -76,6 +120,7 @@ export function AgentActionProvider({
           spotlightPadding,
           tooltipEnabled,
           signal: controller.signal,
+          resolveTarget,
         });
         onExecutionComplete?.(result);
         return result;
@@ -97,7 +142,7 @@ export function AgentActionProvider({
         }
       }
     },
-    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, onExecutionStart, onExecutionComplete],
+    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, onExecutionStart, onExecutionComplete, resolveTarget],
   );
 
   const availableActions = useMemo<AvailableAction[]>(
@@ -126,6 +171,8 @@ export function AgentActionProvider({
     () => ({
       registerAction,
       unregisterAction,
+      registerTarget,
+      unregisterTarget,
       execute,
       availableActions,
       schemas,
@@ -137,6 +184,8 @@ export function AgentActionProvider({
     [
       registerAction,
       unregisterAction,
+      registerTarget,
+      unregisterTarget,
       execute,
       availableActions,
       schemas,

@@ -1,4 +1,4 @@
-import type { RegisteredAction, ExecutionResult, ExecutorConfig } from '../core/types';
+import type { RegisteredAction, ExecutionResult, ExecutionTarget, ExecutorConfig } from '../core/types';
 
 let stylesInjected = false;
 
@@ -135,6 +135,53 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/**
+ * Simulate typing into an input element in a way that triggers React's onChange.
+ */
+function simulateTyping(element: HTMLElement, value: string): void {
+  const input = element as HTMLInputElement;
+  input.focus();
+
+  const nativeSetter =
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set ??
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+
+  if (nativeSetter) {
+    nativeSetter.call(input, value);
+  } else {
+    input.value = value;
+  }
+
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/**
+ * Resolve the element for a step. For static steps, returns the element directly.
+ * For fromParam steps, polls the AgentTarget registry until a match is found.
+ */
+async function resolveStepElement(
+  target: ExecutionTarget,
+  actionName: string,
+  params: Record<string, unknown>,
+  config: ExecutorConfig,
+): Promise<HTMLElement | null> {
+  // prepareView runs first (e.g. scroll virtualized list into view)
+  if (target.prepareView) {
+    await target.prepareView(params);
+    await delay(200, config.signal);
+  }
+
+  // fromParam: resolve lazily from AgentTarget registry
+  if (target.fromParam && config.resolveTarget) {
+    const paramValue = String(params[target.fromParam] ?? '');
+    return config.resolveTarget(actionName, target.fromParam, paramValue, config.signal);
+  }
+
+  // Static element
+  return target.element;
+}
+
 async function executeInstant(
   action: RegisteredAction,
   params: Record<string, unknown>,
@@ -173,27 +220,41 @@ async function executeGuided(
   try {
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i];
-      if (!target.element) continue;
+      const isLast = i === targets.length - 1;
+
+      // Resolve element (may be lazy for fromParam steps)
+      const element = await resolveStepElement(target, action.name, params, config);
+      if (!element) continue;
 
       // 1. Scroll into view
-      target.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await delay(300, config.signal);
 
       // 2. Spotlight
-      spotlight = createSpotlight(target.element, target.label, config);
+      spotlight = createSpotlight(element, target.label, config);
       await delay(config.stepDelay, config.signal);
 
-      // 3. Click (if no onExecute, or for intermediate steps with onExecute)
-      const isLast = i === targets.length - 1;
-      if (action.onExecute) {
+      // 3. Interact based on step type
+      if (target.setParam) {
+        // Type the param value into the input
+        const value = String(params[target.setParam] ?? '');
+        simulateTyping(element, value);
+      } else if (target.setValue && target.onSetValue) {
+        // Set value programmatically via callback
+        const value = params[target.setValue];
+        target.onSetValue(value);
+      } else if (target.fromParam) {
+        // fromParam step: always click the resolved target (this IS the dropdown option)
+        element.click();
+      } else if (action.onExecute) {
         // With onExecute: click intermediate steps (e.g. open dropdown),
         // skip clicking the last step (onExecute handles the action)
         if (!isLast) {
-          target.element.click();
+          element.click();
         }
       } else {
         // Without onExecute: click every step
-        target.element.click();
+        element.click();
       }
 
       // 4. Remove spotlight

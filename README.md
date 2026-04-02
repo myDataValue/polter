@@ -1,6 +1,10 @@
-# polter
+<p align="center">
+  <img src="logo.svg" alt="Polter" width="120" />
+</p>
 
-Declarative React library for agent-driven UI control with visual guided execution.
+<h1 align="center">polter</h1>
+
+<p align="center">Declarative React library for agent-driven UI control with visual guided execution.</p>
 
 The agent drives the **real UI** — it opens the actual dropdown, clicks the actual button, with the user watching. "Let me show you how" instead of "I did it for you." After seeing it twice, users do it themselves.
 
