@@ -136,12 +136,9 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Simulate typing into an input element in a way that triggers React's onChange.
+ * Set an input's value in a way that triggers React's onChange.
  */
-function simulateTyping(element: HTMLElement, value: string): void {
-  const input = element as HTMLInputElement;
-  input.focus();
-
+function setNativeInputValue(input: HTMLInputElement, value: string): void {
   const nativeSetter =
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set ??
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
@@ -154,6 +151,28 @@ function simulateTyping(element: HTMLElement, value: string): void {
 
   input.dispatchEvent(new Event('input', { bubbles: true }));
   input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/**
+ * Simulate typing into an input character by character.
+ */
+async function simulateTyping(element: HTMLElement, value: string, signal?: AbortSignal): Promise<void> {
+  const input = element as HTMLInputElement;
+  input.focus();
+
+  // Clear existing value first
+  if (input.value) {
+    setNativeInputValue(input, '');
+    await delay(30, signal);
+  }
+
+  // Type each character with a small delay
+  const charDelay = Math.max(15, Math.min(40, 800 / value.length));
+  for (let i = 0; i < value.length; i++) {
+    if (signal?.aborted) return;
+    setNativeInputValue(input, value.slice(0, i + 1));
+    await delay(charDelay, signal);
+  }
 }
 
 /**
@@ -236,9 +255,12 @@ async function executeGuided(
 
       // 3. Interact based on step type
       if (target.setParam) {
-        // Type the param value into the input
+        // Type the param value into the input — find the actual input/textarea within the element
+        const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
+          ? element
+          : element.querySelector('input, textarea') ?? element;
         const value = String(params[target.setParam] ?? '');
-        simulateTyping(element, value);
+        await simulateTyping(inputEl as HTMLElement, value, config.signal);
       } else if (target.setValue && target.onSetValue) {
         // Set value programmatically via callback
         const value = params[target.setValue];

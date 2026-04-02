@@ -3,6 +3,19 @@ import type { RegisteredAction, ToolSchema, OpenAITool, AnthropicTool } from './
 type JsonSchema = Record<string, unknown>;
 
 export function zodToJsonSchema(schema: unknown): JsonSchema {
+  // Zod v4+: use built-in toJSONSchema() if available
+  if (typeof (schema as any).toJSONSchema === 'function') {
+    try {
+      const result = (schema as any).toJSONSchema();
+      // Remove $schema key — not needed for tool schemas
+      delete result.$schema;
+      return result;
+    } catch {
+      // Fall through to manual conversion
+    }
+  }
+
+  // Zod v3: manual conversion via _def.typeName
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const def = (schema as any)._def;
   const description = (schema as any).description;
