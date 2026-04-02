@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import type { ExecutionTarget } from '../core/types';
 import { AgentActionContext } from '../components/AgentActionProvider';
 
@@ -12,7 +12,7 @@ interface StepConfig {
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
 }
 
-interface UseAgentActionOptions {
+export interface AgentActionConfig {
   name: string;
   description: string;
   parameters?: unknown;
@@ -27,61 +27,58 @@ interface UseAgentActionOptions {
  * Use this for per-row actions where AgentTargets are on scattered elements
  * and the action resolves to them via fromParam/fromTarget.
  *
+ * Accepts a single config or an array to batch-register multiple actions.
+ *
  * For actions that wrap a visible element, prefer the <AgentAction> component.
  */
-export function useAgentAction({
-  name,
-  description,
-  parameters,
-  onExecute,
-  disabled = false,
-  disabledReason,
-  steps,
-}: UseAgentActionOptions): void {
+export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]): void {
   const context = useContext(AgentActionContext);
   if (!context) {
     throw new Error('useAgentAction must be used within an AgentActionProvider');
   }
 
-  const onExecuteRef = useRef(onExecute);
-  onExecuteRef.current = onExecute;
-  const parametersRef = useRef(parameters);
-  parametersRef.current = parameters;
-  const stepsRef = useRef(steps);
-  stepsRef.current = steps;
-
-  const stableOnExecute = useCallback((params: Record<string, unknown>) => {
-    return onExecuteRef.current?.(params);
-  }, []);
-
-  const getExecutionTargets = useCallback((): ExecutionTarget[] => {
-    const currentSteps = stepsRef.current;
-    if (!currentSteps?.length) return [];
-
-    return currentSteps.map((s) => ({
-      label: s.label,
-      element: null,
-      fromParam: s.fromParam,
-      fromTarget: s.fromTarget,
-      setParam: s.setParam,
-      setValue: s.setValue,
-      onSetValue: s.onSetValue,
-      prepareView: s.prepareView,
-    }));
-  }, []);
+  const configRef = useRef(config);
+  configRef.current = config;
 
   const { registerAction, unregisterAction } = context;
 
   useEffect(() => {
-    registerAction({
-      name,
-      description,
-      parameters: parametersRef.current,
-      onExecute: onExecuteRef.current ? stableOnExecute : undefined,
-      disabled,
-      disabledReason,
-      getExecutionTargets,
-    });
-    return () => unregisterAction(name);
-  }, [name, description, disabled, disabledReason, stableOnExecute, getExecutionTargets, registerAction, unregisterAction]);
+    const items = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
+
+    for (const item of items) {
+      const onExecute = item.onExecute;
+      const steps = item.steps;
+
+      registerAction({
+        name: item.name,
+        description: item.description,
+        parameters: item.parameters,
+        onExecute: onExecute
+          ? (params: Record<string, unknown>) => onExecute(params)
+          : undefined,
+        disabled: item.disabled ?? false,
+        disabledReason: item.disabledReason,
+        getExecutionTargets: (): ExecutionTarget[] => {
+          if (!steps?.length) return [];
+          return steps.map((s) => ({
+            label: s.label,
+            element: null,
+            fromParam: s.fromParam,
+            fromTarget: s.fromTarget,
+            setParam: s.setParam,
+            setValue: s.setValue,
+            onSetValue: s.onSetValue,
+            prepareView: s.prepareView,
+          }));
+        },
+      });
+    }
+
+    return () => {
+      const items = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
+      for (const item of items) {
+        unregisterAction(item.name);
+      }
+    };
+  }, [registerAction, unregisterAction]);
 }
