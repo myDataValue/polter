@@ -1,4 +1,4 @@
-import type { RegisteredAction, ToolSchema, OpenAITool, AnthropicTool } from './types';
+import type { RegisteredAction, ToolSchema } from './types';
 
 type JsonSchema = Record<string, unknown>;
 
@@ -159,21 +159,3 @@ export function generateToolSchemas(actions: RegisteredAction[]): ToolSchema[] {
     }));
 }
 
-export function toOpenAITools(schemas: ToolSchema[]): OpenAITool[] {
-  return schemas.map((schema) => ({
-    type: 'function' as const,
-    function: {
-      name: schema.name,
-      description: schema.description,
-      parameters: schema.parameters,
-    },
-  }));
-}
-
-export function toAnthropicTools(schemas: ToolSchema[]): AnthropicTool[] {
-  return schemas.map((schema) => ({
-    name: schema.name,
-    description: schema.description,
-    input_schema: schema.parameters,
-  }));
-}

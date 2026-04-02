@@ -27,7 +27,7 @@ npm install react react-dom zod
 ## Quick Start
 
 ```tsx
-import { AgentActionProvider, AgentAction, useAgentAction, useAgentActions } from 'polter';
+import { AgentActionProvider, AgentAction, useAgentActions } from 'polter';
 import { z } from 'zod';
 ```
 
@@ -64,23 +64,6 @@ import { z } from 'zod';
 </AgentAction>
 ```
 
-**Programmatic actions** — no UI element, just register the action:
-
-```tsx
-useAgentAction({
-  name: 'navigate_to_settings',
-  description: 'Navigate to settings page',
-  onExecute: () => navigate('/settings'),
-});
-
-useAgentAction({
-  name: 'filter_by_tag',
-  description: 'Filter table by tag',
-  parameters: z.object({ tag_name: z.string() }),
-  onExecute: (p) => setFilter(p.tag_name),
-});
-```
-
 **Multi-step actions** — sequential clicks (e.g. open dropdown, then select):
 
 ```tsx
@@ -97,7 +80,7 @@ useAgentAction({
 ### 3. Connect to your agent
 
 ```tsx
-const { schemas, openaiTools, anthropicTools, execute, availableActions, isExecuting } = useAgentActions();
+const { schemas, execute, availableActions, isExecuting } = useAgentActions();
 
 // Send schemas to your agent backend (auto-updates as components mount/unmount)
 // Call execute("action_name", params) when the agent responds with a tool call
@@ -115,21 +98,13 @@ const handleCommand = useAgentCommandRouter(existingHandler, (cmd) => cmd.action
 
 ## How it works
 
-1. `<AgentAction>` / `useAgentAction` register actions in a React context on mount, deregister on unmount
+1. `<AgentAction>` registers actions in a React context on mount, deregisters on unmount
 2. The registry always reflects exactly what's on screen — schemas auto-generate from Zod parameter definitions
 3. `execute(name, params)` looks up the action, finds the DOM element via refs, runs: **scroll into view → dim surroundings → spotlight with pulsing ring → tooltip → pause → click/execute → cleanup**
 4. `<div style="display: contents">` wrapper provides DOM refs without affecting layout
 5. Components that mount = actions that exist. Navigate away = actions disappear. No manual sync.
 
 ## API
-
-### `useAgentAction` vs `<AgentAction>`
-
-| | `useAgentAction` | `<AgentAction>` |
-|---|---|---|
-| **Use for** | Programmatic actions (navigation, mutations, filters) | Wrapping visible elements (buttons, inputs) |
-| **Visual** | No spotlight | Scrolls, spotlights, clicks the wrapped element |
-| **Renders** | Nothing | `<div style="display: contents">` around children |
 
 ### Execution modes
 

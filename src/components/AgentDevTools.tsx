@@ -115,9 +115,6 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
     ? availableActions.filter((a) => a.name.includes(filter) || a.description.includes(filter))
     : availableActions;
 
-  const visualActions = filtered.filter((a) => a.isVisual);
-  const programmaticActions = filtered.filter((a) => !a.isVisual);
-
   // Toggle button
   if (!open) {
     return (
@@ -226,46 +223,19 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
               />
             </div>
 
-            {/* Visual actions */}
-            {visualActions.length > 0 && (
-              <>
-                <SectionLabel>Visual (spotlight + click)</SectionLabel>
-                {visualActions.map((action) => (
-                  <ActionRow
-                    key={action.name}
-                    action={action}
-                    schemas={schemas}
-                    expanded={expandedAction === action.name}
-                    onToggle={() => setExpandedAction(expandedAction === action.name ? null : action.name)}
-                    fieldValues={paramInputs[action.name] ?? {}}
-                    onFieldChange={(field, value) => setFieldValue(action.name, field, value)}
-                    onExecute={() => handleExecute(action)}
-                    isExecuting={isExecuting}
-                    badge="visual"
-                  />
-                ))}
-              </>
-            )}
-
-            {/* Programmatic actions */}
-            {programmaticActions.length > 0 && (
-              <>
-                <SectionLabel>Programmatic</SectionLabel>
-                {programmaticActions.map((action) => (
-                  <ActionRow
-                    key={action.name}
-                    action={action}
-                    schemas={schemas}
-                    expanded={expandedAction === action.name}
-                    onToggle={() => setExpandedAction(expandedAction === action.name ? null : action.name)}
-                    fieldValues={paramInputs[action.name] ?? {}}
-                    onFieldChange={(field, value) => setFieldValue(action.name, field, value)}
-                    onExecute={() => handleExecute(action)}
-                    isExecuting={isExecuting}
-                  />
-                ))}
-              </>
-            )}
+            {filtered.length > 0 && filtered.map((action) => (
+              <ActionRow
+                key={action.name}
+                action={action}
+                schemas={schemas}
+                expanded={expandedAction === action.name}
+                onToggle={() => setExpandedAction(expandedAction === action.name ? null : action.name)}
+                fieldValues={paramInputs[action.name] ?? {}}
+                onFieldChange={(field, value) => setFieldValue(action.name, field, value)}
+                onExecute={() => handleExecute(action)}
+                isExecuting={isExecuting}
+              />
+            ))}
 
             {filtered.length === 0 && (
               <div style={{ padding: 20, color: '#475569', textAlign: 'center' }}>
@@ -468,24 +438,6 @@ function ActionRow({
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        padding: '8px 20px',
-        fontSize: 11,
-        fontWeight: 700,
-        color: '#475569',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        background: '#0f172a',
-        borderBottom: '1px solid #1e293b',
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 function StatusDot({ result }: { result?: ExecutionResult }) {
   const color = !result ? '#fbbf24' : result.success ? '#4ade80' : '#f87171';

@@ -43,21 +43,6 @@ export interface ToolSchema {
   parameters: Record<string, unknown>;
 }
 
-export interface OpenAITool {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-}
-
-export interface AnthropicTool {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
-}
-
 export interface ExecutionResult {
   success: boolean;
   actionName: string;
@@ -70,8 +55,6 @@ export interface AvailableAction {
   disabled: boolean;
   disabledReason?: string;
   hasParameters: boolean;
-  /** True if the action has DOM targets (registered via AgentAction), false if programmatic (useAgentAction). */
-  isVisual: boolean;
 }
 
 export interface ExecutorConfig {
@@ -115,8 +98,6 @@ export interface AgentActionContextValue {
   execute: (actionName: string, params?: Record<string, unknown>) => Promise<ExecutionResult>;
   availableActions: AvailableAction[];
   schemas: ToolSchema[];
-  openaiTools: OpenAITool[];
-  anthropicTools: AnthropicTool[];
   isExecuting: boolean;
   mode: ExecutionMode;
 }

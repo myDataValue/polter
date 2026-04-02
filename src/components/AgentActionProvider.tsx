@@ -7,7 +7,7 @@ import type {
   ExecutionResult,
   RegisteredAction,
 } from '../core/types';
-import { generateToolSchemas, toOpenAITools, toAnthropicTools } from '../core/schemaGenerator';
+import { generateToolSchemas } from '../core/schemaGenerator';
 import { executeAction } from '../executor/visualExecutor';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
@@ -185,7 +185,6 @@ export function AgentActionProvider({
         disabled: a.disabled,
         disabledReason: a.disabledReason,
         hasParameters: !!a.parameters,
-        isVisual: a.getExecutionTargets().length > 0,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [version],
@@ -197,9 +196,6 @@ export function AgentActionProvider({
     [version],
   );
 
-  const openaiTools = useMemo(() => toOpenAITools(schemas), [schemas]);
-  const anthropicTools = useMemo(() => toAnthropicTools(schemas), [schemas]);
-
   const contextValue = useMemo<AgentActionContextValue>(
     () => ({
       registerAction,
@@ -209,8 +205,6 @@ export function AgentActionProvider({
       execute,
       availableActions,
       schemas,
-      openaiTools,
-      anthropicTools,
       isExecuting,
       mode,
     }),
@@ -222,8 +216,6 @@ export function AgentActionProvider({
       execute,
       availableActions,
       schemas,
-      openaiTools,
-      anthropicTools,
       isExecuting,
       mode,
     ],
