@@ -18,6 +18,7 @@ export function AgentActionProvider({
   overlayOpacity = 0.5,
   spotlightPadding = 8,
   tooltipEnabled = true,
+  cursorEnabled = true,
   children,
   onExecutionStart,
   onExecutionComplete,
@@ -150,6 +151,7 @@ export function AgentActionProvider({
           overlayOpacity,
           spotlightPadding,
           tooltipEnabled,
+          cursorEnabled,
           signal: controller.signal,
           resolveTarget,
           resolveNamedTarget,
@@ -174,7 +176,7 @@ export function AgentActionProvider({
         }
       }
     },
-    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, onExecutionStart, onExecutionComplete, resolveTarget, resolveNamedTarget],
+    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, resolveNamedTarget],
   );
 
   const availableActions = useMemo<AvailableAction[]>(

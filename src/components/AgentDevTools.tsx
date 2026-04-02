@@ -94,7 +94,6 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
                   result: { success: false, actionName: action.name, error: `Invalid JSON for ${field.name}` },
                 },
               ]);
-              setTab('log');
               return;
             }
           } else {
@@ -104,7 +103,6 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
       }
 
       setLog((prev) => [...prev, { id: entryId, action: action.name, params, timestamp: Date.now() }]);
-      setTab('log');
       const result = await execute(action.name, params);
       setLog((prev) => prev.map((e) => (e.id === entryId ? { ...e, result } : e)));
     },
@@ -311,6 +309,12 @@ function ActionRow({
         borderBottom: '1px solid #1e293b',
         opacity: action.disabled ? 0.5 : 1,
         cursor: 'pointer',
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && expanded && !action.disabled && !isExecuting) {
+          e.preventDefault();
+          onExecute();
+        }
       }}
     >
       <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

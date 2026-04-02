@@ -63,6 +63,7 @@ export interface ExecutorConfig {
   overlayOpacity: number;
   spotlightPadding: number;
   tooltipEnabled: boolean;
+  cursorEnabled: boolean;
   signal?: AbortSignal;
   /** Resolve an element from the AgentTarget registry. Used by fromParam steps. */
   resolveTarget?: (
@@ -85,6 +86,7 @@ export interface AgentActionProviderProps {
   overlayOpacity?: number;
   spotlightPadding?: number;
   tooltipEnabled?: boolean;
+  cursorEnabled?: boolean;
   children: React.ReactNode;
   onExecutionStart?: (actionName: string) => void;
   onExecutionComplete?: (result: ExecutionResult) => void;

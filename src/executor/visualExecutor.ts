@@ -18,8 +18,76 @@ function injectStyles(): void {
       from { opacity: 0; transform: translateX(-50%) translateY(4px); }
       to { opacity: 1; transform: translateX(-50%) translateY(0); }
     }
+    @keyframes polter-cursor-click {
+      0% { transform: scale(1); }
+      50% { transform: scale(0.85); }
+      100% { transform: scale(1); }
+    }
   `;
   document.head.appendChild(style);
+}
+
+interface OverlayHandle {
+  remove: () => void;
+}
+
+const CURSOR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.48 0 .68-.61.3-.92L5.95 2.87a.5.5 0 0 0-.45.34z" fill="#1e293b" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+</svg>`;
+
+/**
+ * Full-screen overlay that blocks user interaction during guided execution.
+ * Persists across steps so there's no gap where clicks can leak through.
+ */
+function createBlockingOverlay(): OverlayHandle {
+  const overlay = document.createElement('div');
+  overlay.className = 'polter-blocking-overlay';
+  overlay.style.cssText = `
+    position:fixed;
+    inset:0;
+    z-index:99997;
+    cursor:not-allowed;
+  `;
+  document.body.appendChild(overlay);
+  return { remove: () => overlay.remove() };
+}
+
+function createCursor(): OverlayHandle {
+  injectStyles();
+
+  const cursor = document.createElement('div');
+  cursor.className = 'polter-cursor';
+  cursor.innerHTML = CURSOR_SVG;
+  cursor.style.cssText = `
+    position:fixed;
+    left:-40px;
+    top:-40px;
+    z-index:100000;
+    pointer-events:none;
+    transition:left 0.4s cubic-bezier(0.4,0,0.2,1),top 0.4s cubic-bezier(0.4,0,0.2,1);
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  `;
+  document.body.appendChild(cursor);
+
+  return { remove: () => cursor.remove() };
+}
+
+function moveCursorTo(target: HTMLElement, signal?: AbortSignal): Promise<void> {
+  const cursor = document.querySelector('.polter-cursor') as HTMLElement | null;
+  if (!cursor) return Promise.resolve();
+
+  const rect = target.getBoundingClientRect();
+  cursor.style.left = `${rect.left + rect.width / 2}px`;
+  cursor.style.top = `${rect.top + rect.height / 2}px`;
+
+  return delay(450, signal);
+}
+
+function animateCursorClick(): void {
+  const cursor = document.querySelector('.polter-cursor') as HTMLElement | null;
+  if (!cursor) return;
+  cursor.style.animation = 'polter-cursor-click 0.2s ease';
+  cursor.addEventListener('animationend', () => { cursor.style.animation = ''; }, { once: true });
 }
 
 interface SpotlightHandle {
@@ -191,9 +259,11 @@ async function resolveStepElement(
     await delay(200, config.signal);
   }
 
-  // fromParam: resolve lazily from AgentTarget registry by param value
+  // fromParam: resolve lazily from AgentTarget registry by param value.
+  // For array params, resolve against the first element (spotlight one representative target).
   if (target.fromParam && config.resolveTarget) {
-    const paramValue = String(params[target.fromParam] ?? '');
+    const raw = params[target.fromParam];
+    const paramValue = String(Array.isArray(raw) ? raw[0] ?? '' : raw ?? '');
     return config.resolveTarget(actionName, target.fromParam, paramValue, config.signal);
   }
 
@@ -225,6 +295,17 @@ async function executeInstant(
   }
 }
 
+/**
+ * Check whether an element is visible and measurable.
+ * Returns false for detached nodes and display:contents wrappers
+ * (whose getBoundingClientRect() returns all zeros).
+ */
+function isElementVisible(el: HTMLElement): boolean {
+  if (!el.isConnected) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
 async function executeGuided(
   action: RegisteredAction,
   params: Record<string, unknown>,
@@ -232,7 +313,8 @@ async function executeGuided(
 ): Promise<ExecutionResult> {
   const targets = action.getExecutionTargets();
 
-  if (targets.length === 0) {
+  // No targets, or all targets are invisible (e.g. display:contents wrappers) — run directly
+  if (targets.length === 0 || targets.every((t) => t.element && !isElementVisible(t.element))) {
     if (action.onExecute) {
       await action.onExecute(params);
     }
@@ -240,6 +322,12 @@ async function executeGuided(
   }
 
   let spotlight: SpotlightHandle | null = null;
+  let cursor: OverlayHandle | null = null;
+  const blocker = createBlockingOverlay();
+
+  if (config.cursorEnabled) {
+    cursor = createCursor();
+  }
 
   try {
     for (let i = 0; i < targets.length; i++) {
@@ -250,15 +338,30 @@ async function executeGuided(
       const element = await resolveStepElement(target, action.name, params, config);
       if (!element) continue;
 
+      // Element not in DOM (never rendered) — skip for single-step, abort for multi-step
+      if (!isElementVisible(element)) {
+        if (targets.length > 1) {
+          blocker.remove();
+          cursor?.remove();
+          return { success: false, actionName: action.name, error: `Step element not visible: "${target.label}"` };
+        }
+        continue;
+      }
+
       // 1. Scroll into view
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await delay(300, config.signal);
 
-      // 2. Spotlight
+      // 2. Move cursor to element
+      if (cursor) {
+        await moveCursorTo(element, config.signal);
+      }
+
+      // 3. Spotlight
       spotlight = createSpotlight(element, target.label, config);
       await delay(config.stepDelay, config.signal);
 
-      // 3. Interact based on step type
+      // 4. Interact based on step type
       if (target.setParam) {
         // Type the param value into the input — find the actual input/textarea within the element
         const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
@@ -272,19 +375,22 @@ async function executeGuided(
         target.onSetValue(value);
       } else if (target.fromParam || target.fromTarget) {
         // Lazy-resolved step: always click the resolved target (dropdown option, popover button, etc.)
+        animateCursorClick();
         element.click();
       } else if (action.onExecute) {
         // With onExecute: click intermediate steps (e.g. open dropdown),
         // skip clicking the last step (onExecute handles the action)
         if (!isLast) {
+          animateCursorClick();
           element.click();
         }
       } else {
         // Without onExecute: click every step
+        animateCursorClick();
         element.click();
       }
 
-      // 4. Remove spotlight
+      // 5. Remove spotlight
       spotlight.remove();
       spotlight = null;
 
@@ -293,15 +399,19 @@ async function executeGuided(
       }
     }
 
-    // 5. Call onExecute after visual sequence
+    // 6. Call onExecute after visual sequence
     if (action.onExecute) {
       await action.onExecute(params);
     }
 
+    blocker.remove();
+    cursor?.remove();
     return { success: true, actionName: action.name };
   } catch (err) {
-    // Clean up spotlight on error
+    // Clean up on error
     spotlight?.remove();
+    blocker.remove();
+    cursor?.remove();
 
     if (err instanceof DOMException && err.name === 'AbortError') {
       return { success: false, actionName: action.name, error: 'Execution cancelled' };

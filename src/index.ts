@@ -6,6 +6,7 @@ export { AgentTarget } from './components/AgentTarget';
 export { AgentDevTools } from './components/AgentDevTools';
 
 // Hooks
+export { useAgentAction } from './hooks/useAgentAction';
 export { useAgentActions } from './hooks/useAgentActions';
 export { useAgentCommandRouter } from './hooks/useAgentCommandRouter';
 
