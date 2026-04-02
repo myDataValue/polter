@@ -2,8 +2,8 @@ import React, { useContext, useEffect, useId, useRef } from 'react';
 import { AgentActionContext } from './AgentActionProvider';
 
 interface AgentTargetProps {
-  /** The action name this target belongs to. */
-  action: string;
+  /** The action name this target belongs to. Omit to make a shared target that any action can resolve. */
+  action?: string;
   children: React.ReactNode;
   /** The parameter key this target maps to (for fromParam resolution). */
   param?: string;

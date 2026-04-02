@@ -75,7 +75,7 @@ export function AgentActionProvider({
 
         for (const entry of targetsRef.current.values()) {
           if (
-            entry.action === actionName &&
+            (!entry.action || entry.action === actionName) &&
             entry.param === param &&
             entry.value?.toLowerCase() === normalizedValue &&
             entry.element.isConnected
@@ -107,7 +107,7 @@ export function AgentActionProvider({
 
         for (const entry of targetsRef.current.values()) {
           if (
-            entry.action === actionName &&
+            (!entry.action || entry.action === actionName) &&
             entry.name === name &&
             entry.element.isConnected
           ) {

@@ -17,7 +17,8 @@ export interface ExecutionTarget {
 }
 
 export interface AgentTargetEntry {
-  action: string;
+  /** Action name — when omitted, the target is shared and matches any action. */
+  action?: string;
   element: HTMLElement;
   /** Parameter key — used with `value` for param-based resolution. */
   param?: string;
