@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" alt="Polter" width="200" />
+  <img src="logo.svg?raw=true" alt="Polter" width="200" />
 </p>
 
 <h1 align="center">polter</h1>
