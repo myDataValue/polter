@@ -6,15 +6,17 @@
 
 <p align="center">Declarative React library for agent-driven UI control with visual guided execution.</p>
 
-The agent drives the **real UI** — it opens the actual dropdown, clicks the actual button, with the user watching. "Let me show you how" instead of "I did it for you." After seeing it twice, users do it themselves.
+Your UI *is* the agent's interface. It opens the actual dropdown, clicks the actual button, with the user watching. No separate tools to build — single source of truth. After seeing it twice, users do it themselves.
 
 ## Why
 
-Every SaaS adding an AI agent faces the same problem: the agent does things programmatically but the user never learns where buttons are or how the UI works. They become dependent on the agent.
+Every SaaS adding an AI agent faces two problems:
 
-The alternative — agents generating UI at runtime — is worse. Generated UI is unpredictable and breaks muscle memory.
+1. **Double the work.** You build your UI, then build a whole separate set of agent tools — API endpoints, handlers, schemas — all duplicating what the UI already does.
 
-**The right pattern**: the agent drives the real UI. It scrolls to the button, spotlights it, pauses so the user sees it, then clicks it. The user watches and learns. Nothing else does this.
+2. **Users never learn.** The agent does things behind the scenes or generates throwaway UI. Either way, users never see where buttons are or how the interface works. Permanent dependency.
+
+**Polter solves both.** Your UI *is* the agent's interface — single source of truth. The agent scrolls to the real button, spotlights it, clicks it. Users watch and learn. After twice, they do it themselves. And you wrote zero agent-specific tools.
 
 ## Install
 
