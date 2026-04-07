@@ -4,6 +4,7 @@ import { render, act } from '@testing-library/react';
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { AgentAction } from '../components/AgentAction';
 import { useAgentCommandRouter } from '../hooks/useAgentCommandRouter';
+import type { ExecutionResult } from '../core/types';
 
 interface Command {
   action: string;
@@ -15,7 +16,7 @@ function RouterConsumer({
   onRouter,
 }: {
   fallback: ((cmd: Command) => void) | null;
-  onRouter: (router: (cmd: Command) => Promise<void>) => void;
+  onRouter: (router: (cmd: Command) => Promise<ExecutionResult | undefined>) => void;
 }) {
   const router = useAgentCommandRouter(fallback, (cmd: Command) => cmd.action);
   React.useEffect(() => {
@@ -28,7 +29,7 @@ describe('useAgentCommandRouter', () => {
   it('routes registered actions through execute', async () => {
     const onExecute = vi.fn();
     const fallback = vi.fn();
-    let router: ((cmd: Command) => Promise<void>) | null = null;
+    let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
 
     render(
       <AgentActionProvider mode="instant">
@@ -46,7 +47,7 @@ describe('useAgentCommandRouter', () => {
 
   it('falls through to fallback for unregistered actions', async () => {
     const fallback = vi.fn();
-    let router: ((cmd: Command) => Promise<void>) | null = null;
+    let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
 
     render(
       <AgentActionProvider mode="instant">
@@ -60,7 +61,7 @@ describe('useAgentCommandRouter', () => {
 
   it('falls through for disabled actions', async () => {
     const fallback = vi.fn();
-    let router: ((cmd: Command) => Promise<void>) | null = null;
+    let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
 
     render(
       <AgentActionProvider mode="instant">
@@ -76,7 +77,7 @@ describe('useAgentCommandRouter', () => {
   });
 
   it('handles null fallback gracefully', async () => {
-    let router: ((cmd: Command) => Promise<void>) | null = null;
+    let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
 
     render(
       <AgentActionProvider mode="instant">
