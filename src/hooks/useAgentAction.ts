@@ -49,18 +49,29 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
       const onExecute = item.onExecute;
       const steps = item.steps;
 
+      const actionName = item.name;
       registerAction({
-        name: item.name,
+        name: actionName,
         description: item.description,
         parameters: item.parameters,
+        // Read onExecute from configRef at call time so it always uses the
+        // latest closure (e.g. freshly-loaded allTags, up-to-date state).
         onExecute: onExecute
-          ? (params: Record<string, unknown>) => onExecute(params)
+          ? (params: Record<string, unknown>) => {
+              const current = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
+              const latest = current.find((c) => c.name === actionName);
+              return (latest?.onExecute ?? onExecute)(params);
+            }
           : undefined,
         disabled: item.disabled ?? false,
         disabledReason: item.disabledReason,
         getExecutionTargets: (): ExecutionTarget[] => {
-          if (!steps?.length) return [];
-          return steps.map((s) => ({
+          // Read steps from configRef at call time for up-to-date disabled/setValue callbacks
+          const current = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
+          const latest = current.find((c) => c.name === actionName);
+          const latestSteps = latest?.steps ?? steps;
+          if (!latestSteps?.length) return [];
+          return latestSteps.map((s) => ({
             label: s.label,
             element: null,
             fromParam: s.fromParam,

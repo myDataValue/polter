@@ -13,6 +13,32 @@ import { executeAction } from '../executor/visualExecutor';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
 
+/**
+ * LLMs sometimes send a single value where the schema expects an array
+ * (e.g. `property_ids: 123` instead of `[123]`). Walk the Zod schema shape
+ * and wrap any scalar into a single-element array when the field is ZodArray.
+ */
+function coerceParamsToSchema(
+  params: Record<string, unknown>,
+  schema: any,
+): Record<string, unknown> {
+  // ZodObject exposes `.shape` — bail out for anything else.
+  const shape = schema?.shape;
+  if (!shape || typeof shape !== 'object') return params;
+
+  const coerced = { ...params };
+  for (const key of Object.keys(shape)) {
+    if (!(key in coerced)) continue;
+    const fieldDef = shape[key];
+    // Zod stores the type tag in _def.typeName
+    const typeName = fieldDef?._def?.typeName;
+    if (typeName === 'ZodArray' && !Array.isArray(coerced[key])) {
+      coerced[key] = [coerced[key]];
+    }
+  }
+  return coerced;
+}
+
 /** Convert an ActionDefinition to a schema-only RegisteredAction (no DOM targets). */
 function definitionToRegisteredAction(def: ActionDefinition<any>): RegisteredAction {
   return {
@@ -253,11 +279,17 @@ export function AgentActionProvider({
           resolveNamedTarget,
         };
 
+        // LLMs sometimes send scalars where the schema expects arrays — coerce
+        // before validation so actions like remove_tag({ property_ids: 123 }) work.
+        const schema = action.parameters as any;
+        const resolvedParams = schema
+          ? coerceParamsToSchema((params ?? {}) as Record<string, unknown>, schema)
+          : (params ?? {});
+
         // Validate params against the Zod schema before navigating — prevents
         // wasted navigateVia chains when required params are missing.
-        const schema = action.parameters as any;
         if (schema?.safeParse) {
-          const validation = schema.safeParse(params ?? {});
+          const validation = schema.safeParse(resolvedParams);
           if (!validation.success) {
             const missing = validation.error.issues
               .map((i: any) => i.path.join('.'))
@@ -310,7 +342,7 @@ export function AgentActionProvider({
           // If this is a registry action with no DOM targets, navigate first.
           const targets = action.getExecutionTargets();
           if (targets.length === 0 && action.route && navigateRef.current) {
-            const path = action.route(params ?? {});
+            const path = action.route(resolvedParams);
             await navigateRef.current(path);
 
             // Wait for the <AgentAction> component to mount on the new page.
@@ -333,7 +365,7 @@ export function AgentActionProvider({
           return result;
         }
 
-        const result = await executeAction(action, params ?? {}, executorConfig);
+        const result = await executeAction(action, resolvedParams, executorConfig);
         onExecutionComplete?.(result);
         return result;
       } catch (err) {
