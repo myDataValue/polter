@@ -29,10 +29,14 @@ function coerceParamsToSchema(
   const coerced = { ...params };
   for (const key of Object.keys(shape)) {
     if (!(key in coerced)) continue;
-    const fieldDef = shape[key];
-    // Zod stores the type tag in _def.typeName
-    const typeName = fieldDef?._def?.typeName;
-    if (typeName === 'ZodArray' && !Array.isArray(coerced[key])) {
+    let fieldDef = shape[key];
+    // Unwrap ZodOptional / ZodNullable / ZodDefault to find the inner type
+    while (fieldDef?._def?.innerType) {
+      fieldDef = fieldDef._def.innerType;
+    }
+    // Zod v3 uses _def.typeName, Zod v4 uses _def.type
+    const typeName = fieldDef?._def?.typeName ?? fieldDef?._def?.type;
+    if ((typeName === 'ZodArray' || typeName === 'array') && !Array.isArray(coerced[key])) {
       coerced[key] = [coerced[key]];
     }
   }
