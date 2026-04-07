@@ -4,6 +4,7 @@ import {
   AgentActionProvider,
   AgentAction,
   AgentStep,
+  AgentTarget,
   useAgentActions,
 } from '@mydatavalue/polter';
 
@@ -17,16 +18,18 @@ interface Customer {
   email: string;
   status: 'active' | 'trial' | 'churned';
   plan: string;
+  joined: string;
+  mrr: number;
 }
 
 const ALL_CUSTOMERS: Customer[] = [
-  { id: 1, name: 'Sarah Chen', email: 'sarah@acme.io', status: 'active', plan: 'Pro' },
-  { id: 2, name: 'James Rivera', email: 'james@stellar.co', status: 'trial', plan: 'Free' },
-  { id: 3, name: 'Priya Patel', email: 'priya@nexus.dev', status: 'active', plan: 'Enterprise' },
-  { id: 4, name: 'Tom Anderson', email: 'tom@beacon.io', status: 'churned', plan: 'Pro' },
-  { id: 5, name: 'Maya Tanaka', email: 'maya@drift.app', status: 'active', plan: 'Pro' },
-  { id: 6, name: 'Alex Volkov', email: 'alex@horizon.co', status: 'trial', plan: 'Free' },
-  { id: 7, name: 'Lina Okafor', email: 'lina@vertex.io', status: 'active', plan: 'Enterprise' },
+  { id: 1, name: 'Sarah Chen', email: 'sarah@acme.io', status: 'active', plan: 'Pro', joined: 'Mar 2024', mrr: 99 },
+  { id: 2, name: 'James Rivera', email: 'james@stellar.co', status: 'trial', plan: 'Free', joined: 'Jan 2026', mrr: 0 },
+  { id: 3, name: 'Priya Patel', email: 'priya@nexus.dev', status: 'active', plan: 'Enterprise', joined: 'Sep 2023', mrr: 499 },
+  { id: 4, name: 'Tom Anderson', email: 'tom@beacon.io', status: 'churned', plan: 'Pro', joined: 'May 2023', mrr: 0 },
+  { id: 5, name: 'Maya Tanaka', email: 'maya@drift.app', status: 'active', plan: 'Pro', joined: 'Feb 2025', mrr: 99 },
+  { id: 6, name: 'Alex Volkov', email: 'alex@horizon.co', status: 'trial', plan: 'Free', joined: 'Jan 2026', mrr: 0 },
+  { id: 7, name: 'Lina Okafor', email: 'lina@vertex.io', status: 'active', plan: 'Enterprise', joined: 'Jul 2023', mrr: 499 },
 ];
 
 // ============================================================================
@@ -37,6 +40,7 @@ function Dashboard() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<Customer['status'] | 'all'>('all');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [selected, setSelected] = useState<Customer | null>(null);
 
   const filtered = ALL_CUSTOMERS.filter((c) => {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
@@ -49,17 +53,25 @@ function Dashboard() {
       <div className="dashboard-header">
         <div>
           <h1 className="dashboard-title">Customers</h1>
-          <p className="dashboard-subtitle">{filtered.length} of {ALL_CUSTOMERS.length} customers</p>
+          <p className="dashboard-subtitle">
+            {filtered.length} of {ALL_CUSTOMERS.length} customers
+          </p>
         </div>
       </div>
 
       <div className="toolbar">
+        {/* ============================================================
+            Flow 1: find_and_email
+            Steps: type name → click row (lazy) → click email btn (lazy)
+            ============================================================ */}
         <AgentAction
-          name="search_customers"
-          description="Search customers by name"
-          parameters={z.object({ query: z.string().describe('Name to search for') })}
+          name="find_and_email"
+          description="Find a customer by name, open their record, and draft an email"
+          parameters={z.object({
+            name: z.string().describe('Full customer name'),
+          })}
         >
-          <AgentStep label="Type in search" setParam="query">
+          <AgentStep label="Type the name" setParam="name">
             <div className="search-box">
               <span>🔎</span>
               <input
@@ -70,55 +82,62 @@ function Dashboard() {
               />
             </div>
           </AgentStep>
+          <AgentStep label="Click the customer" fromParam="name" />
+          <AgentStep label="Click 'Send email'" fromTarget="send-email-btn" />
         </AgentAction>
 
+        {/* ============================================================
+            Flow 2: filter_and_export
+            Steps: open dropdown → click status (lazy) → click export
+            ============================================================ */}
         <AgentAction
-          name="filter_by_status"
-          description="Filter customers by status (active, trial, churned)"
+          name="filter_and_export"
+          description="Filter customers by status and export the result to CSV"
           parameters={z.object({
-            status: z.enum(['all', 'active', 'trial', 'churned']).describe('Status to filter by'),
+            status: z.enum(['active', 'trial', 'churned']).describe('Status to filter by'),
           })}
-          onExecute={(p) => setStatusFilter(p.status as Customer['status'] | 'all')}
         >
           <AgentStep label="Open status filter">
             <div className="dropdown">
-              <button className="btn" onClick={() => setDropdownOpen((v) => !v)}>
+              <button
+                className="btn"
+                onClick={() => setDropdownOpen((v) => !v)}
+              >
                 Status: {statusFilter} ▾
               </button>
               {dropdownOpen && (
                 <div className="dropdown-menu">
-                  {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
-                    <button
+                  {(['active', 'trial', 'churned'] as const).map((s) => (
+                    <AgentTarget
                       key={s}
-                      className="dropdown-item"
-                      onClick={() => {
-                        setStatusFilter(s);
-                        setDropdownOpen(false);
-                      }}
+                      action="filter_and_export"
+                      param="status"
+                      value={s}
                     >
-                      {s}
-                    </button>
+                      <button
+                        className="dropdown-item"
+                        onClick={() => {
+                          setStatusFilter(s);
+                          setDropdownOpen(false);
+                        }}
+                      >
+                        {s}
+                      </button>
+                    </AgentTarget>
                   ))}
                 </div>
               )}
             </div>
           </AgentStep>
-        </AgentAction>
-
-        <AgentAction
-          name="export_csv"
-          description="Export all customers to CSV"
-          onExecute={() => alert('Exported ' + filtered.length + ' customers to CSV')}
-        >
-          <button className="btn btn-primary">📥 Export CSV</button>
-        </AgentAction>
-
-        <AgentAction
-          name="sync_data"
-          description="Sync customer data from API"
-          onExecute={() => alert('Synced data from API')}
-        >
-          <button className="btn">🔄 Sync</button>
+          <AgentStep label="Pick a status" fromParam="status" />
+          <AgentStep label="Click export">
+            <button
+              className="btn btn-primary"
+              onClick={() => alert('Exported customers to CSV')}
+            >
+              📥 Export CSV
+            </button>
+          </AgentStep>
         </AgentAction>
       </div>
 
@@ -130,16 +149,67 @@ function Dashboard() {
           <div>Plan</div>
         </div>
         {filtered.map((c) => (
-          <div key={c.id} className="table-row">
-            <div className="name">{c.name}</div>
-            <div className="email">{c.email}</div>
-            <div>
-              <span className={'badge ' + c.status}>{c.status}</span>
+          <AgentTarget key={c.id} action="find_and_email" param="name" value={c.name}>
+            <div
+              className="table-row table-row-clickable"
+              onClick={() => setSelected(c)}
+            >
+              <div className="name">{c.name}</div>
+              <div className="email">{c.email}</div>
+              <div>
+                <span className={'badge ' + c.status}>{c.status}</span>
+              </div>
+              <div>{c.plan}</div>
             </div>
-            <div>{c.plan}</div>
-          </div>
+          </AgentTarget>
         ))}
       </div>
+
+      {/* Customer detail modal */}
+      {selected && (
+        <div className="modal-overlay" onClick={() => setSelected(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{selected.name}</h2>
+              <button className="modal-close" onClick={() => setSelected(null)}>
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="detail-row">
+                <span className="detail-label">Email</span>
+                <span>{selected.email}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Status</span>
+                <span className={'badge ' + selected.status}>{selected.status}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Plan</span>
+                <span>{selected.plan}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Joined</span>
+                <span>{selected.joined}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">MRR</span>
+                <span>${selected.mrr}/mo</span>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <AgentTarget action="find_and_email" name="send-email-btn">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => alert(`Drafting email to ${selected.email}`)}
+                >
+                  ✉️ Send email
+                </button>
+              </AgentTarget>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -162,33 +232,23 @@ interface Suggestion {
 
 const SUGGESTIONS: Suggestion[] = [
   {
-    user: 'Export all customers to CSV',
-    agent: "Sure! Here's where the export button is:",
-    action: 'export_csv',
+    user: 'Find Sarah Chen and draft an email to her',
+    agent: "On it. Let me search for her, open her record, and draft the email:",
+    action: 'find_and_email',
+    params: { name: 'Sarah Chen' },
   },
   {
-    user: 'Show only trial customers',
-    agent: "Let me filter that for you:",
-    action: 'filter_by_status',
-    params: { status: 'trial' },
-  },
-  {
-    user: 'Search for Sarah',
-    agent: "Searching for Sarah:",
-    action: 'search_customers',
-    params: { query: 'Sarah' },
-  },
-  {
-    user: 'Sync the latest data',
-    agent: 'On it. Hitting the sync button:',
-    action: 'sync_data',
+    user: 'Filter to only active customers and export them',
+    agent: "Sure — I'll filter the list and run the export:",
+    action: 'filter_and_export',
+    params: { status: 'active' },
   },
 ];
 
 function AgentPanel() {
   const { execute, isExecuting } = useAgentActions();
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'system', text: 'AI assistant ready. Try a suggestion below 👇' },
+    { role: 'system', text: 'AI assistant ready. Try a prompt below 👇' },
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -202,7 +262,6 @@ function AgentPanel() {
       { role: 'user', text: s.user },
       { role: 'agent', text: s.agent },
     ]);
-    // Small pause so the agent message shows before the spotlight starts
     await new Promise((r) => setTimeout(r, 400));
     await execute(s.action, s.params);
   };
@@ -214,7 +273,7 @@ function AgentPanel() {
           <span className="dot" />
           AI Assistant
         </h2>
-        <p>Click a suggestion to watch the agent drive the UI</p>
+        <p>Click a prompt and watch the agent drive the UI</p>
       </div>
 
       <div className="chat-messages">
