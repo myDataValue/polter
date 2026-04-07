@@ -67,23 +67,13 @@ export function AgentAction(props: AgentActionProps) {
 
   const getExecutionTargets = useCallback((): ExecutionTarget[] => {
     if (stepsRef.current.size > 0) {
+      // Map preserves insertion order, which matches JSX order via React's
+      // tree-order useEffect mounting. This lets you interleave element steps
+      // and lazy (fromParam/fromTarget) steps in any sequence.
       const steps = Array.from(stepsRef.current.values());
+      const valid = steps.filter((s) => s.element || s.fromParam || s.fromTarget);
 
-      // Separate steps with elements (sortable by DOM position) from lazy steps (no element)
-      const withElements = steps.filter((s) => s.element);
-      const withoutElements = steps.filter((s) => !s.element && (s.fromParam || s.fromTarget));
-
-      // Sort steps with elements by DOM position
-      withElements.sort((a, b) => {
-        if (!a.element || !b.element) return 0;
-        const pos = a.element.compareDocumentPosition(b.element);
-        return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-      });
-
-      // Combine: element steps first (in DOM order), then fromParam steps
-      const ordered = [...withElements, ...withoutElements];
-
-      return ordered.map((s) => ({
+      return valid.map((s) => ({
         label: s.label,
         element: s.element,
         fromParam: s.fromParam,

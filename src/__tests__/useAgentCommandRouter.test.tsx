@@ -59,21 +59,25 @@ describe('useAgentCommandRouter', () => {
     expect(fallback).toHaveBeenCalledWith({ action: 'unknown_action' });
   });
 
-  it('falls through for disabled actions', async () => {
+  it('returns error for disabled actions and does not fall through', async () => {
     const fallback = vi.fn();
     let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
 
     render(
       <AgentActionProvider mode="instant">
-        <AgentAction name="locked" description="Locked" disabled>
+        <AgentAction name="locked" description="Locked" disabled disabledReason="Not ready">
           <button>Locked</button>
         </AgentAction>
         <RouterConsumer fallback={fallback} onRouter={(r) => (router = r)} />
       </AgentActionProvider>,
     );
 
-    await act(() => router!({ action: 'locked' }));
-    expect(fallback).toHaveBeenCalledWith({ action: 'locked' });
+    let result: ExecutionResult | undefined;
+    await act(async () => {
+      result = await router!({ action: 'locked' });
+    });
+    expect(result).toEqual({ success: false, actionName: 'locked', error: 'Not ready' });
+    expect(fallback).not.toHaveBeenCalled();
   });
 
   it('handles null fallback gracefully', async () => {
