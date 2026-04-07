@@ -6,6 +6,14 @@
 
 <p align="center">Declarative React library for agent-driven UI control with visual guided execution.</p>
 
+<p align="center">
+  <a href="https://stackblitz.com/github/myDataValue/polter/tree/master/examples/basic"><strong>▶ Try it on StackBlitz</strong></a>
+  ·
+  <a href="https://codesandbox.io/p/github/myDataValue/polter/master?import=true&workspace=examples/basic">CodeSandbox</a>
+  ·
+  <a href="https://mydatavalue.github.io/polter/">Website</a>
+</p>
+
 Your UI *is* the agent's interface. It opens the actual dropdown, clicks the actual button, with the user watching. No separate tools to build — single source of truth. After seeing it twice, users do it themselves.
 
 ## Why
