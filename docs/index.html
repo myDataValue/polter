@@ -204,51 +204,65 @@
 
     .install-cmd code { color: var(--text); }
 
-    /* Demo placeholder */
+    /* Demo video */
     .demo-section {
-      max-width: 900px;
+      max-width: 960px;
       margin: 0 auto 120px;
       padding: 0 40px;
     }
 
-    .demo-placeholder {
-      aspect-ratio: 16 / 9;
+    .demo-video-link {
+      display: block;
+      position: relative;
       border-radius: 16px;
       border: 1px solid var(--border);
+      overflow: hidden;
       background: var(--bg-card);
-      display: flex;
+      text-decoration: none;
+      transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+      box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
+    }
+
+    .demo-video-link:hover {
+      border-color: var(--purple);
+      transform: translateY(-2px);
+      box-shadow:
+        0 30px 80px -20px rgba(92, 46, 136, 0.35),
+        0 0 0 1px rgba(92, 46, 136, 0.2);
+    }
+
+    .demo-video {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .demo-video-cta {
+      position: absolute;
+      bottom: 18px;
+      right: 18px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: rgba(10, 10, 15, 0.82);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--purple-dark);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      pointer-events: none;
+    }
+
+    .demo-video-cta-icon {
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      color: var(--text-muted);
-      font-size: 18px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .demo-placeholder::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(92, 46, 136, 0.05), rgba(59, 130, 246, 0.05));
-    }
-
-    .demo-placeholder span {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .demo-placeholder .play-icon {
-      width: 64px;
-      height: 64px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       background: var(--purple);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 8px;
     }
 
     /* Problem section */
@@ -533,11 +547,14 @@
 
   <!-- Demo -->
   <div class="demo-section">
-    <a href="https://stackblitz.com/github/myDataValue/polter/tree/master/examples/basic" class="demo-placeholder" style="text-decoration: none;">
-      <span>
-        <div class="play-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
-        </div>
+    <a href="https://stackblitz.com/github/myDataValue/polter/tree/master/examples/basic" class="demo-video-link" aria-label="Try the live demo on StackBlitz">
+      <video class="demo-video" autoplay loop muted playsinline>
+        <source src="polter.webm" type="video/webm">
+      </video>
+      <span class="demo-video-cta">
+        <span class="demo-video-cta-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+        </span>
         Try the live demo on StackBlitz
       </span>
     </a>

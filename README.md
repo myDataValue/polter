@@ -7,6 +7,10 @@
 <p align="center">Declarative React library for agent-driven UI control with visual guided execution.</p>
 
 <p align="center">
+  <video src="https://github.com/myDataValue/polter/raw/master/docs/polter.webm" width="800" autoplay loop muted playsinline controls></video>
+</p>
+
+<p align="center">
   <a href="https://stackblitz.com/github/myDataValue/polter/tree/master/examples/basic"><strong>▶ Try it on StackBlitz</strong></a>
   ·
   <a href="https://codesandbox.io/p/github/myDataValue/polter/master?import=true&workspace=examples/basic">CodeSandbox</a>
