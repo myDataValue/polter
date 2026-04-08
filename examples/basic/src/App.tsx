@@ -296,19 +296,20 @@ function AgentPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'system', text: 'AI assistant ready. Try a prompt below 👇' },
   ]);
+  const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isThinking]);
 
   const runSuggestion = async (s: Suggestion) => {
-    setMessages((prev) => [
-      ...prev,
-      { role: 'user', text: s.user },
-      { role: 'agent', text: s.agent },
-    ]);
-    await new Promise((r) => setTimeout(r, 400));
+    setMessages((prev) => [...prev, { role: 'user', text: s.user }]);
+    setIsThinking(true);
+    await new Promise((r) => setTimeout(r, 1200));
+    setIsThinking(false);
+    setMessages((prev) => [...prev, { role: 'agent', text: s.agent }]);
+    await new Promise((r) => setTimeout(r, 350));
     await execute(s.action, s.params);
   };
 
@@ -328,6 +329,15 @@ function AgentPanel() {
             {m.text}
           </div>
         ))}
+        {isThinking && (
+          <div className="msg agent">
+            <span className="typing-dots" aria-label="Agent thinking">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -337,7 +347,7 @@ function AgentPanel() {
           <button
             key={s.action + JSON.stringify(s.params)}
             className="suggestion"
-            disabled={isExecuting}
+            disabled={isExecuting || isThinking}
             onClick={() => runSuggestion(s)}
           >
             {s.user}
@@ -345,6 +355,23 @@ function AgentPanel() {
         ))}
       </div>
     </aside>
+  );
+}
+
+// ============================================================================
+// Execution badge — persistent "🤖 Agent executing" pill at the top of the
+// viewport whenever the agent is driving the UI. The single most important
+// visual cue that the clicks aren't coming from a human.
+// ============================================================================
+
+function ExecutionBadge() {
+  const { isExecuting } = useAgentActions();
+  if (!isExecuting) return null;
+  return (
+    <div className="exec-badge" role="status" aria-live="polite">
+      <span className="exec-badge-icon">🤖</span>
+      <span>Agent executing</span>
+    </div>
   );
 }
 
@@ -359,6 +386,7 @@ export default function App() {
         <Dashboard />
         <AgentPanel />
       </div>
+      <ExecutionBadge />
       <Toaster />
     </AgentActionProvider>
   );
