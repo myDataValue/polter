@@ -1,5 +1,7 @@
 # Best Practices
 
+Polter implements **Agent-Driven UI (ADUI)** — agents that drive your existing, permanent interface rather than generating a new one. The practices below flow from that core principle: register actions where the real UI lives, keep them in sync with what's on screen, and let users watch the agent click the same buttons they'd click themselves.
+
 ## Use `<AgentAction>` when wrapping a visible element
 
 The component pattern is for actions that have a single, visible UI element to spotlight:

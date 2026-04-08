@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Polter - AI agents that drive your real UI</title>
-  <meta name="description" content="Declarative React library for agent-driven UI control. The agent clicks real buttons, opens real dropdowns, while the user watches and learns.">
-  <meta property="og:title" content="Polter - AI agents that drive your real UI">
-  <meta property="og:description" content="The agent drives the real UI — scrolls to the button, spotlights it, clicks it. Users watch and learn. Nothing else does this.">
+  <title>Polter - Agent-Driven UI for React</title>
+  <meta name="description" content="Polter is a declarative React library for Agent-Driven UI (ADUI). The agent drives your real interface — scrolls, spotlights, clicks — while users watch and learn.">
+  <meta property="og:title" content="Polter - Agent-Driven UI (ADUI) for React">
+  <meta property="og:description" content="Agent-Driven UI: agents that drive your real, permanent interface. Users watch and learn. Single source of truth. The opposite of Generative UI.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://github.com/myDataValue/polter">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👻</text></svg>">
@@ -120,6 +120,32 @@
       height: 100px;
       margin-bottom: 32px;
       position: relative;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      margin-bottom: 20px;
+      border-radius: 999px;
+      background: rgba(92, 46, 136, 0.15);
+      border: 1px solid var(--purple-dark);
+      color: var(--purple-light);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-eyebrow::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--purple-light);
+      box-shadow: 0 0 8px var(--purple-light);
     }
 
     .hero h1 {
@@ -263,6 +289,91 @@
       height: 22px;
       border-radius: 50%;
       background: var(--purple);
+    }
+
+    /* Paradigm section */
+    .paradigm {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 40px 80px;
+    }
+
+    .paradigm-inner {
+      text-align: center;
+      padding: 56px 48px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(92, 46, 136, 0.1), rgba(59, 130, 246, 0.04));
+      border: 1px solid var(--purple-dark);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .paradigm-inner::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -10%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(92, 46, 136, 0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .paradigm-eyebrow {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: rgba(92, 46, 136, 0.25);
+      color: var(--purple-light);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .paradigm h2 {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1.2;
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    .paradigm h2 .arrow {
+      color: var(--purple-light);
+      margin: 0 6px;
+      font-weight: 400;
+    }
+
+    .paradigm p {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto 16px;
+      line-height: 1.75;
+      position: relative;
+    }
+
+    .paradigm p strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .paradigm p em {
+      color: var(--purple-light);
+      font-style: normal;
+      font-weight: 600;
+    }
+
+    .paradigm .paradigm-kicker {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 500;
     }
 
     /* Problem section */
@@ -495,6 +606,11 @@
       .hero h1 { font-size: 36px; }
       .hero p { font-size: 16px; }
 
+      .paradigm { padding: 20px 20px 40px; }
+      .paradigm-inner { padding: 36px 24px; }
+      .paradigm h2 { font-size: 24px; }
+      .paradigm p { font-size: 15px; }
+
       .problem { padding: 60px 20px; }
       .problem h2 { font-size: 28px; }
       .problem-grid { grid-template-columns: 1fr; }
@@ -534,6 +650,7 @@
   <!-- Hero -->
   <section class="hero">
     <img src="logo.svg" alt="Polter" class="hero-logo">
+    <div class="hero-eyebrow">Agent-Driven UI (ADUI)</div>
     <h1>AI agents that drive <br>your <span class="highlight">real UI</span></h1>
     <p>Your UI is the agent's interface — single source of truth. Users watch, learn, and take over. No separate tools to build.</p>
     <div class="hero-actions">
@@ -559,6 +676,17 @@
       </span>
     </a>
   </div>
+
+  <!-- Paradigm -->
+  <section class="paradigm">
+    <div class="paradigm-inner">
+      <span class="paradigm-eyebrow">A new paradigm</span>
+      <h2>From Generative UI <span class="arrow">→</span> Agent-Driven UI</h2>
+      <p>Vercel gave us <strong>Generative UI</strong> — agents that generate brand new, ephemeral interfaces on the fly. Great for chatbots.</p>
+      <p>Polter is the opposite. We call this <strong>Agent-Driven UI (ADUI)</strong> — agents that drive your <em>existing</em>, permanent interface. The user isn't driving the UI, and the UI isn't being generated. The agent is in the driver's seat of the app you already built.</p>
+      <p class="paradigm-kicker">Generative UI is great for chat. ADUI is how you bring agents into real SaaS without destroying user muscle memory.</p>
+    </div>
+  </section>
 
   <!-- Problem -->
   <section class="problem" id="why">
