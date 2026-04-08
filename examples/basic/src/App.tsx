@@ -9,6 +9,52 @@ import {
 } from '@mydatavalue/polter';
 
 // ============================================================================
+// Toast (tiny zero-dep notification system)
+// ============================================================================
+
+interface ToastMessage {
+  id: number;
+  text: string;
+}
+
+let toastIdCounter = 0;
+let toastState: ToastMessage[] = [];
+const toastListeners = new Set<(messages: ToastMessage[]) => void>();
+
+function emitToasts() {
+  toastListeners.forEach((listener) => listener(toastState));
+}
+
+function showToast(text: string) {
+  const id = ++toastIdCounter;
+  toastState = [...toastState, { id, text }];
+  emitToasts();
+  setTimeout(() => {
+    toastState = toastState.filter((m) => m.id !== id);
+    emitToasts();
+  }, 3500);
+}
+
+function Toaster() {
+  const [messages, setMessages] = useState<ToastMessage[]>(toastState);
+  useEffect(() => {
+    toastListeners.add(setMessages);
+    return () => {
+      toastListeners.delete(setMessages);
+    };
+  }, []);
+  return (
+    <div className="toaster">
+      {messages.map((m) => (
+        <div key={m.id} className="toast">
+          {m.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
 // Fake data
 // ============================================================================
 
@@ -133,7 +179,7 @@ function Dashboard() {
           <AgentStep label="Click export">
             <button
               className="btn btn-primary"
-              onClick={() => alert('Exported customers to CSV')}
+              onClick={() => showToast('✨ Exported customers to CSV')}
             >
               📥 Export CSV
             </button>
@@ -201,7 +247,7 @@ function Dashboard() {
               <AgentTarget action="find_and_email" name="send-email-btn">
                 <button
                   className="btn btn-primary"
-                  onClick={() => alert(`Drafting email to ${selected.email}`)}
+                  onClick={() => showToast(`✨ AI: Drafting email to ${selected.email}`)}
                 >
                   ✉️ Send email
                 </button>
@@ -313,6 +359,7 @@ export default function App() {
         <Dashboard />
         <AgentPanel />
       </div>
+      <Toaster />
     </AgentActionProvider>
   );
 }
