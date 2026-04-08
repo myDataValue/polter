@@ -116,9 +116,10 @@
     }
 
     .hero-logo {
+      display: block;
       width: 100px;
       height: 100px;
-      margin-bottom: 32px;
+      margin: 0 auto 32px;
       position: relative;
     }
 
@@ -235,26 +236,27 @@
       max-width: 960px;
       margin: 0 auto 120px;
       padding: 0 40px;
+      text-align: center;
     }
 
-    .demo-video-link {
+    .demo-caption {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .demo-caption strong {
+      color: var(--purple-light);
+      font-weight: 600;
+    }
+
+    .demo-video-frame {
       display: block;
-      position: relative;
       border-radius: 16px;
       border: 1px solid var(--border);
       overflow: hidden;
       background: var(--bg-card);
-      text-decoration: none;
-      transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
       box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
-    }
-
-    .demo-video-link:hover {
-      border-color: var(--purple);
-      transform: translateY(-2px);
-      box-shadow:
-        0 30px 80px -20px rgba(92, 46, 136, 0.35),
-        0 0 0 1px rgba(92, 46, 136, 0.2);
     }
 
     .demo-video {
@@ -263,32 +265,8 @@
       height: auto;
     }
 
-    .demo-video-cta {
-      position: absolute;
-      bottom: 18px;
-      right: 18px;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 16px;
-      background: rgba(10, 10, 15, 0.82);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--purple-dark);
-      border-radius: 10px;
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 600;
-      pointer-events: none;
-    }
-
-    .demo-video-cta-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: var(--purple);
+    .demo-cta {
+      margin-top: 24px;
     }
 
     /* Paradigm section */
@@ -393,24 +371,15 @@
 
     .problem-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 24px;
     }
 
     .problem-card {
       padding: 32px;
       border-radius: 16px;
-      border: 1px solid var(--border);
+      border: 1px solid #2d1515;
       background: var(--bg-card);
-    }
-
-    .problem-card.bad {
-      border-color: #2d1515;
-    }
-
-    .problem-card.good {
-      border-color: var(--purple-dark);
-      background: linear-gradient(135deg, rgba(92, 46, 136, 0.08), var(--bg-card));
     }
 
     .problem-card .tag {
@@ -422,16 +391,8 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 16px;
-    }
-
-    .problem-card.bad .tag {
       background: #2d1515;
       color: #f87171;
-    }
-
-    .problem-card.good .tag {
-      background: rgba(92, 46, 136, 0.2);
-      color: var(--purple-light);
     }
 
     .problem-card h3 {
@@ -444,6 +405,59 @@
       font-size: 14px;
       color: var(--text-muted);
       line-height: 1.7;
+    }
+
+    .solution-callout {
+      margin-top: 40px;
+      padding: 48px 40px;
+      border-radius: 20px;
+      border: 1px solid var(--purple-dark);
+      background: linear-gradient(135deg, rgba(92, 46, 136, 0.12), rgba(59, 130, 246, 0.04));
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .solution-callout::before {
+      content: '';
+      position: absolute;
+      top: -40%;
+      right: -10%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(92, 46, 136, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .solution-eyebrow {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: rgba(92, 46, 136, 0.25);
+      color: var(--purple-light);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 18px;
+      position: relative;
+    }
+
+    .solution-callout h3 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .solution-callout p {
+      font-size: 16px;
+      color: var(--text-muted);
+      line-height: 1.7;
+      max-width: 640px;
+      margin: 0 auto;
+      position: relative;
     }
 
     /* How it works */
@@ -614,6 +628,8 @@
       .problem { padding: 60px 20px; }
       .problem h2 { font-size: 28px; }
       .problem-grid { grid-template-columns: 1fr; }
+      .solution-callout { padding: 36px 24px; }
+      .solution-callout h3 { font-size: 22px; }
 
       .how { padding: 60px 20px; }
       .how h2 { font-size: 28px; }
@@ -664,17 +680,18 @@
 
   <!-- Demo -->
   <div class="demo-section">
-    <a href="https://stackblitz.com/github/myDataValue/polter/tree/master/examples/basic" class="demo-video-link" aria-label="Try the live demo on StackBlitz">
+    <p class="demo-caption"><strong>The AI assistant on the right sends a single sentence.</strong> Polter drives every click on the left.</p>
+    <div class="demo-video-frame">
       <video class="demo-video" autoplay loop muted playsinline>
         <source src="polter.webm" type="video/webm">
       </video>
-      <span class="demo-video-cta">
-        <span class="demo-video-cta-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
-        </span>
+    </div>
+    <div class="demo-cta">
+      <a href="https://stackblitz.com/github/myDataValue/polter/tree/master/examples/basic" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
         Try the live demo on StackBlitz
-      </span>
-    </a>
+      </a>
+    </div>
   </div>
 
   <!-- Paradigm -->
@@ -682,9 +699,7 @@
     <div class="paradigm-inner">
       <span class="paradigm-eyebrow">A new paradigm</span>
       <h2>From Generative UI <span class="arrow">→</span> Agent-Driven UI</h2>
-      <p>Vercel gave us <strong>Generative UI</strong> — agents that generate brand new, ephemeral interfaces on the fly. Great for chatbots.</p>
-      <p>Polter is the opposite. We call this <strong>Agent-Driven UI (ADUI)</strong> — agents that drive your <em>existing</em>, permanent interface. The user isn't driving the UI, and the UI isn't being generated. The agent is in the driver's seat of the app you already built.</p>
-      <p class="paradigm-kicker">Generative UI is great for chat. ADUI is how you bring agents into real SaaS without destroying user muscle memory.</p>
+      <p>Generative UI generates new interfaces on the fly. <strong>Agent-Driven UI drives the one you already built.</strong></p>
     </div>
   </section>
 
@@ -702,11 +717,12 @@
         <h3>Users never learn</h3>
         <p>The agent works behind the scenes or generates throwaway UI. Either way, users never learn your actual interface. Permanent dependency.</p>
       </div>
-      <div class="problem-card good">
-        <span class="tag">Polter</span>
-        <h3>Your UI is the agent</h3>
-        <p>Single source of truth. The agent drives your real buttons, dropdowns, and forms — users watch and learn. After twice, they do it themselves. Zero extra tools to build.</p>
-      </div>
+    </div>
+
+    <div class="solution-callout">
+      <span class="solution-eyebrow">→ Polter solves both</span>
+      <h3>Your UI is the agent</h3>
+      <p>Single source of truth. The agent drives your real buttons, dropdowns, and forms — users watch and learn. After twice, they do it themselves. Zero extra tools to build.</p>
     </div>
   </section>
 

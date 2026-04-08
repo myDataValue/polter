@@ -6,8 +6,10 @@
 
 <p align="center">Declarative React library for <strong>Agent-Driven UI</strong> with visual guided execution.</p>
 
+<p align="center"><em>The AI assistant on the right sends a single sentence — Polter drives every click on the left.</em></p>
+
 <p align="center">
-  <video src="https://github.com/myDataValue/polter/raw/master/docs/polter.webm" width="800" autoplay loop muted playsinline controls></video>
+  <img src="https://github.com/myDataValue/polter/raw/master/docs/polter.gif" alt="Polter demo" width="800" />
 </p>
 
 <p align="center">
@@ -22,11 +24,7 @@ Your UI *is* the agent's interface. It opens the actual dropdown, clicks the act
 
 ## Agent-Driven UI (ADUI)
 
-Vercel gave us **Generative UI** — agents that generate brand new, ephemeral interfaces on the fly. Great for chatbots.
-
-Polter is the opposite. We call this **Agent-Driven UI (ADUI)** — agents that drive your *existing*, permanent interface. The user isn't driving the UI, and the UI isn't being generated. The agent is in the driver's seat of the app you already built.
-
-Generative UI is great for chat. ADUI is how you bring agents into real SaaS without destroying user muscle memory.
+Generative UI generates new interfaces on the fly. **Agent-Driven UI drives the one you already built.** Vercel's Generative UI is great for chatbots. ADUI is how you bring agents into real SaaS without destroying user muscle memory.
 
 ## Why
 
