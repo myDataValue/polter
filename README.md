@@ -15,8 +15,6 @@
 <p align="center">
   <a href="https://stackblitz.com/github/myDataValue/polter/tree/master/examples/basic"><strong>▶ Try it on StackBlitz</strong></a>
   ·
-  <a href="https://codesandbox.io/p/github/myDataValue/polter/master?import=true&workspace=examples/basic">CodeSandbox</a>
-  ·
   <a href="https://mydatavalue.github.io/polter/">Website</a>
 </p>
 
