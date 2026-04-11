@@ -4,7 +4,7 @@
 
 <h1 align="center">polter</h1>
 
-<p align="center">Declarative React library for <strong>Agent-Driven UI</strong> with visual guided execution.</p>
+<p align="center">Drop an AI agent into your complex B2B dashboard — without rebuilding your UI as agent tools.</p>
 
 <p align="center"><em>The AI assistant on the right sends a single sentence — Polter drives every click on the left.</em></p>
 
@@ -18,21 +18,21 @@
   <a href="https://mydatavalue.github.io/polter/">Website</a>
 </p>
 
-Your UI *is* the agent's interface. It opens the actual dropdown, clicks the actual button, with the user watching. No separate tools to build — single source of truth. After seeing it twice, users do it themselves.
+Your UI *is* the agent's interface. Same buttons, same dropdowns, same forms your users already click — single source of truth, zero duplicate tool layer. As a side effect, users watch the agent work and graduate off it for tasks they've seen once or twice.
 
 ## Agent-Driven UI (ADUI)
 
-Generative UI generates new interfaces on the fly. **Agent-Driven UI drives the one you already built.** Vercel's Generative UI is great for chatbots. ADUI is how you bring agents into real SaaS without destroying user muscle memory.
+Generative UI generates new interfaces on the fly. **Agent-Driven UI drives the one you already built.** Vercel's Generative UI is great for chatbots. ADUI is how you bring agents into complex B2B apps — CRMs, ERPs, PMSes, admin panels — without duplicating your UI as a parallel tool layer.
 
 ## Why
 
-Every SaaS adding an AI agent faces two problems:
+If you're adding an AI agent to a complex dashboard — a CRM, an ERP, a PMS, an admin panel, anywhere users manage 100s of things across tables, forms, and modals — you hit the same wall.
 
-1. **Double the work.** You build your UI, then build a whole separate set of agent tools — API endpoints, handlers, schemas — all duplicating what the UI already does.
+**The duplicate tool layer.** You already built the table, the filters, the bulk-edit modal, the per-row actions. Now the agent needs to do the same things — so you're writing a parallel set of API endpoints, tool schemas, and handlers that re-implement your UI in JSON. Every feature ships twice, and the two layers drift apart.
 
-2. **Users never learn.** The agent does things behind the scenes or generates throwaway UI. Either way, users never see where buttons are or how the interface works. Permanent dependency.
+**Polter's approach: your UI *is* the agent's interface.** The agent scrolls to the real button, opens the real dropdown, clicks the real row. One mount, one schema, one click path — zero agent-specific tools to build.
 
-**Polter solves both.** Your UI *is* the agent's interface — single source of truth. The agent scrolls to the real button, spotlights it, clicks it. Users watch and learn. After twice, they do it themselves. And you wrote zero agent-specific tools.
+As a side effect, because the user watches the agent work, they pick up the interface and graduate off the agent for tasks they've seen once or twice. Permanent dependency isn't part of the deal.
 
 ## Install
 
