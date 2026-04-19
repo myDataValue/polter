@@ -34,10 +34,15 @@ export interface RegisteredAction {
   name: string;
   description: string;
   parameters?: unknown;
-  onExecute?: (params: Record<string, unknown>) => void | Promise<void>;
   disabled: boolean;
   disabledReason?: string;
   getExecutionTargets: () => ExecutionTarget[];
+  /**
+   * Awaited after all steps complete. Use for waiting on async work triggered
+   * by a step click (e.g. a mutation or streaming response). This should WAIT
+   * for work, not DO work — the steps drive the UI.
+   */
+  awaitResult?: () => void | Promise<void>;
   /** Client-side route for navigation before execution (from defineAction). */
   route?: (params: Record<string, unknown>) => string;
   /** Chain of action names to execute sequentially before this action (from defineAction). */
@@ -106,6 +111,8 @@ export interface AgentActionProviderProps {
   registry?: import('./defineAction').ActionDefinition<any>[];
   /** Router integration — called when executing a registry action that needs navigation. */
   navigate?: (path: string) => void | Promise<void>;
+  /** Enable dev-mode console warnings for actions missing from the registry. */
+  devWarnings?: boolean;
 }
 
 export interface AgentActionContextValue {

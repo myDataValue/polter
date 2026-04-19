@@ -19,8 +19,6 @@ export interface ActionDefinition<TParams = Record<string, unknown>> {
   readonly parameters?: unknown;
   /** Client-side route to navigate to before executing. */
   readonly route?: (params: TParams) => string;
-  /** Handler for background execution (no UI component needed). */
-  readonly onExecute?: (params: TParams) => void | Promise<void>;
   /**
    * Chain of action names to execute sequentially before this action.
    * Each action in the chain is visually executed (spotlight → click), and the next
@@ -40,7 +38,6 @@ export function defineAction<TParams = Record<string, unknown>>(config: {
   description: string;
   parameters?: unknown;
   route?: (params: TParams) => string;
-  onExecute?: (params: TParams) => void | Promise<void>;
   navigateVia?: string[];
   mountTimeout?: number;
 }): ActionDefinition<TParams> {
@@ -49,7 +46,6 @@ export function defineAction<TParams = Record<string, unknown>>(config: {
     description: config.description,
     parameters: config.parameters,
     route: config.route,
-    onExecute: config.onExecute,
     navigateVia: config.navigateVia,
     mountTimeout: config.mountTimeout,
   };

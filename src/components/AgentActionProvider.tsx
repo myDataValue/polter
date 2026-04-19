@@ -19,7 +19,6 @@ function definitionToRegisteredAction(def: ActionDefinition<any>): RegisteredAct
     name: def.name,
     description: def.description,
     parameters: def.parameters,
-    onExecute: def.onExecute as RegisteredAction['onExecute'],
     disabled: false,
     disabledReason: undefined,
     getExecutionTargets: () => [],
@@ -41,6 +40,7 @@ export function AgentActionProvider({
   onExecutionComplete,
   registry,
   navigate,
+  devWarnings = false,
 }: AgentActionProviderProps) {
   const actionsRef = useRef<Map<string, RegisteredAction>>(new Map());
   const targetsRef = useRef<Map<string, AgentTargetEntry>>(new Map());
@@ -93,6 +93,14 @@ export function AgentActionProvider({
       if (!action.route) action.route = registryAction.route;
       if (!action.navigateVia) action.navigateVia = registryAction.navigateVia;
       if (action.mountTimeout == null) action.mountTimeout = registryAction.mountTimeout;
+    }
+
+    // Dev-mode warning: action registered by component but not in registry
+    if (devWarnings && !registryAction && action.componentBacked) {
+      console.warn(
+        `[polter] Action "${action.name}" is registered by a component but missing from the registry. ` +
+        `Add a defineAction() export to an actions.ts file so it appears in the tool schema before mount.`,
+      );
     }
 
     actionsRef.current.set(action.name, action);

@@ -281,13 +281,12 @@ async function executeInstant(
   params: Record<string, unknown>,
 ): Promise<ExecutionResult> {
   try {
-    if (action.onExecute) {
-      await action.onExecute(params);
-    } else {
-      const targets = action.getExecutionTargets();
-      for (const target of targets) {
-        target.element?.click();
-      }
+    const targets = action.getExecutionTargets();
+    for (const target of targets) {
+      target.element?.click();
+    }
+    if (action.awaitResult) {
+      await action.awaitResult();
     }
     return { success: true, actionName: action.name };
   } catch (err) {
@@ -313,10 +312,10 @@ async function executeGuided(
 ): Promise<ExecutionResult> {
   const targets = action.getExecutionTargets();
 
-  // No targets, or all targets are invisible (e.g. display:contents wrappers) — run directly
+  // No targets and no awaitResult — nothing to do
   if (targets.length === 0 || targets.every((t) => t.element && !isElementVisible(t.element))) {
-    if (action.onExecute) {
-      await action.onExecute(params);
+    if (action.awaitResult) {
+      await action.awaitResult();
     }
     return { success: true, actionName: action.name };
   }
@@ -373,19 +372,8 @@ async function executeGuided(
         // Set value programmatically via callback
         const value = params[target.setValue];
         target.onSetValue(value);
-      } else if (target.fromParam || target.fromTarget) {
-        // Lazy-resolved step: always click the resolved target (dropdown option, popover button, etc.)
-        animateCursorClick();
-        element.click();
-      } else if (action.onExecute) {
-        // With onExecute: click intermediate steps (e.g. open dropdown),
-        // skip clicking the last step (onExecute handles the action)
-        if (!isLast) {
-          animateCursorClick();
-          element.click();
-        }
       } else {
-        // Without onExecute: click every step
+        // Click every step — pure ADUI
         animateCursorClick();
         element.click();
       }
@@ -399,9 +387,9 @@ async function executeGuided(
       }
     }
 
-    // 6. Call onExecute after visual sequence
-    if (action.onExecute) {
-      await action.onExecute(params);
+    // 6. Await async work triggered by step clicks
+    if (action.awaitResult) {
+      await action.awaitResult();
     }
 
     blocker.remove();

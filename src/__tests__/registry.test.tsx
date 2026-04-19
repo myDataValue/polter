@@ -45,11 +45,10 @@ describe('Registry', () => {
   });
 
   it('component-backed action overrides registry version', () => {
-    const onExecute = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" registry={[exportCsv]}>
-        <AgentAction action={exportCsv} onExecute={onExecute}>
+        <AgentAction action={exportCsv}>
           <button>Export</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -84,11 +83,10 @@ describe('Registry', () => {
   });
 
   it('preserves navigateVia from registry when component registers', async () => {
-    const onExecute = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" registry={[grantAccess]}>
-        <AgentAction action={grantAccess} onExecute={onExecute}>
+        <AgentAction action={grantAccess}>
           <button>Grant</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -105,7 +103,7 @@ describe('componentBacked flag', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" registry={[exportCsv]}>
-        <AgentAction action={exportCsv} onExecute={() => {}}>
+        <AgentAction action={exportCsv}>
           <button>Export</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -133,7 +131,7 @@ describe('Zod param validation', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" registry={[grantAccess]}>
-        <AgentAction action={grantAccess} onExecute={() => {}}>
+        <AgentAction action={grantAccess}>
           <button>Grant</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -146,28 +144,28 @@ describe('Zod param validation', () => {
   });
 
   it('passes when required params are provided', async () => {
-    const onExecute = vi.fn();
+    const onClick = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" registry={[grantAccess]}>
-        <AgentAction action={grantAccess} onExecute={onExecute}>
-          <button>Grant</button>
+        <AgentAction action={grantAccess}>
+          <button onClick={onClick}>Grant</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
     const result = await act(() => ctx!.execute('grant_access', { property_ids: [1, 2, 3] }));
     expect(result.success).toBe(true);
-    expect(onExecute).toHaveBeenCalledWith({ property_ids: [1, 2, 3] });
+    expect(onClick).toHaveBeenCalled();
   });
 
   it('skips validation for actions without parameters schema', async () => {
-    const onExecute = vi.fn();
+    const onClick = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" registry={[exportCsv]}>
-        <AgentAction action={exportCsv} onExecute={onExecute}>
-          <button>Export</button>
+        <AgentAction action={exportCsv}>
+          <button onClick={onClick}>Export</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
@@ -178,11 +176,13 @@ describe('Zod param validation', () => {
 });
 
 describe('disabled after navigation', () => {
+  const lockedAction = defineAction({ name: 'locked', description: 'Locked action' });
+
   it('returns disabledReason when action is disabled', async () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant">
-        <AgentAction name="locked" description="Locked action" disabled disabledReason="Not logged in">
+        <AgentAction action={lockedAction} disabled disabledReason="Not logged in">
           <button>Locked</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />

@@ -21,48 +21,48 @@ interface AgentStepContextValue {
 
 export const AgentStepContext = createContext<AgentStepContextValue | null>(null);
 
-type AgentActionProps = {
-  onExecute?: (params: Record<string, unknown>) => void | Promise<void>;
+interface AgentActionProps {
+  /** The action definition — provides name, description, parameters. */
+  action: ActionDefinition<any>;
   disabled?: boolean;
   disabledReason?: string;
+  /**
+   * Awaited after all steps complete. Use for waiting on async work triggered
+   * by a step click (e.g. a mutation or streaming response). This should WAIT
+   * for work, not DO work — the steps drive the UI.
+   */
+  awaitResult?: () => void | Promise<void>;
   children?: React.ReactNode;
-} & (
-  | { action: ActionDefinition<any>; name?: string; description?: string; parameters?: unknown }
-  | { action?: never; name: string; description: string; parameters?: unknown }
-);
+}
 
 export function AgentAction(props: AgentActionProps) {
   const {
     action,
-    onExecute,
     disabled = false,
     disabledReason,
+    awaitResult,
     children,
   } = props;
 
-  // Resolve from action definition, with inline props as overrides.
-  const name = props.name ?? action?.name;
-  const description = props.description ?? action?.description ?? '';
-  const parameters = props.parameters ?? action?.parameters;
+  const name = action.name;
+  const description = action.description;
+  const parameters = action.parameters;
 
   const context = useContext(AgentActionContext);
   if (!context) {
     throw new Error('AgentAction must be used within an AgentActionProvider');
   }
-  if (!name) {
-    throw new Error('AgentAction requires either a "name" prop or an "action" prop');
-  }
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stepsRef = useRef<Map<string, StepData>>(new Map());
 
-  const onExecuteRef = useRef(onExecute);
-  onExecuteRef.current = onExecute;
+  const awaitResultRef = useRef(awaitResult);
+  awaitResultRef.current = awaitResult;
   const parametersRef = useRef(parameters);
   parametersRef.current = parameters;
 
-  const stableOnExecute = useCallback((params: Record<string, unknown>) => {
-    return onExecuteRef.current?.(params);
+  const stableAwaitResult = useCallback(() => {
+    return awaitResultRef.current?.();
   }, []);
 
   const getExecutionTargets = useCallback((): ExecutionTarget[] => {
@@ -97,14 +97,14 @@ export function AgentAction(props: AgentActionProps) {
       name,
       description,
       parameters: parametersRef.current,
-      onExecute: onExecuteRef.current ? stableOnExecute : undefined,
       disabled,
       disabledReason,
+      awaitResult: awaitResultRef.current ? stableAwaitResult : undefined,
       getExecutionTargets,
       componentBacked: true,
     });
     return () => unregisterAction(name);
-  }, [name, description, disabled, disabledReason, stableOnExecute, getExecutionTargets, registerAction, unregisterAction]);
+  }, [name, description, disabled, disabledReason, stableAwaitResult, getExecutionTargets, registerAction, unregisterAction]);
 
   const registerStep = useCallback(
     (id: string, data: StepData) => {

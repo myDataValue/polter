@@ -4,12 +4,16 @@ import { render, act } from '@testing-library/react';
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { AgentAction } from '../components/AgentAction';
 import { useAgentCommandRouter } from '../hooks/useAgentCommandRouter';
+import { defineAction } from '../core/defineAction';
 import type { ExecutionResult } from '../core/types';
 
 interface Command {
   action: string;
   payload?: Record<string, unknown>;
 }
+
+const syncAction = defineAction({ name: 'sync', description: 'Sync' });
+const lockedAction = defineAction({ name: 'locked', description: 'Locked' });
 
 function RouterConsumer({
   fallback,
@@ -27,21 +31,21 @@ function RouterConsumer({
 
 describe('useAgentCommandRouter', () => {
   it('routes registered actions through execute', async () => {
-    const onExecute = vi.fn();
+    const onClick = vi.fn();
     const fallback = vi.fn();
     let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
 
     render(
       <AgentActionProvider mode="instant">
-        <AgentAction name="sync" description="Sync" onExecute={onExecute}>
-          <button>Sync</button>
+        <AgentAction action={syncAction}>
+          <button onClick={onClick}>Sync</button>
         </AgentAction>
         <RouterConsumer fallback={fallback} onRouter={(r) => (router = r)} />
       </AgentActionProvider>,
     );
 
     await act(() => router!({ action: 'sync', payload: { id: 1 } }));
-    expect(onExecute).toHaveBeenCalled();
+    expect(onClick).toHaveBeenCalled();
     expect(fallback).not.toHaveBeenCalled();
   });
 
@@ -65,7 +69,7 @@ describe('useAgentCommandRouter', () => {
 
     render(
       <AgentActionProvider mode="instant">
-        <AgentAction name="locked" description="Locked" disabled disabledReason="Not ready">
+        <AgentAction action={lockedAction} disabled disabledReason="Not ready">
           <button>Locked</button>
         </AgentAction>
         <RouterConsumer fallback={fallback} onRouter={(r) => (router = r)} />

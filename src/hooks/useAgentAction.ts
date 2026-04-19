@@ -1,8 +1,9 @@
 import { useContext, useEffect, useRef } from 'react';
 import type { ExecutionTarget } from '../core/types';
+import type { ActionDefinition } from '../core/defineAction';
 import { AgentActionContext } from '../components/AgentActionProvider';
 
-interface StepConfig {
+export interface StepConfig {
   label: string;
   fromParam?: string;
   fromTarget?: string;
@@ -13,19 +14,26 @@ interface StepConfig {
 }
 
 export interface AgentActionConfig {
-  name: string;
-  description: string;
-  parameters?: unknown;
-  onExecute?: (params: Record<string, unknown>) => void | Promise<void>;
+  /** The action definition — provides name, description, parameters. */
+  action: ActionDefinition<any>;
+  /** Steps the agent walks through to drive the UI. Required. */
+  steps: StepConfig[];
   disabled?: boolean;
   disabledReason?: string;
-  steps?: StepConfig[];
+  /**
+   * Awaited after all steps complete. Use for waiting on async work triggered
+   * by a step click (e.g. a mutation or streaming response). This should WAIT
+   * for work, not DO work — the steps drive the UI.
+   */
+  awaitResult?: () => void | Promise<void>;
 }
 
 /**
  * Hook-based action registration for actions that don't wrap a single element.
  * Use this for per-row actions where AgentTargets are on scattered elements
  * and the action resolves to them via fromParam/fromTarget.
+ *
+ * Every action requires an `action` definition (from `defineAction`) and `steps`.
  *
  * Accepts a single config or an array to batch-register multiple actions.
  *
@@ -46,18 +54,16 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
     const items = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
 
     for (const item of items) {
-      const onExecute = item.onExecute;
       const steps = item.steps;
+      const awaitResult = item.awaitResult;
 
       registerAction({
-        name: item.name,
-        description: item.description,
-        parameters: item.parameters,
-        onExecute: onExecute
-          ? (params: Record<string, unknown>) => onExecute(params)
-          : undefined,
+        name: item.action.name,
+        description: item.action.description,
+        parameters: item.action.parameters,
         disabled: item.disabled ?? false,
         disabledReason: item.disabledReason,
+        awaitResult: awaitResult ? () => awaitResult() : undefined,
         getExecutionTargets: (): ExecutionTarget[] => {
           if (!steps?.length) return [];
           return steps.map((s) => ({
@@ -77,7 +83,7 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
     return () => {
       const items = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
       for (const item of items) {
-        unregisterAction(item.name);
+        unregisterAction(item.action.name);
       }
     };
   }, [registerAction, unregisterAction]);

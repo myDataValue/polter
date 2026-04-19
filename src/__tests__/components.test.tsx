@@ -6,7 +6,24 @@ import { AgentAction } from '../components/AgentAction';
 import { AgentStep } from '../components/AgentStep';
 import { AgentTarget } from '../components/AgentTarget';
 import { useAgentActions } from '../hooks/useAgentActions';
+import { defineAction } from '../core/defineAction';
 import { z } from 'zod';
+
+// Action definitions used across tests
+const exportCsvAction = defineAction({ name: 'export_csv', description: 'Export to CSV' });
+const syncAction = defineAction({
+  name: 'sync',
+  description: 'Sync data',
+  parameters: z.object({ ids: z.array(z.number()) }),
+});
+const pushAction = defineAction({ name: 'push', description: 'Push changes' });
+const tempAction = defineAction({ name: 'temp', description: 'Temporary' });
+const noChildrenAction = defineAction({ name: 'no_children', description: 'No children' });
+const disabledAction = defineAction({ name: 'disabled_action', description: 'Disabled' });
+const runAction = defineAction({ name: 'run', description: 'Run' });
+const clickTestAction = defineAction({ name: 'click_test', description: 'Click test' });
+const trackedAction = defineAction({ name: 'tracked', description: 'Tracked' });
+const multiAction = defineAction({ name: 'multi', description: 'Multi-step' });
 
 function TestConsumer({ onContext }: { onContext: (ctx: ReturnType<typeof useAgentActions>) => void }) {
   const ctx = useAgentActions();
@@ -53,7 +70,7 @@ describe('AgentActionProvider', () => {
 
 describe('AgentAction', () => {
   it('throws when used outside provider', () => {
-    expect(() => render(<AgentAction name="test" description="Test" />)).toThrow(
+    expect(() => render(<AgentAction action={exportCsvAction} />)).toThrow(
       'AgentAction must be used within an AgentActionProvider',
     );
   });
@@ -62,7 +79,7 @@ describe('AgentAction', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider>
-        <AgentAction name="export_csv" description="Export to CSV">
+        <AgentAction action={exportCsvAction}>
           <button>Export</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -77,11 +94,7 @@ describe('AgentAction', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider>
-        <AgentAction
-          name="sync"
-          description="Sync data"
-          parameters={z.object({ ids: z.array(z.number()) })}
-        >
+        <AgentAction action={syncAction}>
           <button>Sync</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -100,7 +113,7 @@ describe('AgentAction', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider>
-        <AgentAction name="push" description="Push changes" disabled disabledReason="Nothing to push">
+        <AgentAction action={pushAction} disabled disabledReason="Nothing to push">
           <button>Push</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -116,7 +129,7 @@ describe('AgentAction', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     const { rerender } = render(
       <AgentActionProvider>
-        <AgentAction name="temp" description="Temporary">
+        <AgentAction action={tempAction}>
           <button>Temp</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -135,7 +148,7 @@ describe('AgentAction', () => {
   it('renders nothing when no children provided', () => {
     const { container } = render(
       <AgentActionProvider>
-        <AgentAction name="no_children" description="No children" />
+        <AgentAction action={noChildrenAction} />
       </AgentActionProvider>,
     );
     expect(container.querySelector('[style*="display: contents"]')).toBeNull();
@@ -159,7 +172,7 @@ describe('AgentAction execute', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider>
-        <AgentAction name="disabled_action" description="Disabled" disabled disabledReason="Not ready">
+        <AgentAction action={disabledAction} disabled disabledReason="Not ready">
           <button>Disabled</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -170,12 +183,12 @@ describe('AgentAction execute', () => {
     expect(result.error).toBe('Not ready');
   });
 
-  it('calls onExecute in instant mode', async () => {
-    const onExecute = vi.fn();
+  it('calls awaitResult in instant mode', async () => {
+    const awaitResult = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant">
-        <AgentAction name="run" description="Run" onExecute={onExecute}>
+        <AgentAction action={runAction} awaitResult={awaitResult}>
           <button>Run</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -183,15 +196,15 @@ describe('AgentAction execute', () => {
     );
     const result = await act(() => ctx!.execute('run', { foo: 'bar' }));
     expect(result.success).toBe(true);
-    expect(onExecute).toHaveBeenCalledWith({ foo: 'bar' });
+    expect(awaitResult).toHaveBeenCalled();
   });
 
-  it('clicks element in instant mode without onExecute', async () => {
+  it('clicks element in instant mode', async () => {
     const onClick = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant">
-        <AgentAction name="click_test" description="Click test">
+        <AgentAction action={clickTestAction}>
           <button onClick={onClick}>Click me</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -208,7 +221,7 @@ describe('AgentAction execute', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" onExecutionStart={onStart} onExecutionComplete={onComplete}>
-        <AgentAction name="tracked" description="Tracked" onExecute={() => {}}>
+        <AgentAction action={trackedAction}>
           <button>Go</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -236,7 +249,7 @@ describe('AgentStep', () => {
   it('renders children inside AgentAction', () => {
     render(
       <AgentActionProvider>
-        <AgentAction name="multi" description="Multi-step">
+        <AgentAction action={multiAction}>
           <AgentStep label="First step">
             <button data-testid="step-btn">Step 1</button>
           </AgentStep>

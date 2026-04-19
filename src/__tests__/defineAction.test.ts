@@ -44,19 +44,16 @@ describe('defineAction', () => {
   });
 
   it('includes all properties together', () => {
-    const onExecute = async () => {};
     const action = defineAction({
       name: 'full_action',
       description: 'Full action',
       parameters: z.object({ ids: z.array(z.number()) }),
       navigateVia: ['step1', 'step2'],
       mountTimeout: 60_000,
-      onExecute,
     });
     expect(action.name).toBe('full_action');
     expect(action.navigateVia).toEqual(['step1', 'step2']);
     expect(action.mountTimeout).toBe(60_000);
-    expect(action.onExecute).toBe(onExecute);
     expect(action.parameters).toBeDefined();
   });
 });
