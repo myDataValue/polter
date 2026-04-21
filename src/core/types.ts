@@ -1,5 +1,7 @@
 export type ExecutionMode = 'guided' | 'instant';
 
+export type SkipPredicate = (params: Record<string, unknown>) => boolean;
+
 export interface ExecutionTarget {
   label: string;
   element: HTMLElement | null;
@@ -14,6 +16,8 @@ export interface ExecutionTarget {
   onSetValue?: (value: unknown) => void;
   /** Run a callback to prepare the DOM (e.g. scroll virtualized list) before resolving. */
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  /** Own predicate + inherited AgentStepGroup predicates. The step is skipped when any returns true. */
+  skipIfs?: SkipPredicate[];
 }
 
 export interface AgentTargetEntry {

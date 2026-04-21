@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
-import type { ExecutionTarget } from '../core/types';
+import type { ExecutionTarget, SkipPredicate } from '../core/types';
 import type { ActionDefinition } from '../core/defineAction';
 import { AgentActionContext } from './AgentActionProvider';
 
@@ -12,6 +12,7 @@ interface StepData {
   setValue?: string;
   onSetValue?: (value: unknown) => void;
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  skipIfs?: SkipPredicate[];
 }
 
 interface AgentStepContextValue {
@@ -82,6 +83,7 @@ export function AgentAction(props: AgentActionProps) {
         setValue: s.setValue,
         onSetValue: s.onSetValue,
         prepareView: s.prepareView,
+        skipIfs: s.skipIfs,
       }));
     }
 

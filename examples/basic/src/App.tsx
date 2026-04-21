@@ -4,6 +4,7 @@ import {
   AgentActionProvider,
   AgentAction,
   AgentStep,
+  AgentStepGroup,
   AgentTarget,
   useAgentActions,
 } from '@mydatavalue/polter';
@@ -117,18 +118,24 @@ function Dashboard() {
             name: z.string().describe('Full customer name'),
           })}
         >
-          <AgentStep label="Type the name" setParam="name">
-            <div className="search-box">
-              <span>🔎</span>
-              <input
-                type="text"
-                placeholder="Search customers..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </AgentStep>
-          <AgentStep label="Click the customer" fromParam="name" />
+          <AgentStepGroup skipIf={(p) => selected?.name === p.name}>
+            <AgentStep
+              label="Type the name"
+              setParam="name"
+              skipIf={(p) => search === p.name}
+            >
+              <div className="search-box">
+                <span>🔎</span>
+                <input
+                  type="text"
+                  placeholder="Search customers..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </AgentStep>
+            <AgentStep label="Click the customer" fromParam="name" />
+          </AgentStepGroup>
           <AgentStep label="Click 'Send email'" fromTarget="send-email-btn" />
         </AgentAction>
 
@@ -143,39 +150,44 @@ function Dashboard() {
             status: z.enum(['all', 'active', 'trial', 'churned']).describe('Status to filter by'),
           })}
         >
-          <div className="dropdown">
-            <AgentStep label="Open status filter">
-              <button
-                className="btn"
-                onClick={() => setDropdownOpen((v) => !v)}
+          <AgentStepGroup skipIf={(p) => statusFilter === p.status}>
+            <div className="dropdown">
+              <AgentStep
+                label="Open status filter"
+                skipIf={() => dropdownOpen}
               >
-                Status: {statusFilter} ▾
-              </button>
-            </AgentStep>
-            {dropdownOpen && (
-              <div className="dropdown-menu">
-                {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
-                  <AgentTarget
-                    key={s}
-                    action="filter_and_export"
-                    param="status"
-                    value={s}
-                  >
-                    <button
-                      className="dropdown-item"
-                      onClick={() => {
-                        setStatusFilter(s);
-                        setDropdownOpen(false);
-                      }}
+                <button
+                  className="btn"
+                  onClick={() => setDropdownOpen((v) => !v)}
+                >
+                  Status: {statusFilter} ▾
+                </button>
+              </AgentStep>
+              {dropdownOpen && (
+                <div className="dropdown-menu">
+                  {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
+                    <AgentTarget
+                      key={s}
+                      action="filter_and_export"
+                      param="status"
+                      value={s}
                     >
-                      {s}
-                    </button>
-                  </AgentTarget>
-                ))}
-              </div>
-            )}
-          </div>
-          <AgentStep label="Pick a status" fromParam="status" />
+                      <button
+                        className="dropdown-item"
+                        onClick={() => {
+                          setStatusFilter(s);
+                          setDropdownOpen(false);
+                        }}
+                      >
+                        {s}
+                      </button>
+                    </AgentTarget>
+                  ))}
+                </div>
+              )}
+            </div>
+            <AgentStep label="Pick a status" fromParam="status" />
+          </AgentStepGroup>
           <AgentStep label="Click export">
             <button
               className="btn btn-primary"

@@ -2,6 +2,7 @@
 export { AgentActionProvider } from './components/AgentActionProvider';
 export { AgentAction } from './components/AgentAction';
 export { AgentStep } from './components/AgentStep';
+export { AgentStepGroup } from './components/AgentStepGroup';
 export { AgentTarget } from './components/AgentTarget';
 export { AgentDevTools } from './components/AgentDevTools';
 

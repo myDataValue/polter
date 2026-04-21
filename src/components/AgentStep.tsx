@@ -1,5 +1,7 @@
 import React, { useContext, useEffect, useId, useRef } from 'react';
 import { AgentStepContext } from './AgentAction';
+import { AgentStepGroupContext } from './AgentStepGroup';
+import type { SkipPredicate } from '../core/types';
 
 interface AgentStepProps {
   label: string;
@@ -16,6 +18,8 @@ interface AgentStepProps {
   onSetValue?: (value: unknown) => void;
   /** Run a callback to prepare the DOM (e.g. scroll a virtualized list) before resolving the target. */
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  /** Skip the step at execution time when the predicate returns true (preconditions already satisfied). */
+  skipIf?: SkipPredicate;
 }
 
 export function AgentStep({
@@ -27,10 +31,12 @@ export function AgentStep({
   setValue,
   onSetValue,
   prepareView,
+  skipIf,
 }: AgentStepProps) {
   const id = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stepContext = useContext(AgentStepContext);
+  const { skipIfs: ancestorSkipIfs } = useContext(AgentStepGroupContext);
 
   if (!stepContext) {
     throw new Error('AgentStep must be used within an AgentAction');
@@ -40,6 +46,14 @@ export function AgentStep({
   onSetValueRef.current = onSetValue;
   const prepareViewRef = useRef(prepareView);
   prepareViewRef.current = prepareView;
+  const skipIfRef = useRef(skipIf);
+  skipIfRef.current = skipIf;
+
+  const ownSkipIfRef = useRef<SkipPredicate | null>(null);
+  if (!ownSkipIfRef.current) {
+    ownSkipIfRef.current = (params) => skipIfRef.current?.(params) ?? false;
+  }
+  const ownSkipIf = ownSkipIfRef.current;
 
   useEffect(() => {
     const element = children
@@ -55,9 +69,10 @@ export function AgentStep({
       setValue,
       onSetValue: onSetValueRef.current,
       prepareView: prepareViewRef.current,
+      skipIfs: [...ancestorSkipIfs, ownSkipIf],
     });
     return () => stepContext.unregisterStep(id);
-  }, [id, label, fromParam, fromTarget, setParam, setValue, stepContext]);
+  }, [id, label, fromParam, fromTarget, setParam, setValue, stepContext, ancestorSkipIfs, ownSkipIf]);
 
   if (!children) return null;
 
