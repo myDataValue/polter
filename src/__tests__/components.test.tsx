@@ -4,6 +4,7 @@ import { render, screen, act } from '@testing-library/react';
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { AgentAction } from '../components/AgentAction';
 import { AgentStep } from '../components/AgentStep';
+import { AgentStepGroup } from '../components/AgentStepGroup';
 import { AgentTarget } from '../components/AgentTarget';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { z } from 'zod';
@@ -244,6 +245,224 @@ describe('AgentStep', () => {
       </AgentActionProvider>,
     );
     expect(screen.getByTestId('step-btn')).toBeInTheDocument();
+  });
+});
+
+describe('AgentStep skipIf', () => {
+  it('skips the step click when skipIf returns true', async () => {
+    const click1 = vi.fn();
+    const click2 = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <AgentStep label="one" skipIf={() => true}>
+            <button onClick={click1}>1</button>
+          </AgentStep>
+          <AgentStep label="two">
+            <button onClick={click2}>2</button>
+          </AgentStep>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(click1).not.toHaveBeenCalled();
+    expect(click2).toHaveBeenCalled();
+  });
+
+  it('runs the step when skipIf returns false', async () => {
+    const click = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <AgentStep label="one" skipIf={() => false}>
+            <button onClick={click}>1</button>
+          </AgentStep>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('passes action params to the skipIf predicate', async () => {
+    const click = vi.fn();
+    const predicate = vi.fn((p: Record<string, unknown>) => p.skip === true);
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <AgentStep label="one" skipIf={predicate}>
+            <button onClick={click}>1</button>
+          </AgentStep>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a', { skip: true, other: 'y' }));
+    expect(predicate).toHaveBeenCalledWith({ skip: true, other: 'y' });
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it('reads the latest skipIf closure after rerender', async () => {
+    const click = vi.fn();
+    function Harness({ shouldSkip }: { shouldSkip: boolean }) {
+      return (
+        <AgentStep label="one" skipIf={() => shouldSkip}>
+          <button onClick={click}>1</button>
+        </AgentStep>
+      );
+    }
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    const { rerender } = render(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <Harness shouldSkip={false} />
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <Harness shouldSkip={true} />
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AgentStepGroup skipIf', () => {
+  it('renders children', () => {
+    render(
+      <AgentStepGroup>
+        <div data-testid="grouped">hello</div>
+      </AgentStepGroup>,
+    );
+    expect(screen.getByTestId('grouped')).toHaveTextContent('hello');
+  });
+
+  it('skips all inner steps when group skipIf returns true', async () => {
+    const inner1 = vi.fn();
+    const inner2 = vi.fn();
+    const outer = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <AgentStepGroup skipIf={() => true}>
+            <AgentStep label="i1">
+              <button onClick={inner1}>i1</button>
+            </AgentStep>
+            <AgentStep label="i2">
+              <button onClick={inner2}>i2</button>
+            </AgentStep>
+          </AgentStepGroup>
+          <AgentStep label="out">
+            <button onClick={outer}>out</button>
+          </AgentStep>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(inner1).not.toHaveBeenCalled();
+    expect(inner2).not.toHaveBeenCalled();
+    expect(outer).toHaveBeenCalled();
+  });
+
+  it('runs inner steps when group skipIf returns false', async () => {
+    const inner = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <AgentStepGroup skipIf={() => false}>
+            <AgentStep label="i">
+              <button onClick={inner}>i</button>
+            </AgentStep>
+          </AgentStepGroup>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(inner).toHaveBeenCalled();
+  });
+
+  it('composes step and group predicates: either skips', async () => {
+    const stepSkipped = vi.fn();
+    const stepRun = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <AgentStepGroup skipIf={() => false}>
+            <AgentStep label="x" skipIf={() => true}>
+              <button onClick={stepSkipped}>x</button>
+            </AgentStep>
+            <AgentStep label="y">
+              <button onClick={stepRun}>y</button>
+            </AgentStep>
+          </AgentStepGroup>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(stepSkipped).not.toHaveBeenCalled();
+    expect(stepRun).toHaveBeenCalled();
+  });
+
+  it('nested groups — any ancestor predicate skips the step', async () => {
+    const click = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <AgentStepGroup skipIf={() => true}>
+            <AgentStepGroup skipIf={() => false}>
+              <AgentStep label="deep">
+                <button onClick={click}>deep</button>
+              </AgentStep>
+            </AgentStepGroup>
+          </AgentStepGroup>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it('group skipIf receives action params', async () => {
+    const click = vi.fn();
+    const predicate = vi.fn((p: Record<string, unknown>) => p.skip === true);
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction name="a" description="A">
+          <AgentStepGroup skipIf={predicate}>
+            <AgentStep label="i">
+              <button onClick={click}>i</button>
+            </AgentStep>
+          </AgentStepGroup>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a', { skip: true }));
+    expect(predicate).toHaveBeenCalledWith({ skip: true });
+    expect(click).not.toHaveBeenCalled();
   });
 });
 
