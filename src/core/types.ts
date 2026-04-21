@@ -27,18 +27,22 @@ export interface ExecutionTarget extends StepDefinition {
   skipIfs?: SkipPredicate[];
 }
 
-export interface AgentTargetEntry {
-  /** Action name — when omitted, the target is shared and matches any action. */
+/** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */
+export interface TargetDefinition {
+  /** The action name this target belongs to. Omit to make a shared target that any action can resolve. */
   action?: string;
-  element: HTMLElement;
-  /** Parameter key — used with `value` for param-based resolution. */
+  /** The parameter key this target maps to (for fromParam resolution). */
   param?: string;
-  /** Parameter value — matched against the agent's param value. */
+  /** The parameter value this target represents (for fromParam resolution). */
   value?: string;
-  /** Named target key — used for static lazy resolution via `fromTarget`. */
+  /** Named target key (for fromTarget resolution — static elements inside popovers/dropdowns). */
   name?: string;
-  /** Run a callback to prepare component state before the agent interacts with this target. */
+  /** Run a callback to prepare component state before the agent interacts with this target. Runs in the child's scope so it can access internal state. */
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+}
+
+export interface AgentTargetEntry extends TargetDefinition {
+  element: HTMLElement;
 }
 
 export interface RegisteredAction {
