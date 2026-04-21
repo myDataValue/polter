@@ -143,38 +143,38 @@ function Dashboard() {
             status: z.enum(['all', 'active', 'trial', 'churned']).describe('Status to filter by'),
           })}
         >
-          <AgentStep label="Open status filter">
-            <div className="dropdown">
+          <div className="dropdown">
+            <AgentStep label="Open status filter">
               <button
                 className="btn"
                 onClick={() => setDropdownOpen((v) => !v)}
               >
                 Status: {statusFilter} ▾
               </button>
-              {dropdownOpen && (
-                <div className="dropdown-menu">
-                  {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
-                    <AgentTarget
-                      key={s}
-                      action="filter_and_export"
-                      param="status"
-                      value={s}
+            </AgentStep>
+            {dropdownOpen && (
+              <div className="dropdown-menu">
+                {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
+                  <AgentTarget
+                    key={s}
+                    action="filter_and_export"
+                    param="status"
+                    value={s}
+                  >
+                    <button
+                      className="dropdown-item"
+                      onClick={() => {
+                        setStatusFilter(s);
+                        setDropdownOpen(false);
+                      }}
                     >
-                      <button
-                        className="dropdown-item"
-                        onClick={() => {
-                          setStatusFilter(s);
-                          setDropdownOpen(false);
-                        }}
-                      >
-                        {s}
-                      </button>
-                    </AgentTarget>
-                  ))}
-                </div>
-              )}
-            </div>
-          </AgentStep>
+                      {s}
+                    </button>
+                  </AgentTarget>
+                ))}
+              </div>
+            )}
+          </div>
           <AgentStep label="Pick a status" fromParam="status" />
           <AgentStep label="Click export">
             <button
