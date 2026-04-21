@@ -2,7 +2,7 @@ export type ExecutionMode = 'guided' | 'instant';
 
 export type SkipPredicate = (params: Record<string, unknown>) => boolean;
 
-/** Shared fields describing an agent step's behavior — consumed by AgentStep props, StepConfig (useAgentAction), and ExecutionTarget. */
+/** Shared fields describing an agent step's behavior — consumed by AgentStep props, useAgentAction config, and ExecutionTarget. */
 export interface StepDefinition {
   label: string;
   /** Resolve element from AgentTarget registry by matching this param's value. */
@@ -19,12 +19,12 @@ export interface StepDefinition {
   defaultValue?: string;
   /** Run a callback to prepare the DOM (e.g. scroll virtualized list) before resolving. */
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  /** Skip this step at execution time when the predicate returns true. */
+  skipIf?: SkipPredicate;
 }
 
 export interface ExecutionTarget extends StepDefinition {
   element: HTMLElement | null;
-  /** The step is skipped at execution time when this predicate returns true. */
-  skipIf?: SkipPredicate;
 }
 
 /** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */

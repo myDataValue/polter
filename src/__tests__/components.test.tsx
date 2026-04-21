@@ -7,14 +7,7 @@ import { AgentStep } from '../components/AgentStep';
 import { AgentTarget } from '../components/AgentTarget';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { z } from 'zod';
-
-function TestConsumer({ onContext }: { onContext: (ctx: ReturnType<typeof useAgentActions>) => void }) {
-  const ctx = useAgentActions();
-  React.useEffect(() => {
-    onContext(ctx);
-  });
-  return null;
-}
+import { TestConsumer } from './testUtils';
 
 describe('AgentActionProvider', () => {
   it('renders children', () => {
@@ -573,14 +566,3 @@ describe('AgentTarget', () => {
   });
 });
 
-describe('useAgentActions', () => {
-  it('throws when used outside provider', () => {
-    function BadComponent() {
-      useAgentActions();
-      return null;
-    }
-    expect(() => render(<BadComponent />)).toThrow(
-      'useAgentActions must be used within an AgentActionProvider',
-    );
-  });
-});

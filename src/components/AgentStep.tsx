@@ -4,8 +4,6 @@ import type { SkipPredicate, StepDefinition } from '../core/types';
 
 interface AgentStepProps extends StepDefinition {
   children?: React.ReactNode;
-  /** Skip the step at execution time when the predicate returns true (preconditions already satisfied). */
-  skipIf?: SkipPredicate;
 }
 
 export function AgentStep({
