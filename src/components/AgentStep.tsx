@@ -1,6 +1,5 @@
 import React, { useContext, useEffect, useId, useRef } from 'react';
 import { AgentStepContext } from './AgentAction';
-import { AgentStepGroupContext } from './AgentStepGroup';
 import type { SkipPredicate, StepDefinition } from '../core/types';
 
 interface AgentStepProps extends StepDefinition {
@@ -24,7 +23,6 @@ export function AgentStep({
   const id = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stepContext = useContext(AgentStepContext);
-  const { skipIfs: ancestorSkipIfs } = useContext(AgentStepGroupContext);
 
   if (!stepContext) {
     throw new Error('AgentStep must be used within an AgentAction');
@@ -37,11 +35,12 @@ export function AgentStep({
   const skipIfRef = useRef(skipIf);
   skipIfRef.current = skipIf;
 
-  const ownSkipIfRef = useRef<SkipPredicate | null>(null);
-  if (!ownSkipIfRef.current) {
-    ownSkipIfRef.current = (params) => skipIfRef.current?.(params) ?? false;
+  // Stable wrapper reading the latest `skipIf` prop, so inline closures don't
+  // re-fire the registration effect (which would reorder stepsRef's Map).
+  const stableSkipIfRef = useRef<SkipPredicate | null>(null);
+  if (!stableSkipIfRef.current) {
+    stableSkipIfRef.current = (params) => skipIfRef.current?.(params) ?? false;
   }
-  const ownSkipIf = ownSkipIfRef.current;
 
   useEffect(() => {
     const element = children
@@ -58,10 +57,10 @@ export function AgentStep({
       onSetValue: onSetValueRef.current,
       defaultValue,
       prepareView: prepareViewRef.current,
-      skipIfs: [...ancestorSkipIfs, ownSkipIf],
+      skipIf: stableSkipIfRef.current!,
     });
     return () => stepContext.unregisterStep(id);
-  }, [id, label, fromParam, fromTarget, setParam, setValue, defaultValue, stepContext, ancestorSkipIfs, ownSkipIf]);
+  }, [id, label, fromParam, fromTarget, setParam, setValue, defaultValue, stepContext]);
 
   if (!children) return null;
 

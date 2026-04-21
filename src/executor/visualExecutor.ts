@@ -287,7 +287,7 @@ async function executeInstant(
     } else {
       const targets = action.getExecutionTargets();
       for (const target of targets) {
-        if (target.skipIfs?.some((pred) => pred(params))) continue;
+        if (target.skipIf?.(params)) continue;
         target.element?.click();
       }
     }
@@ -336,8 +336,8 @@ async function executeGuided(
       const target = targets[i];
       const isLast = i === targets.length - 1;
 
-      // Skip when the step (or an ancestor AgentStepGroup) declares a precondition is already satisfied.
-      if (target.skipIfs?.some((pred) => pred(params))) continue;
+      // Skip when the step declares a precondition is already satisfied.
+      if (target.skipIf?.(params)) continue;
 
       // Resolve element (may be lazy for fromParam steps)
       const element = await resolveStepElement(target, action.name, params, config);

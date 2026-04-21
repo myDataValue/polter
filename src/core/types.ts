@@ -23,8 +23,8 @@ export interface StepDefinition {
 
 export interface ExecutionTarget extends StepDefinition {
   element: HTMLElement | null;
-  /** Own predicate + inherited AgentStepGroup predicates. The step is skipped when any returns true. */
-  skipIfs?: SkipPredicate[];
+  /** The step is skipped at execution time when this predicate returns true. */
+  skipIf?: SkipPredicate;
 }
 
 /** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */
