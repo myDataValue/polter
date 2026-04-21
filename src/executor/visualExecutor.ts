@@ -263,7 +263,8 @@ async function resolveStepElement(
   // For array params, resolve against the first element (spotlight one representative target).
   if (target.fromParam && config.resolveTarget) {
     const raw = params[target.fromParam];
-    const paramValue = String(Array.isArray(raw) ? raw[0] ?? '' : raw ?? '');
+    const first = Array.isArray(raw) ? raw[0] : raw;
+    const paramValue = String(first ?? target.defaultValue ?? '');
     return config.resolveTarget(actionName, target.fromParam, paramValue, config.signal);
   }
 
@@ -371,11 +372,11 @@ async function executeGuided(
         const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
           ? element
           : element.querySelector('input, textarea') ?? element;
-        const value = String(params[target.setParam] ?? '');
+        const value = String(params[target.setParam] ?? target.defaultValue ?? '');
         await simulateTyping(inputEl as HTMLElement, value, config.signal);
       } else if (target.setValue && target.onSetValue) {
         // Set value programmatically via callback
-        const value = params[target.setValue];
+        const value = params[target.setValue] ?? target.defaultValue;
         target.onSetValue(value);
       } else if (target.fromParam || target.fromTarget) {
         // Lazy-resolved step: always click the resolved target (dropdown option, popover button, etc.)

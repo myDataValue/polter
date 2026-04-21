@@ -2,9 +2,9 @@ export type ExecutionMode = 'guided' | 'instant';
 
 export type SkipPredicate = (params: Record<string, unknown>) => boolean;
 
-export interface ExecutionTarget {
+/** Shared fields describing an agent step's behavior — consumed by AgentStep props, StepConfig (useAgentAction), and ExecutionTarget. */
+export interface StepDefinition {
   label: string;
-  element: HTMLElement | null;
   /** Resolve element from AgentTarget registry by matching this param's value. */
   fromParam?: string;
   /** Resolve element from AgentTarget registry by matching a named target. */
@@ -13,9 +13,16 @@ export interface ExecutionTarget {
   setParam?: string;
   /** Set a value programmatically via onSetValue callback. */
   setValue?: string;
+  /** Callback for setValue — receives the param value and sets it on the component. */
   onSetValue?: (value: unknown) => void;
+  /** Fallback for params[fromParam/setParam/setValue] when the param is absent — lets a step target a fixed value without a matching param. */
+  defaultValue?: string;
   /** Run a callback to prepare the DOM (e.g. scroll virtualized list) before resolving. */
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+}
+
+export interface ExecutionTarget extends StepDefinition {
+  element: HTMLElement | null;
   /** Own predicate + inherited AgentStepGroup predicates. The step is skipped when any returns true. */
   skipIfs?: SkipPredicate[];
 }
