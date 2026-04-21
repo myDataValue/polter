@@ -140,7 +140,7 @@ function Dashboard() {
           name="filter_and_export"
           description="Filter customers by status and export the result to CSV"
           parameters={z.object({
-            status: z.enum(['active', 'trial', 'churned']).describe('Status to filter by'),
+            status: z.enum(['all', 'active', 'trial', 'churned']).describe('Status to filter by'),
           })}
         >
           <AgentStep label="Open status filter">
@@ -153,7 +153,7 @@ function Dashboard() {
               </button>
               {dropdownOpen && (
                 <div className="dropdown-menu">
-                  {(['active', 'trial', 'churned'] as const).map((s) => (
+                  {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
                     <AgentTarget
                       key={s}
                       action="filter_and_export"
