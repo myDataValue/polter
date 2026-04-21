@@ -22,6 +22,7 @@ export type {
   ExecutionMode,
   StepDefinition,
   ExecutionTarget,
+  TargetDefinition,
   AgentTargetEntry,
   RegisteredAction,
   ToolSchema,

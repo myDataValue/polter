@@ -1,18 +1,9 @@
 import React, { useContext, useEffect, useId, useRef } from 'react';
 import { AgentActionContext } from './AgentActionProvider';
+import type { TargetDefinition } from '../core/types';
 
-interface AgentTargetProps {
-  /** The action name this target belongs to. Omit to make a shared target that any action can resolve. */
-  action?: string;
+interface AgentTargetProps extends TargetDefinition {
   children: React.ReactNode;
-  /** The parameter key this target maps to (for fromParam resolution). */
-  param?: string;
-  /** The parameter value this target represents (for fromParam resolution). */
-  value?: string;
-  /** Named target key (for fromTarget resolution — static elements inside popovers/dropdowns). */
-  name?: string;
-  /** Run a callback to prepare component state before the agent interacts with this target. Runs in the child's scope so it can access internal state. */
-  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
 }
 
 /**
