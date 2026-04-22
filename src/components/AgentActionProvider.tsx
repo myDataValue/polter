@@ -277,7 +277,7 @@ export function AgentActionProvider({
             const viaRegistered = actionsRef.current.get(viaName);
             const viaTimeout = viaRegistered?.mountTimeout ?? 10000;
             const viaAction = await waitForActionMount(viaName, controller.signal, viaTimeout);
-            if (!viaAction || viaAction.getExecutionTargets().length === 0) {
+            if (!viaAction || (!viaAction.componentBacked && viaAction.getExecutionTargets().length === 0)) {
               return {
                 success: false,
                 actionName,
