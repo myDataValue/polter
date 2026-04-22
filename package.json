@@ -64,5 +64,8 @@
     "zod": "^3.23.0"
   },
   "sideEffects": false,
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
 }
