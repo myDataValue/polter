@@ -130,6 +130,9 @@ function Dashboard() {
             {filtered.length} of {ALL_CUSTOMERS.length} customers
           </p>
         </div>
+        <a href="https://mydatavalue.github.io/polter/" className="back-link">
+          polter docs
+        </a>
       </div>
 
       <div className="toolbar">
