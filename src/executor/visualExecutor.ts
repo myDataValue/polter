@@ -298,11 +298,12 @@ async function executeInstant(
 }
 
 /**
- * Check whether an element is visible and measurable.
- * Returns false for detached nodes and display:contents wrappers
+ * Check whether an element is present, visible, and measurable.
+ * Returns false for null, detached nodes, and display:contents wrappers
  * (whose getBoundingClientRect() returns all zeros).
  */
-function isElementVisible(el: HTMLElement): boolean {
+function isElementVisible(el: HTMLElement | null): el is HTMLElement {
+  if (!el) return false;
   if (!el.isConnected) return false;
   const rect = el.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
@@ -339,16 +340,15 @@ async function executeGuided(
       // Skip when the step declares a precondition is already satisfied.
       if (target.skipIf?.(params)) continue;
 
-      // Resolve element (may be lazy for fromParam steps)
+      // Resolve element (may be lazy for fromParam steps).
+      // Multi-step actions abort on miss; single-step actions continue silently.
       const element = await resolveStepElement(target, action.name, params, config);
-      if (!element) continue;
-
-      // Element not in DOM (never rendered) — skip for single-step, abort for multi-step
       if (!isElementVisible(element)) {
         if (targets.length > 1) {
           blocker.remove();
           cursor?.remove();
-          return { success: false, actionName: action.name, error: `Step element not visible: "${target.label}"` };
+          const reason = !element ? `target not found for step "${target.label}"` : `element not visible: "${target.label}"`;
+          return { success: false, actionName: action.name, error: reason };
         }
         continue;
       }
