@@ -219,6 +219,14 @@ export function AgentActionProvider({
     [],
   );
 
+  const navigateToRoute = useCallback(
+    async (action: RegisteredAction, routeParams?: Record<string, unknown>) => {
+      const path = action.route!(routeParams ?? {});
+      await navigateRef.current!(path);
+    },
+    [],
+  );
+
   const execute = useCallback(
     async (actionName: string, params?: Record<string, unknown>): Promise<ExecutionResult> => {
       currentExecutionRef.current?.abort();
@@ -277,7 +285,14 @@ export function AgentActionProvider({
             const viaRegistered = actionsRef.current.get(viaName);
             const viaTimeout = viaRegistered?.mountTimeout ?? 10000;
             const viaAction = await waitForActionMount(viaName, controller.signal, viaTimeout);
-            if (!viaAction || (!viaAction.componentBacked && viaAction.getExecutionTargets().length === 0)) {
+
+            if (!viaAction || viaAction.getExecutionTargets().length === 0) {
+              // Route fallback: navigate directly if the action has a route defined.
+              if (viaAction?.route && navigateRef.current) {
+                await navigateToRoute(viaAction, params);
+                continue;
+              }
+
               return {
                 success: false,
                 actionName,
@@ -310,8 +325,7 @@ export function AgentActionProvider({
           // If this is a registry action with no DOM targets, navigate first.
           const targets = action.getExecutionTargets();
           if (targets.length === 0 && action.route && navigateRef.current) {
-            const path = action.route(params ?? {});
-            await navigateRef.current(path);
+            await navigateToRoute(action, params);
 
             // Wait for the <AgentAction> component to mount on the new page.
             const mounted = await waitForActionMount(actionName, controller.signal, action.mountTimeout);
@@ -354,7 +368,7 @@ export function AgentActionProvider({
         }
       }
     },
-    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, resolveNamedTarget, waitForActionMount],
+    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, resolveNamedTarget, waitForActionMount, navigateToRoute],
   );
 
   const availableActions = useMemo<AvailableAction[]>(
