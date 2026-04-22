@@ -1,0 +1,55 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Build polter (the example imports from it)
+      - run: npm ci
+      - run: npm run build
+      - run: npm link
+
+      # Build the example against the local build
+      - working-directory: examples/basic
+        run: npm ci
+      - working-directory: examples/basic
+        run: npm link @mydatavalue/polter
+      - working-directory: examples/basic
+        run: npx vite build --base=/polter/demo/
+
+      # Assemble: docs/ as root, example build as /demo/
+      - run: |
+          mkdir _site
+          cp -r docs/* _site/
+          cp -r examples/basic/dist _site/demo
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
