@@ -3,19 +3,8 @@ import type { ExecutionTarget } from '../core/types';
 import type { ActionDefinition } from '../core/defineAction';
 import { AgentActionContext } from './AgentActionProvider';
 
-interface StepData {
-  label: string;
-  element: HTMLElement | null;
-  fromParam?: string;
-  fromTarget?: string;
-  setParam?: string;
-  setValue?: string;
-  onSetValue?: (value: unknown) => void;
-  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
-}
-
 interface AgentStepContextValue {
-  registerStep: (id: string, data: StepData) => void;
+  registerStep: (id: string, data: ExecutionTarget) => void;
   unregisterStep: (id: string) => void;
 }
 
@@ -54,7 +43,7 @@ export function AgentAction(props: AgentActionProps) {
   }
 
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const stepsRef = useRef<Map<string, StepData>>(new Map());
+  const stepsRef = useRef<Map<string, ExecutionTarget>>(new Map());
 
   const onExecuteRef = useRef(onExecute);
   onExecuteRef.current = onExecute;
@@ -70,19 +59,9 @@ export function AgentAction(props: AgentActionProps) {
       // Map preserves insertion order, which matches JSX order via React's
       // tree-order useEffect mounting. This lets you interleave element steps
       // and lazy (fromParam/fromTarget) steps in any sequence.
-      const steps = Array.from(stepsRef.current.values());
-      const valid = steps.filter((s) => s.element || s.fromParam || s.fromTarget);
-
-      return valid.map((s) => ({
-        label: s.label,
-        element: s.element,
-        fromParam: s.fromParam,
-        fromTarget: s.fromTarget,
-        setParam: s.setParam,
-        setValue: s.setValue,
-        onSetValue: s.onSetValue,
-        prepareView: s.prepareView,
-      }));
+      return Array.from(stepsRef.current.values()).filter(
+        (s) => s.element || s.fromParam || s.fromTarget,
+      );
     }
 
     // Single element: use wrapper's first child
@@ -107,7 +86,7 @@ export function AgentAction(props: AgentActionProps) {
   }, [name, description, disabled, disabledReason, stableOnExecute, getExecutionTargets, registerAction, unregisterAction]);
 
   const registerStep = useCallback(
-    (id: string, data: StepData) => {
+    (id: string, data: ExecutionTarget) => {
       stepsRef.current.set(id, data);
     },
     [],

@@ -1,16 +1,6 @@
 import { useContext, useEffect, useRef } from 'react';
-import type { ExecutionTarget } from '../core/types';
+import type { ExecutionTarget, StepDefinition } from '../core/types';
 import { AgentActionContext } from '../components/AgentActionProvider';
-
-interface StepConfig {
-  label: string;
-  fromParam?: string;
-  fromTarget?: string;
-  setParam?: string;
-  setValue?: string;
-  onSetValue?: (value: unknown) => void;
-  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
-}
 
 export interface AgentActionConfig {
   name: string;
@@ -19,7 +9,7 @@ export interface AgentActionConfig {
   onExecute?: (params: Record<string, unknown>) => void | Promise<void>;
   disabled?: boolean;
   disabledReason?: string;
-  steps?: StepConfig[];
+  steps?: StepDefinition[];
 }
 
 /**
@@ -37,46 +27,30 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
     throw new Error('useAgentAction must be used within an AgentActionProvider');
   }
 
-  const configRef = useRef(config);
-  configRef.current = config;
+  const normalized = Array.isArray(config) ? config : [config];
+  const configRef = useRef(normalized);
+  configRef.current = normalized;
 
   const { registerAction, unregisterAction } = context;
 
   useEffect(() => {
-    const items = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
-
-    for (const item of items) {
-      const onExecute = item.onExecute;
-      const steps = item.steps;
-
+    for (const item of configRef.current) {
       registerAction({
-        name: item.name,
-        description: item.description,
-        parameters: item.parameters,
-        onExecute: onExecute
-          ? (params: Record<string, unknown>) => onExecute(params)
-          : undefined,
+        ...item,
         disabled: item.disabled ?? false,
-        disabledReason: item.disabledReason,
+        // Look up `steps` fresh per execute so inline step skipIfs see the
+        // latest render's closures; other fields (onExecute, disabled, etc.)
+        // are snapshot at mount.
         getExecutionTargets: (): ExecutionTarget[] => {
+          const steps = configRef.current.find((i) => i.name === item.name)?.steps;
           if (!steps?.length) return [];
-          return steps.map((s) => ({
-            label: s.label,
-            element: null,
-            fromParam: s.fromParam,
-            fromTarget: s.fromTarget,
-            setParam: s.setParam,
-            setValue: s.setValue,
-            onSetValue: s.onSetValue,
-            prepareView: s.prepareView,
-          }));
+          return steps.map((s) => ({ ...s, element: null }));
         },
       });
     }
 
     return () => {
-      const items = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
-      for (const item of items) {
+      for (const item of configRef.current) {
         unregisterAction(item.name);
       }
     };
