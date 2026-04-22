@@ -28,7 +28,8 @@ npm run test:watch   # run tests in watch mode
 To test your local changes against the example app:
 
 ```bash
-# 1. From the polter root, register the package globally
+# 1. From the polter root, build and register the package globally
+npm run build
 npm link
 
 # 2. From the example directory, link to your local build
@@ -40,7 +41,8 @@ npm link @mydatavalue/polter
 npm run dev
 ```
 
-After linking, any rebuild of polter (`npm run dev` in the root) is picked up by the example app on the next HMR cycle or page refresh.
+After linking, any rebuild of polter (`npm run dev` in the root) is picked up by
+the example app on the next HMR cycle or page refresh.
 
 To unlink when you're done:
 
