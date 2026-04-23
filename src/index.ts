@@ -20,7 +20,9 @@ export { zodToJsonSchema, generateToolSchemas } from './core/schemaGenerator';
 // Types
 export type {
   ExecutionMode,
+  StepDefinition,
   ExecutionTarget,
+  TargetDefinition,
   AgentTargetEntry,
   RegisteredAction,
   ToolSchema,

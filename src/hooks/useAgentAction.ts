@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef } from 'react';
-import type { ExecutionTarget } from '../core/types';
+import type { ExecutionTarget, SkipPredicate } from '../core/types';
 import type { ActionDefinition } from '../core/defineAction';
 import { AgentActionContext } from '../components/AgentActionProvider';
 
@@ -10,7 +10,9 @@ export interface StepConfig {
   setParam?: string;
   setValue?: string;
   onSetValue?: (value: unknown) => void;
+  defaultValue?: string;
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  skipIf?: SkipPredicate;
 }
 
 export interface AgentActionConfig {
@@ -45,16 +47,14 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
     throw new Error('useAgentAction must be used within an AgentActionProvider');
   }
 
-  const configRef = useRef(config);
-  configRef.current = config;
+  const normalized = Array.isArray(config) ? config : [config];
+  const configRef = useRef(normalized);
+  configRef.current = normalized;
 
   const { registerAction, unregisterAction } = context;
 
   useEffect(() => {
-    const items = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
-
-    for (const item of items) {
-      const steps = item.steps;
+    for (const item of configRef.current) {
       const awaitResult = item.awaitResult;
 
       registerAction({
@@ -64,25 +64,20 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
         disabled: item.disabled ?? false,
         disabledReason: item.disabledReason,
         awaitResult: awaitResult ? () => awaitResult() : undefined,
+        // Look up `steps` fresh per execute so inline step closures see the
+        // latest render's values; other fields are snapshot at mount.
         getExecutionTargets: (): ExecutionTarget[] => {
+          const steps = configRef.current.find(
+            (i) => i.action.name === item.action.name,
+          )?.steps;
           if (!steps?.length) return [];
-          return steps.map((s) => ({
-            label: s.label,
-            element: null,
-            fromParam: s.fromParam,
-            fromTarget: s.fromTarget,
-            setParam: s.setParam,
-            setValue: s.setValue,
-            onSetValue: s.onSetValue,
-            prepareView: s.prepareView,
-          }));
+          return steps.map((s) => ({ ...s, element: null }));
         },
       });
     }
 
     return () => {
-      const items = Array.isArray(configRef.current) ? configRef.current : [configRef.current];
-      for (const item of items) {
+      for (const item of configRef.current) {
         unregisterAction(item.action.name);
       }
     };

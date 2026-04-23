@@ -1,8 +1,10 @@
 export type ExecutionMode = 'guided' | 'instant';
 
-export interface ExecutionTarget {
+export type SkipPredicate = (params: Record<string, unknown>) => boolean;
+
+/** Shared fields describing an agent step's behavior — consumed by AgentStep props, useAgentAction config, and ExecutionTarget. */
+export interface StepDefinition {
   label: string;
-  element: HTMLElement | null;
   /** Resolve element from AgentTarget registry by matching this param's value. */
   fromParam?: string;
   /** Resolve element from AgentTarget registry by matching a named target. */
@@ -11,23 +13,36 @@ export interface ExecutionTarget {
   setParam?: string;
   /** Set a value programmatically via onSetValue callback. */
   setValue?: string;
+  /** Callback for setValue — receives the param value and sets it on the component. */
   onSetValue?: (value: unknown) => void;
+  /** Fallback for params[fromParam/setParam/setValue] when the param is absent — lets a step target a fixed value without a matching param. */
+  defaultValue?: string;
   /** Run a callback to prepare the DOM (e.g. scroll virtualized list) before resolving. */
+  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  /** Skip this step at execution time when the predicate returns true. */
+  skipIf?: SkipPredicate;
+}
+
+export interface ExecutionTarget extends StepDefinition {
+  element: HTMLElement | null;
+}
+
+/** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */
+export interface TargetDefinition {
+  /** The action name this target belongs to. Omit to make a shared target that any action can resolve. */
+  action?: string;
+  /** The parameter key this target maps to (for fromParam resolution). */
+  param?: string;
+  /** The parameter value this target represents (for fromParam resolution). */
+  value?: string;
+  /** Named target key (for fromTarget resolution — static elements inside popovers/dropdowns). */
+  name?: string;
+  /** Run a callback to prepare component state before the agent interacts with this target. Runs in the child's scope so it can access internal state. */
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
 }
 
-export interface AgentTargetEntry {
-  /** Action name — when omitted, the target is shared and matches any action. */
-  action?: string;
+export interface AgentTargetEntry extends TargetDefinition {
   element: HTMLElement;
-  /** Parameter key — used with `value` for param-based resolution. */
-  param?: string;
-  /** Parameter value — matched against the agent's param value. */
-  value?: string;
-  /** Named target key — used for static lazy resolution via `fromTarget`. */
-  name?: string;
-  /** Run a callback to prepare component state before the agent interacts with this target. */
-  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
 }
 
 export interface RegisteredAction {

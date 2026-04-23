@@ -2,9 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { z } from 'zod';
 import {
   AgentActionProvider,
-  AgentAction,
-  AgentStep,
   AgentTarget,
+  useAgentAction,
   useAgentActions,
 } from '@mydatavalue/polter';
 
@@ -94,6 +93,34 @@ function Dashboard() {
     return true;
   });
 
+  useAgentAction([
+    {
+      name: 'find_and_email',
+      description: 'Find a customer by name, open their record, and draft an email',
+      parameters: z.object({ name: z.string().describe('Full customer name') }),
+      steps: [
+        { label: 'Type the name', setParam: 'name', fromTarget: 'search', skipIf: ({ name }) => selected?.name === name || search === name },
+        { label: 'Open status filter', fromTarget: 'status-toggle', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' || dropdownOpen },
+        { label: 'Reset to all', fromParam: 'status', defaultValue: 'all', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' },
+        { label: 'Click the customer', fromParam: 'name', skipIf: ({ name }) => selected?.name === name },
+        { label: "Click 'Send email'", fromTarget: 'send-email-btn' },
+      ],
+    },
+    {
+      name: 'filter_and_export',
+      description: 'Filter customers by status and export the result to CSV',
+      parameters: z.object({
+        status: z.enum(['all', 'active', 'trial', 'churned']).describe('Status to filter by'),
+      }),
+      steps: [
+        { label: 'Clear search', setParam: 'search', defaultValue: '', fromTarget: 'search', skipIf: () => search === '' },
+        { label: 'Open status filter', fromTarget: 'status-toggle', skipIf: ({status}) => statusFilter === status || dropdownOpen },
+        { label: 'Pick a status', fromParam: 'status', skipIf: ({status}) => statusFilter === status },
+        { label: 'Click export', fromTarget: 'export-btn' },
+      ],
+    },
+  ]);
+
   return (
     <main className="dashboard">
       <div className="dashboard-header">
@@ -106,85 +133,54 @@ function Dashboard() {
       </div>
 
       <div className="toolbar">
-        {/* ============================================================
-            Flow 1: find_and_email
-            Steps: type name → click row (lazy) → click email btn (lazy)
-            ============================================================ */}
-        <AgentAction
-          name="find_and_email"
-          description="Find a customer by name, open their record, and draft an email"
-          parameters={z.object({
-            name: z.string().describe('Full customer name'),
-          })}
-        >
-          <AgentStep label="Type the name" setParam="name">
-            <div className="search-box">
-              <span>🔎</span>
-              <input
-                type="text"
-                placeholder="Search customers..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </AgentStep>
-          <AgentStep label="Click the customer" fromParam="name" />
-          <AgentStep label="Click 'Send email'" fromTarget="send-email-btn" />
-        </AgentAction>
+        <AgentTarget name="search">
+          <div className="search-box">
+            <span>🔎</span>
+            <input
+              type="text"
+              placeholder="Search customers..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </AgentTarget>
 
-        {/* ============================================================
-            Flow 2: filter_and_export
-            Steps: open dropdown → click status (lazy) → click export
-            ============================================================ */}
-        <AgentAction
-          name="filter_and_export"
-          description="Filter customers by status and export the result to CSV"
-          parameters={z.object({
-            status: z.enum(['active', 'trial', 'churned']).describe('Status to filter by'),
-          })}
-        >
-          <AgentStep label="Open status filter">
-            <div className="dropdown">
-              <button
-                className="btn"
-                onClick={() => setDropdownOpen((v) => !v)}
-              >
-                Status: {statusFilter} ▾
-              </button>
-              {dropdownOpen && (
-                <div className="dropdown-menu">
-                  {(['active', 'trial', 'churned'] as const).map((s) => (
-                    <AgentTarget
-                      key={s}
-                      action="filter_and_export"
-                      param="status"
-                      value={s}
-                    >
-                      <button
-                        className="dropdown-item"
-                        onClick={() => {
-                          setStatusFilter(s);
-                          setDropdownOpen(false);
-                        }}
-                      >
-                        {s}
-                      </button>
-                    </AgentTarget>
-                  ))}
-                </div>
-              )}
-            </div>
-          </AgentStep>
-          <AgentStep label="Pick a status" fromParam="status" />
-          <AgentStep label="Click export">
+        <div className="dropdown">
+          <AgentTarget name="status-toggle">
             <button
-              className="btn btn-primary"
-              onClick={() => showToast('✨ Exported customers to CSV')}
+              className="btn"
+              onClick={() => setDropdownOpen((v) => !v)}
             >
-              📥 Export CSV
+              Status: {statusFilter} ▾
             </button>
-          </AgentStep>
-        </AgentAction>
+          </AgentTarget>
+          {dropdownOpen && (
+            <div className="dropdown-menu">
+              {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
+                <AgentTarget key={s} param="status" value={s}>
+                  <button
+                    className="dropdown-item"
+                    onClick={() => {
+                      setStatusFilter(s);
+                      setDropdownOpen(false);
+                    }}
+                  >
+                    {s}
+                  </button>
+                </AgentTarget>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <AgentTarget name="export-btn">
+          <button
+            className="btn btn-primary"
+            onClick={() => showToast('✨ Exported customers to CSV')}
+          >
+            📥 Export CSV
+          </button>
+        </AgentTarget>
       </div>
 
       <div className="table">

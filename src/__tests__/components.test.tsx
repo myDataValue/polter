@@ -8,6 +8,7 @@ import { AgentTarget } from '../components/AgentTarget';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { defineAction } from '../core/defineAction';
 import { z } from 'zod';
+import { TestConsumer } from './testUtils';
 
 // Action definitions used across tests
 const exportCsvAction = defineAction({ name: 'export_csv', description: 'Export to CSV' });
@@ -24,14 +25,7 @@ const runAction = defineAction({ name: 'run', description: 'Run' });
 const clickTestAction = defineAction({ name: 'click_test', description: 'Click test' });
 const trackedAction = defineAction({ name: 'tracked', description: 'Tracked' });
 const multiAction = defineAction({ name: 'multi', description: 'Multi-step' });
-
-function TestConsumer({ onContext }: { onContext: (ctx: ReturnType<typeof useAgentActions>) => void }) {
-  const ctx = useAgentActions();
-  React.useEffect(() => {
-    onContext(ctx);
-  });
-  return null;
-}
+const aAction = defineAction({ name: 'a', description: 'A' });
 
 describe('AgentActionProvider', () => {
   it('renders children', () => {
@@ -260,6 +254,309 @@ describe('AgentStep', () => {
   });
 });
 
+describe('AgentStep skipIf', () => {
+  it('skips the step click when skipIf returns true', async () => {
+    const click1 = vi.fn();
+    const click2 = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <AgentStep label="one" skipIf={() => true}>
+            <button onClick={click1}>1</button>
+          </AgentStep>
+          <AgentStep label="two">
+            <button onClick={click2}>2</button>
+          </AgentStep>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(click1).not.toHaveBeenCalled();
+    expect(click2).toHaveBeenCalled();
+  });
+
+  it('runs the step when skipIf returns false', async () => {
+    const click = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <AgentStep label="one" skipIf={() => false}>
+            <button onClick={click}>1</button>
+          </AgentStep>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('passes action params to the skipIf predicate', async () => {
+    const click = vi.fn();
+    const predicate = vi.fn((p: Record<string, unknown>) => p.skip === true);
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <AgentStep label="one" skipIf={predicate}>
+            <button onClick={click}>1</button>
+          </AgentStep>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('a', { skip: true, other: 'y' }));
+    expect(predicate).toHaveBeenCalledWith({ skip: true, other: 'y' });
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it('reads the latest skipIf closure after the step rerenders', async () => {
+    const click = vi.fn();
+    let setShouldSkip: (v: boolean) => void = () => {};
+
+    function Harness() {
+      const [shouldSkip, setter] = React.useState(false);
+      setShouldSkip = setter;
+      return (
+        <AgentStep label="one" skipIf={() => shouldSkip}>
+          <button onClick={click}>1</button>
+        </AgentStep>
+      );
+    }
+
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <Harness />
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+
+    act(() => setShouldSkip(true));
+
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+
+  it('tracks the latest skipIf closure across many flips', async () => {
+    const click = vi.fn();
+    let setShouldSkip: (v: boolean) => void = () => {};
+
+    function Harness() {
+      const [shouldSkip, setter] = React.useState(false);
+      setShouldSkip = setter;
+      return (
+        <AgentStep label="one" skipIf={() => shouldSkip}>
+          <button onClick={click}>1</button>
+        </AgentStep>
+      );
+    }
+
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <Harness />
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    let expectedCount = 0;
+    const sequence = [false, true, false, true, true, false, false, true];
+    for (const shouldSkip of sequence) {
+      act(() => setShouldSkip(shouldSkip));
+      await act(() => ctx!.execute('a'));
+      if (!shouldSkip) expectedCount += 1;
+      expect(click).toHaveBeenCalledTimes(expectedCount);
+    }
+  });
+
+  it('handles skipIf toggling between defined and undefined', async () => {
+    const click = vi.fn();
+    let setState: (v: { pass: boolean; skip: boolean }) => void = () => {};
+
+    function Harness() {
+      const [state, setter] = React.useState({ pass: false, skip: false });
+      setState = setter;
+      return (
+        <AgentStep
+          label="one"
+          skipIf={state.pass ? () => state.skip : undefined}
+        >
+          <button onClick={click}>1</button>
+        </AgentStep>
+      );
+    }
+
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <Harness />
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // No skipIf at all — runs.
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+
+    // skipIf now present and returns true — skips.
+    act(() => setState({ pass: true, skip: true }));
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+
+    // skipIf still present but returns false — runs.
+    act(() => setState({ pass: true, skip: false }));
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(2);
+
+    // skipIf removed — runs.
+    act(() => setState({ pass: false, skip: true }));
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not reorder steps when skipIf changes reference on rerender', async () => {
+    const clicks: string[] = [];
+    let setShouldSkip: (v: boolean) => void = () => {};
+
+    function Harness() {
+      const [shouldSkip, setter] = React.useState(false);
+      setShouldSkip = setter;
+      return (
+        <>
+          <AgentStep label="a">
+            <button onClick={() => clicks.push('a')}>a</button>
+          </AgentStep>
+          <AgentStep label="b" skipIf={() => shouldSkip}>
+            <button onClick={() => clicks.push('b')}>b</button>
+          </AgentStep>
+          <AgentStep label="c">
+            <button onClick={() => clicks.push('c')}>c</button>
+          </AgentStep>
+        </>
+      );
+    }
+
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <Harness />
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    act(() => setShouldSkip(false));
+    act(() => setShouldSkip(false));
+    act(() => setShouldSkip(false));
+
+    await act(() => ctx!.execute('a'));
+    expect(clicks).toEqual(['a', 'b', 'c']);
+  });
+
+  it('handles skipIf swapping between distinct stable lambdas from a map', async () => {
+    const click = vi.fn();
+    let setRule: (k: 'allow' | 'block') => void = () => {};
+
+    const allow = vi.fn((_p: Record<string, unknown>) => false);
+    const block = vi.fn((_p: Record<string, unknown>) => true);
+    const rules: Record<'allow' | 'block', (p: Record<string, unknown>) => boolean> = {
+      allow,
+      block,
+    };
+
+    function Harness() {
+      const [key, setter] = React.useState<'allow' | 'block'>('allow');
+      setRule = setter;
+      return (
+        <AgentStep label="one" skipIf={rules[key]}>
+          <button onClick={click}>1</button>
+        </AgentStep>
+      );
+    }
+
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <Harness />
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(allow).toHaveBeenCalledTimes(1);
+    expect(block).not.toHaveBeenCalled();
+
+    act(() => setRule('block'));
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(allow).toHaveBeenCalledTimes(1);
+    expect(block).toHaveBeenCalledTimes(1);
+
+    act(() => setRule('allow'));
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(2);
+    expect(allow).toHaveBeenCalledTimes(2);
+    expect(block).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps skipIf fresh when an unrelated prop change triggers re-registration', async () => {
+    const click = vi.fn();
+    let setState: (v: { label: string; skip: boolean }) => void = () => {};
+
+    function Harness() {
+      const [state, setter] = React.useState({ label: 'first', skip: false });
+      setState = setter;
+      return (
+        <AgentStep label={state.label} skipIf={() => state.skip}>
+          <button onClick={click}>1</button>
+        </AgentStep>
+      );
+    }
+
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <Harness />
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+
+    // Flipping `label` forces the registration effect to re-fire (label is in
+    // deps). Simultaneously flip skip to true. After re-registration, the
+    // stable skipIf wrapper must still read the latest closure.
+    act(() => setState({ label: 'second', skip: true }));
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(1);
+
+    // Flip back — another re-registration, skip flips to false again.
+    act(() => setState({ label: 'third', skip: false }));
+    await act(() => ctx!.execute('a'));
+    expect(click).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('AgentTarget', () => {
   it('throws when used outside provider', () => {
     expect(() =>
@@ -283,14 +580,3 @@ describe('AgentTarget', () => {
   });
 });
 
-describe('useAgentActions', () => {
-  it('throws when used outside provider', () => {
-    function BadComponent() {
-      useAgentActions();
-      return null;
-    }
-    expect(() => render(<BadComponent />)).toThrow(
-      'useAgentActions must be used within an AgentActionProvider',
-    );
-  });
-});

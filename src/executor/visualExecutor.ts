@@ -263,7 +263,8 @@ async function resolveStepElement(
   // For array params, resolve against the first element (spotlight one representative target).
   if (target.fromParam && config.resolveTarget) {
     const raw = params[target.fromParam];
-    const paramValue = String(Array.isArray(raw) ? raw[0] ?? '' : raw ?? '');
+    const first = Array.isArray(raw) ? raw[0] : raw;
+    const paramValue = String(first ?? target.defaultValue ?? '');
     return config.resolveTarget(actionName, target.fromParam, paramValue, config.signal);
   }
 
@@ -283,6 +284,7 @@ async function executeInstant(
   try {
     const targets = action.getExecutionTargets();
     for (const target of targets) {
+      if (target.skipIf?.(params)) continue;
       target.element?.click();
     }
     if (action.awaitResult) {
@@ -295,11 +297,12 @@ async function executeInstant(
 }
 
 /**
- * Check whether an element is visible and measurable.
- * Returns false for detached nodes and display:contents wrappers
+ * Check whether an element is present, visible, and measurable.
+ * Returns false for null, detached nodes, and display:contents wrappers
  * (whose getBoundingClientRect() returns all zeros).
  */
-function isElementVisible(el: HTMLElement): boolean {
+function isElementVisible(el: HTMLElement | null): el is HTMLElement {
+  if (!el) return false;
   if (!el.isConnected) return false;
   const rect = el.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
@@ -333,16 +336,18 @@ async function executeGuided(
       const target = targets[i];
       const isLast = i === targets.length - 1;
 
-      // Resolve element (may be lazy for fromParam steps)
-      const element = await resolveStepElement(target, action.name, params, config);
-      if (!element) continue;
+      // Skip when the step declares a precondition is already satisfied.
+      if (target.skipIf?.(params)) continue;
 
-      // Element not in DOM (never rendered) — skip for single-step, abort for multi-step
+      // Resolve element (may be lazy for fromParam steps).
+      // Multi-step actions abort on miss; single-step actions continue silently.
+      const element = await resolveStepElement(target, action.name, params, config);
       if (!isElementVisible(element)) {
         if (targets.length > 1) {
           blocker.remove();
           cursor?.remove();
-          return { success: false, actionName: action.name, error: `Step element not visible: "${target.label}"` };
+          const reason = !element ? `target not found for step "${target.label}"` : `element not visible: "${target.label}"`;
+          return { success: false, actionName: action.name, error: reason };
         }
         continue;
       }
@@ -366,11 +371,11 @@ async function executeGuided(
         const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
           ? element
           : element.querySelector('input, textarea') ?? element;
-        const value = String(params[target.setParam] ?? '');
+        const value = String(params[target.setParam] ?? target.defaultValue ?? '');
         await simulateTyping(inputEl as HTMLElement, value, config.signal);
       } else if (target.setValue && target.onSetValue) {
         // Set value programmatically via callback
-        const value = params[target.setValue];
+        const value = params[target.setValue] ?? target.defaultValue;
         target.onSetValue(value);
       } else {
         // Click every step — pure ADUI

@@ -1,6 +1,6 @@
 {
   "name": "@mydatavalue/polter",
-  "version": "0.2.1",
+  "version": "0.3.2",
   "description": "Declarative React library for agent-driven UI control with visual guided execution",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -64,5 +64,8 @@
     "zod": "^3.23.0"
   },
   "sideEffects": false,
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
 }
