@@ -11,7 +11,6 @@ describe('defineAction', () => {
     expect(action.name).toBe('export_csv');
     expect(action.description).toBe('Export to CSV');
     expect(action.steps).toBeUndefined();
-    expect(action.mountTimeout).toBeUndefined();
     expect(action.route).toBeUndefined();
   });
 
@@ -27,15 +26,6 @@ describe('defineAction', () => {
     expect(action.steps).toHaveLength(2);
     expect(action.steps![0].fromTarget).toBe('settings-tab');
     expect(action.steps![1].fromTarget).toBe('grant-link');
-  });
-
-  it('includes mountTimeout', () => {
-    const action = defineAction({
-      name: 'slow_page',
-      description: 'Slow loading page',
-      mountTimeout: 120_000,
-    });
-    expect(action.mountTimeout).toBe(120_000);
   });
 
   it('includes route function', () => {
@@ -57,11 +47,9 @@ describe('defineAction', () => {
         { label: 'Step 1', fromTarget: 'btn-1' },
         { label: 'Step 2', fromTarget: 'btn-2' },
       ],
-      mountTimeout: 60_000,
     });
     expect(action.name).toBe('full_action');
     expect(action.steps).toHaveLength(2);
-    expect(action.mountTimeout).toBe(60_000);
     expect(action.parameters).toBeDefined();
   });
 });

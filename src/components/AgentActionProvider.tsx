@@ -25,7 +25,6 @@ function definitionToRegisteredAction(def: ActionDefinition<any>): RegisteredAct
     getExecutionTargets: () =>
       def.steps?.length ? def.steps.map((s) => ({ ...s, element: null })) : [],
     route: def.route as RegisteredAction['route'],
-    mountTimeout: def.mountTimeout,
   };
 }
 
@@ -88,11 +87,10 @@ export function AgentActionProvider({
   const registerAction = useCallback((action: RegisteredAction) => {
     const existing = actionsRef.current.get(action.name);
 
-    // Preserve route/mountTimeout from registry definition when a component upgrades the action.
+    // Preserve route from registry definition when a component upgrades the action.
     const registryAction = registryRef.current.get(action.name);
     if (registryAction) {
       if (!action.route) action.route = registryAction.route;
-      if (action.mountTimeout == null) action.mountTimeout = registryAction.mountTimeout;
     }
 
     // Dev-mode warning: action registered by component but not in registry
@@ -286,7 +284,7 @@ export function AgentActionProvider({
           tooltipEnabled,
           cursorEnabled,
           signal: controller.signal,
-          mountTimeout: action.mountTimeout ?? 5000,
+          mountTimeout: 5000,
           resolveTarget,
           resolveNamedTarget,
         };
@@ -312,7 +310,7 @@ export function AgentActionProvider({
           await navigateToRoute(action, params);
 
           // Wait for the <AgentAction> component to mount on the new page.
-          const mounted = await waitForActionMount(actionName, controller.signal, action.mountTimeout);
+          const mounted = await waitForActionMount(actionName, controller.signal, 5000);
           if (mounted) {
             action = mounted;
           }
@@ -337,7 +335,7 @@ export function AgentActionProvider({
         // After defineAction steps complete (e.g. navigation), the component may
         // have mounted and provided its own steps. If so, continue with those.
         if (result.success && !action.componentBacked) {
-          const upgraded = await waitForActionMount(actionName, controller.signal, action.mountTimeout);
+          const upgraded = await waitForActionMount(actionName, controller.signal, 5000);
           if (upgraded && upgraded.componentBacked) {
             // Re-check disabled — the mounted version may have dynamic state.
             if (upgraded.disabled) {

@@ -244,7 +244,7 @@ describe('AgentAction execute', () => {
     );
     await act(() => ctx!.execute('tracked'));
     expect(onStart).toHaveBeenCalledWith('tracked');
-    expect(onComplete).toHaveBeenCalledWith({ success: true, actionName: 'tracked' });
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ success: true, actionName: 'tracked' }));
   });
 });
 

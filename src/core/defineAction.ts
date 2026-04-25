@@ -26,11 +26,6 @@ export interface ActionDefinition<TParams = Record<string, unknown>> {
    * runtime steps via `useAgentAction` or `<AgentAction>`.
    */
   readonly steps?: StepDefinition[];
-  /**
-   * How long (ms) to poll for each step's target to appear. Defaults to 5000ms.
-   * Increase for actions whose steps cross slow page transitions.
-   */
-  readonly mountTimeout?: number;
 }
 
 export function defineAction<TParams = Record<string, unknown>>(config: {
@@ -39,7 +34,6 @@ export function defineAction<TParams = Record<string, unknown>>(config: {
   parameters?: unknown;
   route?: (params: TParams) => string;
   steps?: StepDefinition[];
-  mountTimeout?: number;
 }): ActionDefinition<TParams> {
   return {
     name: config.name,
@@ -47,6 +41,5 @@ export function defineAction<TParams = Record<string, unknown>>(config: {
     parameters: config.parameters,
     route: config.route,
     steps: config.steps,
-    mountTimeout: config.mountTimeout,
   };
 }

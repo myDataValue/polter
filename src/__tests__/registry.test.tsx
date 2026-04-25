@@ -28,7 +28,6 @@ const grantAccess = defineAction({
     { label: 'Click Settings', fromTarget: 'settings-tab' },
     { label: 'Click Grant', fromTarget: 'grant-link' },
   ],
-  mountTimeout: 60_000,
   parameters: z.object({
     property_ids: z.array(z.number()).describe('Property IDs'),
   }),
@@ -85,20 +84,7 @@ describe('Registry', () => {
     expect(ctx!.availableActions[0].name).toBe('export_csv');
   });
 
-  it('preserves mountTimeout from registry when component registers', async () => {
-    let ctx: ReturnType<typeof useAgentActions> | null = null;
-    render(
-      <AgentActionProvider mode="instant" registry={[grantAccess]}>
-        <AgentAction action={grantAccess}>
-          <button>Grant</button>
-        </AgentAction>
-        <TestConsumer onContext={(c) => (ctx = c)} />
-      </AgentActionProvider>,
-    );
-    // The action should still be available
-    expect(ctx!.availableActions).toHaveLength(1);
-    expect(ctx!.availableActions[0].name).toBe('grant_access');
-  });
+
 });
 
 describe('componentBacked flag', () => {

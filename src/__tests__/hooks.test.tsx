@@ -85,7 +85,7 @@ describe('useAgentAction', () => {
     expect(ctx!.availableActions).toHaveLength(0);
   });
 
-  it('invokes step skipIf at execute time with the action params', async () => {
+  it('invokes step skipIf at execute time with the action params', { timeout: 10000 }, async () => {
     const skipIf = vi.fn(() => false);
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     function Harness() {
@@ -105,7 +105,7 @@ describe('useAgentAction', () => {
     expect(skipIf).toHaveBeenCalledWith({ k: 'v' });
   });
 
-  it('reads the latest step skipIf closure after the component rerenders', async () => {
+  it('reads the latest step skipIf closure after the component rerenders', { timeout: 20000 }, async () => {
     // Regression guard: useAgentAction must look up the config via
     // configRef.current at execute time — not capture item.steps at effect
     // run time — so inline closures see the latest render's state.

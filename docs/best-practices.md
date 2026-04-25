@@ -97,7 +97,7 @@ useAgentAction({
 
 ## Put cross-page steps in `defineAction`
 
-When a step click causes a page navigation, the next step's target doesn't exist yet — it's on the new page. The executor polls up to `mountTimeout` (default 5s) for each step's target to appear, so cross-page actions work automatically.
+When a step click causes a page navigation, the next step's target doesn't exist yet — it's on the new page. The executor polls up to 5s for each step's target to appear, so cross-page actions work automatically. For targets that take longer to load (API calls), render them with `disabled` during loading — polter polls past disabled elements and clicks when they become enabled.
 
 Define these steps on `defineAction` since they're static and don't need React closures:
 
@@ -109,7 +109,6 @@ export const grantAccess = defineAction({
     { label: 'Click Settings', fromTarget: 'settings-tab' },
     { label: 'Click Grant Access', fromTarget: 'grant-link' },
   ],
-  mountTimeout: 30_000, // increase for slow page transitions
 });
 ```
 

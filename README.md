@@ -228,8 +228,9 @@ import { editItem } from './actions';
    schema-only — never disappears from the agent's view
 
 **Cross-page actions** — use `steps` on `defineAction` for steps that cross page
-boundaries. The executor polls up to `mountTimeout` (default 5s) for each
-step's target to appear:
+boundaries. The executor polls up to 5s for each step's target to appear.
+For targets behind slow API calls, render them with `disabled` during loading —
+polter polls past disabled elements and clicks when they become enabled:
 
 ```ts
 export const grantAccess = defineAction({
@@ -239,7 +240,6 @@ export const grantAccess = defineAction({
     { label: 'Click Settings', fromTarget: 'settings-tab' },
     { label: 'Click Grant Access', fromTarget: 'grant-link' },
   ],
-  mountTimeout: 30_000, // increase for slow transitions
 });
 ```
 

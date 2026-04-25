@@ -70,8 +70,6 @@ export interface RegisteredAction {
   waitFor?: () => void | Promise<void>;
   /** Client-side route for navigation before execution (from defineAction). */
   route?: (params: Record<string, unknown>) => string;
-  /** How long (ms) to wait for this action's component to mount after navigation. */
-  mountTimeout?: number;
   /** True when registered by an `<AgentAction>` component (vs schema-only from registry). */
   componentBacked?: boolean;
 }
@@ -119,8 +117,6 @@ export interface ExecutorConfig {
   tooltipEnabled: boolean;
   cursorEnabled: boolean;
   signal?: AbortSignal;
-  /** Timeout (ms) for polling until a step's target appears. Defaults to 5000. */
-  mountTimeout?: number;
   /** Resolve an element from the AgentTarget registry. Used by fromParam steps. */
   resolveTarget?: (
     actionName: string,

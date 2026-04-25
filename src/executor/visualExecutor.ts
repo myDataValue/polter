@@ -256,7 +256,6 @@ async function resolveStepElement(
   params: Record<string, unknown>,
   config: ExecutorConfig,
 ): Promise<HTMLElement | null> {
-  // All steps poll up to mountTimeout (default 5s) for their target to appear.
   const timeout = config.mountTimeout ?? 5000;
 
   // scrollTo runs first (e.g. scroll virtualized list into view)
@@ -369,8 +368,9 @@ export async function executeAction(
   const targets = action.getExecutionTargets();
   const stepTraces: StepTrace[] = [];
 
-  // No targets and no awaitResult — nothing to do
-  if (targets.length === 0 || targets.every((t) => t.element && !isElementVisible(t.element))) {
+  // No targets and no awaitResult — nothing to do.
+  // Visibility check only in guided mode — instant mode doesn't need measurable elements.
+  if (targets.length === 0 || (config.mode === 'guided' && targets.every((t) => t.element && !isElementVisible(t.element)))) {
     if (action.waitFor) {
       await action.waitFor();
     }
@@ -415,8 +415,12 @@ export async function executeAction(
 
       // Resolve element (may be lazy for fromParam steps).
       // Multi-step actions abort on miss; single-step actions continue silently.
-      const element = await resolveStepElement(target, action.name, params, config);
-      if (!isElementVisible(element)) {
+      // Instant mode only needs the element to exist; guided mode needs it measurable (for spotlight).
+      const resolved = await resolveStepElement(target, action.name, params, config);
+      const element = config.mode === 'instant'
+        ? (resolved?.isConnected ? resolved : null)
+        : (isElementVisible(resolved) ? resolved : null);
+      if (!element) {
         if (targets.length > 1) {
           fx.cleanup();
           const reason = !element ? `target not found for step "${target.label}"` : `element not visible: "${target.label}"`;
@@ -484,12 +488,15 @@ export async function executeAction(
       activeStep = null;
     }
 
+    // Remove overlay before awaiting async work — steps are done,
+    // user should be able to interact while waitFor runs.
+    fx.cleanup();
+
     // Await async work triggered by step clicks
     if (action.waitFor) {
       await action.waitFor();
     }
 
-    fx.cleanup();
     return { success: true, actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
   } catch (err) {
     fx.cleanup();
