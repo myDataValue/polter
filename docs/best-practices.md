@@ -365,6 +365,41 @@ style="display:contents">` wrapper that breaks this:
 Since `Popover.Root` renders no DOM element, `AgentTarget`'s `firstElementChild`
 resolves to the Button directly.
 
+## `AgentTarget` must resolve to the interactive element
+
+`element.click()` fires on the target element and bubbles **up** — it does not
+propagate down to children. If `AgentTarget` resolves to a wrapper (span, div)
+with the actual interactive element (button, checkbox, input) nested inside,
+polter's click never reaches it.
+
+```tsx
+// Bad — AgentTarget resolves to the <span>, click doesn't reach Checkbox
+<AgentTarget name="select-all">
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <span>
+        <Checkbox onCheckedChange={handleChange} />
+      </span>
+    </TooltipTrigger>
+  </Tooltip>
+</AgentTarget>
+
+// Good — AgentTarget wraps the Checkbox directly
+<Tooltip>
+  <TooltipTrigger asChild>
+    <span>
+      <AgentTarget name="select-all">
+        <Checkbox onCheckedChange={handleChange} />
+      </AgentTarget>
+    </span>
+  </TooltipTrigger>
+</Tooltip>
+```
+
+This is the inverse of the Radix `asChild` rule above. Both come from the same
+principle: polter clicks whatever element `AgentTarget` resolves to, so that
+element must be the one with the click handler.
+
 ## Bulk operations: search + select + act
 
 When an action accepts an array of IDs and needs to apply to all of them, compose
