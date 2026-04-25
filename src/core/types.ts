@@ -89,10 +89,25 @@ export interface ToolSchema {
   parameters: Record<string, unknown>;
 }
 
+export interface StepTrace {
+  index: number;
+  label: string;
+  status: 'completed' | 'skipped' | 'failed';
+  targetType?: 'fromParam' | 'fromTarget' | 'static';
+  targetName?: string;
+  targetValue?: string;
+  targetFound: boolean;
+  interactionType: 'click' | 'type' | 'setValue' | 'none';
+  error?: string;
+  durationMs: number;
+}
+
 export interface ExecutionResult {
   success: boolean;
   actionName: string;
   error?: string;
+  trace: StepTrace[];
+  durationMs: number;
 }
 
 export interface AvailableAction {

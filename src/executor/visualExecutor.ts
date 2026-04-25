@@ -1,4 +1,4 @@
-import type { RegisteredAction, ExecutionResult, ExecutionTarget, ExecutorConfig } from '../core/types';
+import type { RegisteredAction, ExecutionResult, ExecutionTarget, ExecutorConfig, StepTrace } from '../core/types';
 
 let stylesInjected = false;
 
@@ -286,18 +286,44 @@ async function executeInstant(
   action: RegisteredAction,
   params: Record<string, unknown>,
 ): Promise<ExecutionResult> {
+  const executionStart = performance.now();
+  const stepTraces: StepTrace[] = [];
+
   try {
     const targets = action.getExecutionTargets();
-    for (const target of targets) {
-      if (target.skipIf?.(params)) continue;
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const stepStart = performance.now();
+
+      if (target.skipIf?.(params)) {
+        stepTraces.push({
+          index: i,
+          label: target.label,
+          status: 'skipped',
+          targetFound: !!target.element,
+          interactionType: 'none',
+          durationMs: performance.now() - stepStart,
+        });
+        continue;
+      }
+
       target.element?.click();
+      stepTraces.push({
+        index: i,
+        label: target.label,
+        status: 'completed',
+        targetType: 'static',
+        targetFound: !!target.element,
+        interactionType: 'click',
+        durationMs: performance.now() - stepStart,
+      });
     }
     if (action.waitFor) {
       await action.waitFor();
     }
-    return { success: true, actionName: action.name };
+    return { success: true, actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
   } catch (err) {
-    return { success: false, actionName: action.name, error: String(err) };
+    return { success: false, actionName: action.name, error: String(err), trace: stepTraces, durationMs: performance.now() - executionStart };
   }
 }
 
@@ -318,14 +344,16 @@ async function executeGuided(
   params: Record<string, unknown>,
   config: ExecutorConfig,
 ): Promise<ExecutionResult> {
+  const executionStart = performance.now();
   const targets = action.getExecutionTargets();
+  const stepTraces: StepTrace[] = [];
 
   // No targets and no awaitResult — nothing to do
   if (targets.length === 0 || targets.every((t) => t.element && !isElementVisible(t.element))) {
     if (action.waitFor) {
       await action.waitFor();
     }
-    return { success: true, actionName: action.name };
+    return { success: true, actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
   }
 
   let spotlight: SpotlightHandle | null = null;
@@ -336,13 +364,37 @@ async function executeGuided(
     cursor = createCursor();
   }
 
+  // Track in-progress step for the catch block
+  let activeStep: { index: number; target: ExecutionTarget; start: number } | null = null;
+
   try {
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i];
       const isLast = i === targets.length - 1;
+      const stepStart = performance.now();
 
       // Skip when the step declares a precondition is already satisfied.
-      if (target.skipIf?.(params)) continue;
+      if (target.skipIf?.(params)) {
+        stepTraces.push({
+          index: i,
+          label: target.label,
+          status: 'skipped',
+          targetFound: false,
+          interactionType: 'none',
+          durationMs: performance.now() - stepStart,
+        });
+        continue;
+      }
+
+      activeStep = { index: i, target, start: stepStart };
+
+      const resolvedFromParam = typeof target.fromParam === 'function' ? target.fromParam(params) : target.fromParam;
+      const resolvedFromTarget = typeof target.fromTarget === 'function' ? target.fromTarget(params) : target.fromTarget;
+      const targetType = resolvedFromParam ? 'fromParam' as const : resolvedFromTarget ? 'fromTarget' as const : 'static' as const;
+      const targetName = resolvedFromParam || resolvedFromTarget;
+      const targetValue = resolvedFromParam
+        ? String(params[resolvedFromParam] ?? target.defaultValue ?? '')
+        : resolvedFromTarget || undefined;
 
       // Resolve element (may be lazy for fromParam steps).
       // Multi-step actions abort on miss; single-step actions continue silently.
@@ -352,8 +404,31 @@ async function executeGuided(
           blocker.remove();
           cursor?.remove();
           const reason = !element ? `target not found for step "${target.label}"` : `element not visible: "${target.label}"`;
-          return { success: false, actionName: action.name, error: reason };
+          stepTraces.push({
+            index: i,
+            label: target.label,
+            status: 'failed',
+            targetType,
+            targetName,
+            targetValue,
+            targetFound: !!element,
+            interactionType: 'none',
+            error: reason,
+            durationMs: performance.now() - stepStart,
+          });
+          return { success: false, actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
         }
+        stepTraces.push({
+          index: i,
+          label: target.label,
+          status: 'skipped',
+          targetType,
+          targetName,
+          targetValue,
+          targetFound: false,
+          interactionType: 'none',
+          durationMs: performance.now() - stepStart,
+        });
         continue;
       }
 
@@ -371,7 +446,9 @@ async function executeGuided(
       await delay(config.stepDelay, config.signal);
 
       // 4. Interact based on step type
+      let interactionType: StepTrace['interactionType'] = 'click';
       if (target.setParam) {
+        interactionType = 'type';
         // Type the param value into the input — find the actual input/textarea within the element
         const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
           ? element
@@ -379,6 +456,7 @@ async function executeGuided(
         const value = String(params[target.setParam] ?? target.defaultValue ?? '');
         await simulateTyping(inputEl as HTMLElement, value, config.signal);
       } else if (target.setValue && target.onSetValue) {
+        interactionType = 'setValue';
         // Set value programmatically via callback
         const value = params[target.setValue] ?? target.defaultValue;
         target.onSetValue(value);
@@ -392,6 +470,20 @@ async function executeGuided(
       spotlight.remove();
       spotlight = null;
 
+      stepTraces.push({
+        index: i,
+        label: target.label,
+        status: 'completed',
+        targetType,
+        targetName,
+        targetValue,
+        targetFound: true,
+        interactionType,
+        durationMs: performance.now() - stepStart,
+      });
+
+      activeStep = null;
+
       if (!isLast) {
         await delay(200, config.signal);
       }
@@ -404,17 +496,36 @@ async function executeGuided(
 
     blocker.remove();
     cursor?.remove();
-    return { success: true, actionName: action.name };
+    return { success: true, actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
   } catch (err) {
     // Clean up on error
     spotlight?.remove();
     blocker.remove();
     cursor?.remove();
 
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      return { success: false, actionName: action.name, error: 'Execution cancelled' };
+    const errorMsg = err instanceof DOMException && err.name === 'AbortError'
+      ? 'Execution cancelled'
+      : String(err);
+
+    // Trace the step that was in progress when the error occurred
+    if (activeStep) {
+      const { index, target: t, start } = activeStep;
+      const fp = typeof t.fromParam === 'function' ? t.fromParam(params) : t.fromParam;
+      const ft = typeof t.fromTarget === 'function' ? t.fromTarget(params) : t.fromTarget;
+      stepTraces.push({
+        index,
+        label: t.label,
+        status: 'failed',
+        targetType: fp ? 'fromParam' : ft ? 'fromTarget' : 'static',
+        targetName: fp || ft,
+        targetFound: false,
+        interactionType: 'none',
+        error: errorMsg,
+        durationMs: performance.now() - start,
+      });
     }
-    return { success: false, actionName: action.name, error: String(err) };
+
+    return { success: false, actionName: action.name, error: errorMsg, trace: stepTraces, durationMs: performance.now() - executionStart };
   }
 }
 

@@ -240,16 +240,19 @@ export function AgentActionProvider({
       currentExecutionRef.current?.abort();
       const controller = new AbortController();
       currentExecutionRef.current = controller;
+      const start = performance.now();
 
       let action = actionsRef.current.get(actionName);
       if (!action) {
-        return { success: false, actionName, error: `Action "${actionName}" not found` };
+        return { success: false, actionName, error: `Action "${actionName}" not found`, trace: [], durationMs: performance.now() - start };
       }
       if (action.disabled) {
         return {
           success: false,
           actionName,
           error: action.disabledReason || 'Action is disabled',
+          trace: [],
+          durationMs: performance.now() - start,
         };
       }
 
@@ -281,7 +284,7 @@ export function AgentActionProvider({
             const error = missing.length > 0
               ? `Required parameters missing: ${missing.join(', ')}`
               : validation.error.issues.map((i: any) => i.message).join('; ');
-            return { success: false, actionName, error };
+            return { success: false, actionName, error, trace: [], durationMs: performance.now() - start };
           }
         }
 
@@ -304,6 +307,8 @@ export function AgentActionProvider({
             success: false,
             actionName,
             error: action.disabledReason || 'Action is disabled',
+            trace: [],
+            durationMs: performance.now() - start,
           };
           onExecutionComplete?.(result);
           return result;
@@ -322,13 +327,22 @@ export function AgentActionProvider({
                 success: false,
                 actionName,
                 error: upgraded.disabledReason || 'Action is disabled',
+                trace: result.trace,
+                durationMs: performance.now() - start,
               };
             } else {
-              result = await executeAction(upgraded, params ?? {}, executorConfig);
+              const phase2 = await executeAction(upgraded, params ?? {}, executorConfig);
+              result = {
+                ...phase2,
+                trace: [...result.trace, ...phase2.trace],
+                durationMs: performance.now() - start,
+              };
             }
           }
         }
 
+        // Override durationMs with total end-to-end time from provider
+        result = { ...result, durationMs: performance.now() - start };
         onExecutionComplete?.(result);
         return result;
       } catch (err) {
@@ -339,6 +353,8 @@ export function AgentActionProvider({
             err instanceof DOMException && err.name === 'AbortError'
               ? 'Execution cancelled'
               : String(err),
+          trace: [],
+          durationMs: performance.now() - start,
         };
         onExecutionComplete?.(result);
         return result;

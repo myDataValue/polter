@@ -26,6 +26,7 @@ export type {
   AgentTargetEntry,
   RegisteredAction,
   ToolSchema,
+  StepTrace,
   ExecutionResult,
   AvailableAction,
   ExecutorConfig,
