@@ -6,6 +6,13 @@ from that core principle: register actions where the real UI lives, keep them in
 sync with what's on screen, and let users watch the agent click the same buttons
 they'd click themselves.
 
+**The #1 mistake: reaching for programmatic shortcuts.** When you need to select
+rows, filter a table, or prepare state for a step — don't dispatch events, set
+refs, or call `setState` behind the scenes. Instead, ask: "what would a human
+click?" Then add steps that click those same elements. If the target belongs to
+another action, make it a shared `<AgentTarget>` (no `action` prop) so any action
+can reach it. Every interaction the agent performs should be visible to the user.
+
 ## Every action starts with `defineAction`
 
 All actions must be defined via `defineAction` in a static `actions.ts` file. This provides the schema (name, description, parameters, route) upfront — before any component mounts. The registry collects these definitions so the agent backend knows all available actions for tool discovery.
@@ -357,6 +364,49 @@ style="display:contents">` wrapper that breaks this:
 
 Since `Popover.Root` renders no DOM element, `AgentTarget`'s `firstElementChild`
 resolves to the Button directly.
+
+## Bulk operations: search + select + act
+
+When an action accepts an array of IDs and needs to apply to all of them, compose
+shared targets from the existing UI — don't reach for programmatic state
+manipulation. The pattern is: filter the table to the target rows, select them,
+then edit one — the save callback applies to the full selection.
+
+```tsx
+useAgentAction({
+  action: editMarkup, // parameters: { property_ids: number[], markup: number }
+  steps: [
+    // 1. Type IDs into the search box — String([1,2,3]) produces "1,2,3"
+    { label: 'Filter to target properties', fromTarget: 'search-input',
+      setParam: 'property_ids',
+      skipIf: (p) => (p.property_ids as number[]).length <= 1 },
+
+    // 2. Select all filtered rows
+    { label: 'Select all filtered', fromTarget: 'select-all-checkbox',
+      skipIf: (p) => (p.property_ids as number[]).length <= 1 },
+
+    // 3. Click edit on the first property
+    { label: 'Click edit', fromTarget: (p) => `edit-${(p.property_ids as number[])[0]}` },
+
+    // 4. Type the value — save callback sees the selection and applies to all
+    { label: 'Set value', fromTarget: 'markup-input', setParam: 'markup' },
+  ],
+});
+```
+
+Key ingredients:
+- **Shared targets** — `search-input` and `select-all-checkbox` have no `action`
+  prop, so any action can resolve them
+- **`skipIf`** — single-ID calls skip the search/select steps and edit directly
+- **`setParam` on arrays** — `String([id1, id2])` produces `"id1,id2"`, which the
+  search box accepts as a comma-separated filter
+- **Existing save callback** — the table's save handler already checks
+  `getSelectedRowIds()` and applies to all selected rows, showing a confirmation
+  dialog for the user to approve
+
+This is pure ADUI: the user sees polter type IDs into the search box, click
+select-all, click edit, and type the value. No programmatic state preparation,
+no `scrollTo` hacks, no event dispatching.
 
 ## Use shared targets for elements used by multiple actions
 
