@@ -150,8 +150,12 @@ export function AgentActionProvider({
       const normalizedValue = value.toLowerCase();
       const pollInterval = 50;
       const start = Date.now();
+      let seenDisabled = false;
 
-      while (Date.now() - start < timeout) {
+      // Poll until the target appears and is enabled.
+      // If a disabled match is found, the element is loading — poll indefinitely.
+      // If no match at all, give up after timeout.
+      while (seenDisabled || Date.now() - start < timeout) {
         if (signal?.aborted) return null;
 
         for (const entry of targetsRef.current.values()) {
@@ -159,10 +163,13 @@ export function AgentActionProvider({
             (!entry.action || entry.action === actionName) &&
             entry.param === param &&
             entry.value?.toLowerCase() === normalizedValue &&
-            entry.element.isConnected &&
-            !(entry.element as HTMLButtonElement).disabled
+            entry.element.isConnected
           ) {
-            return entry.element;
+            if ((entry.element as HTMLButtonElement).disabled) {
+              seenDisabled = true;
+            } else {
+              return entry.element;
+            }
           }
         }
 
@@ -184,21 +191,28 @@ export function AgentActionProvider({
     ): Promise<HTMLElement | null> => {
       const pollInterval = 50;
       const start = Date.now();
+      let seenDisabled = false;
 
-      while (Date.now() - start < timeout) {
+      // Poll until the target appears and is enabled.
+      // If a disabled match is found, the element is loading — poll indefinitely.
+      // If no match at all, give up after timeout.
+      while (seenDisabled || Date.now() - start < timeout) {
         if (signal?.aborted) return null;
 
         for (const entry of targetsRef.current.values()) {
           if (
             (!entry.action || entry.action === actionName) &&
             entry.name === name &&
-            entry.element.isConnected &&
-            !(entry.element as HTMLButtonElement).disabled
+            entry.element.isConnected
           ) {
-            if (entry.scrollTo && params) {
-              await entry.scrollTo(params);
+            if ((entry.element as HTMLButtonElement).disabled) {
+              seenDisabled = true;
+            } else {
+              if (entry.scrollTo && params) {
+                await entry.scrollTo(params);
+              }
+              return entry.element;
             }
-            return entry.element;
           }
         }
 
