@@ -256,24 +256,26 @@ async function resolveStepElement(
   // waitForMount steps use mountTimeout; normal steps use the default 3s.
   const timeout = target.waitForMount ? (config.mountTimeout ?? 5000) : undefined;
 
-  // prepareView runs first (e.g. scroll virtualized list into view)
-  if (target.prepareView) {
-    await target.prepareView(params);
+  // scrollTo runs first (e.g. scroll virtualized list into view)
+  if (target.scrollTo) {
+    await target.scrollTo(params);
     await delay(200, config.signal);
   }
 
   // fromParam: resolve lazily from AgentTarget registry by param value.
   // For array params, resolve against the first element (spotlight one representative target).
   if (target.fromParam && config.resolveTarget) {
-    const raw = params[target.fromParam];
+    const paramKey = typeof target.fromParam === 'function' ? target.fromParam(params) : target.fromParam;
+    const raw = params[paramKey];
     const first = Array.isArray(raw) ? raw[0] : raw;
     const paramValue = String(first ?? target.defaultValue ?? '');
-    return config.resolveTarget(actionName, target.fromParam, paramValue, config.signal, timeout);
+    return config.resolveTarget(actionName, paramKey, paramValue, config.signal, timeout);
   }
 
   // fromTarget: resolve lazily from AgentTarget registry by name
   if (target.fromTarget && config.resolveNamedTarget) {
-    return config.resolveNamedTarget(actionName, target.fromTarget, config.signal, params, timeout);
+    const targetName = typeof target.fromTarget === 'function' ? target.fromTarget(params) : target.fromTarget;
+    return config.resolveNamedTarget(actionName, targetName, config.signal, params, timeout);
   }
 
   // Static element

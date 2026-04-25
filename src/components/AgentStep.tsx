@@ -14,7 +14,7 @@ export function AgentStep({
   setParam,
   setValue,
   onSetValue,
-  prepareView,
+  scrollTo,
   defaultValue,
   skipIf,
 }: AgentStepProps) {
@@ -28,8 +28,8 @@ export function AgentStep({
 
   const onSetValueRef = useRef(onSetValue);
   onSetValueRef.current = onSetValue;
-  const prepareViewRef = useRef(prepareView);
-  prepareViewRef.current = prepareView;
+  const scrollToRef = useRef(scrollTo);
+  scrollToRef.current = scrollTo;
   const skipIfRef = useRef(skipIf);
   skipIfRef.current = skipIf;
 
@@ -54,7 +54,7 @@ export function AgentStep({
       setValue,
       onSetValue: onSetValueRef.current,
       defaultValue,
-      prepareView: prepareViewRef.current,
+      scrollTo: scrollToRef.current,
       skipIf: stableSkipIfRef.current!,
     });
     return () => stepContext.unregisterStep(id);

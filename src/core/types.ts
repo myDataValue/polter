@@ -5,10 +5,10 @@ export type SkipPredicate = (params: Record<string, unknown>) => boolean;
 /** Shared fields describing an agent step's behavior — consumed by AgentStep props, useAgentAction config, and ExecutionTarget. */
 export interface StepDefinition {
   label: string;
-  /** Resolve element from AgentTarget registry by matching this param's value. */
-  fromParam?: string;
-  /** Resolve element from AgentTarget registry by matching a named target. */
-  fromTarget?: string;
+  /** Resolve element from AgentTarget registry by matching this param's value. Static string or function receiving params. */
+  fromParam?: string | ((params: Record<string, unknown>) => string);
+  /** Resolve element from AgentTarget registry by matching a named target. Static string or function receiving params. */
+  fromTarget?: string | ((params: Record<string, unknown>) => string);
   /** Simulate typing the value of this param into the element. */
   setParam?: string;
   /** Set a value programmatically via onSetValue callback. */
@@ -17,8 +17,12 @@ export interface StepDefinition {
   onSetValue?: (value: unknown) => void;
   /** Fallback for params[fromParam/setParam/setValue] when the param is absent — lets a step target a fixed value without a matching param. */
   defaultValue?: string;
-  /** Run a callback to prepare the DOM (e.g. scroll virtualized list) before resolving. */
-  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  /**
+   * Scroll a virtualized list or viewport so the target element renders in DOM.
+   * This is the ONLY legitimate use — if you're tempted to set state, call a
+   * mutation, or switch a mode, that should be a step the agent clicks instead.
+   */
+  scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
   /** Skip this step at execution time when the predicate returns true. */
   skipIf?: SkipPredicate;
   /**
@@ -44,8 +48,11 @@ export interface TargetDefinition {
   value?: string;
   /** Named target key (for fromTarget resolution — static elements inside popovers/dropdowns). */
   name?: string;
-  /** Run a callback to prepare component state before the agent interacts with this target. Runs in the child's scope so it can access internal state. */
-  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  /**
+   * Scroll a virtualized list or viewport so this target's element renders in DOM.
+   * Only for making targets reachable — not for state changes or business logic.
+   */
+  scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
 }
 
 export interface AgentTargetEntry extends TargetDefinition {

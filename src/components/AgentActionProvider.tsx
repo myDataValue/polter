@@ -190,8 +190,8 @@ export function AgentActionProvider({
             entry.name === name &&
             entry.element.isConnected
           ) {
-            if (entry.prepareView && params) {
-              await entry.prepareView(params);
+            if (entry.scrollTo && params) {
+              await entry.scrollTo(params);
             }
             return entry.element;
           }
