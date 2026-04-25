@@ -253,6 +253,9 @@ async function resolveStepElement(
   params: Record<string, unknown>,
   config: ExecutorConfig,
 ): Promise<HTMLElement | null> {
+  // waitForMount steps use mountTimeout; normal steps use the default 3s.
+  const timeout = target.waitForMount ? (config.mountTimeout ?? 5000) : undefined;
+
   // prepareView runs first (e.g. scroll virtualized list into view)
   if (target.prepareView) {
     await target.prepareView(params);
@@ -265,12 +268,12 @@ async function resolveStepElement(
     const raw = params[target.fromParam];
     const first = Array.isArray(raw) ? raw[0] : raw;
     const paramValue = String(first ?? target.defaultValue ?? '');
-    return config.resolveTarget(actionName, target.fromParam, paramValue, config.signal);
+    return config.resolveTarget(actionName, target.fromParam, paramValue, config.signal, timeout);
   }
 
   // fromTarget: resolve lazily from AgentTarget registry by name
   if (target.fromTarget && config.resolveNamedTarget) {
-    return config.resolveNamedTarget(actionName, target.fromTarget, config.signal, params);
+    return config.resolveNamedTarget(actionName, target.fromTarget, config.signal, params, timeout);
   }
 
   // Static element

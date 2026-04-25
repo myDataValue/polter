@@ -21,9 +21,10 @@ function definitionToRegisteredAction(def: ActionDefinition<any>): RegisteredAct
     parameters: def.parameters,
     disabled: false,
     disabledReason: undefined,
-    getExecutionTargets: () => [],
+    // Use defineAction steps as fallback when no component provides runtime steps.
+    getExecutionTargets: () =>
+      def.steps?.length ? def.steps.map((s) => ({ ...s, element: null })) : [],
     route: def.route as RegisteredAction['route'],
-    navigateVia: def.navigateVia,
     mountTimeout: def.mountTimeout,
   };
 }
@@ -87,11 +88,10 @@ export function AgentActionProvider({
   const registerAction = useCallback((action: RegisteredAction) => {
     const existing = actionsRef.current.get(action.name);
 
-    // Preserve route/navigateVia from registry definition when a component upgrades the action.
+    // Preserve route/mountTimeout from registry definition when a component upgrades the action.
     const registryAction = registryRef.current.get(action.name);
     if (registryAction) {
       if (!action.route) action.route = registryAction.route;
-      if (!action.navigateVia) action.navigateVia = registryAction.navigateVia;
       if (action.mountTimeout == null) action.mountTimeout = registryAction.mountTimeout;
     }
 
@@ -142,13 +142,13 @@ export function AgentActionProvider({
       param: string,
       value: string,
       signal?: AbortSignal,
+      timeout = 3000,
     ): Promise<HTMLElement | null> => {
       const normalizedValue = value.toLowerCase();
-      const maxWait = 3000;
       const pollInterval = 50;
       const start = Date.now();
 
-      while (Date.now() - start < maxWait) {
+      while (Date.now() - start < timeout) {
         if (signal?.aborted) return null;
 
         for (const entry of targetsRef.current.values()) {
@@ -176,12 +176,12 @@ export function AgentActionProvider({
       name: string,
       signal?: AbortSignal,
       params?: Record<string, unknown>,
+      timeout = 3000,
     ): Promise<HTMLElement | null> => {
-      const maxWait = 3000;
       const pollInterval = 50;
       const start = Date.now();
 
-      while (Date.now() - start < maxWait) {
+      while (Date.now() - start < timeout) {
         if (signal?.aborted) return null;
 
         for (const entry of targetsRef.current.values()) {
@@ -265,12 +265,12 @@ export function AgentActionProvider({
           tooltipEnabled,
           cursorEnabled,
           signal: controller.signal,
+          mountTimeout: action.mountTimeout ?? 5000,
           resolveTarget,
           resolveNamedTarget,
         };
 
-        // Validate params against the Zod schema before navigating — prevents
-        // wasted navigateVia chains when required params are missing.
+        // Validate params against the Zod schema before executing.
         const schema = action.parameters as any;
         if (schema?.safeParse) {
           const validation = schema.safeParse(params ?? {});
@@ -285,61 +285,15 @@ export function AgentActionProvider({
           }
         }
 
-        if (action.navigateVia && action.navigateVia.length > 0) {
-          // Execute each action in the chain sequentially — spotlight, click, wait for next mount.
-          for (const viaName of action.navigateVia) {
-            if (controller.signal.aborted) break;
+        // If this is a registry action with no DOM targets, navigate first.
+        const targets = action.getExecutionTargets();
+        if (targets.length === 0 && action.route && navigateRef.current) {
+          await navigateToRoute(action, params);
 
-            const viaRegistered = actionsRef.current.get(viaName);
-            const viaTimeout = viaRegistered?.mountTimeout ?? 10000;
-            const viaAction = await waitForActionMount(viaName, controller.signal, viaTimeout);
-
-            if (!viaAction || viaAction.getExecutionTargets().length === 0) {
-              // Route fallback: navigate directly if the action has a route defined.
-              if (viaAction?.route && navigateRef.current) {
-                await navigateToRoute(viaAction, params);
-                continue;
-              }
-
-              return {
-                success: false,
-                actionName,
-                error: `Navigation chain action "${viaName}" not found or has no targets`,
-              };
-            }
-
-            const viaResult = await executeAction(viaAction, {}, executorConfig);
-            if (!viaResult.success) {
-              return {
-                success: false,
-                actionName,
-                error: `Navigation chain failed at "${viaName}": ${viaResult.error}`,
-              };
-            }
-          }
-
-          // After the chain, wait for the terminal action to mount with DOM targets.
-          const mounted = await waitForActionMount(actionName, controller.signal, action.mountTimeout ?? 10000);
-          if (!mounted || !mounted.componentBacked) {
-            // Still schema-only — component never mounted on the page
-            return {
-              success: false,
-              actionName,
-              error: `Action "${actionName}" did not mount after navigation chain — the page may require authentication or failed to load`,
-            };
-          }
-          action = mounted;
-        } else {
-          // If this is a registry action with no DOM targets, navigate first.
-          const targets = action.getExecutionTargets();
-          if (targets.length === 0 && action.route && navigateRef.current) {
-            await navigateToRoute(action, params);
-
-            // Wait for the <AgentAction> component to mount on the new page.
-            const mounted = await waitForActionMount(actionName, controller.signal, action.mountTimeout);
-            if (mounted) {
-              action = mounted;
-            }
+          // Wait for the <AgentAction> component to mount on the new page.
+          const mounted = await waitForActionMount(actionName, controller.signal, action.mountTimeout);
+          if (mounted) {
+            action = mounted;
           }
         }
 

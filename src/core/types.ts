@@ -21,6 +21,13 @@ export interface StepDefinition {
   prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
   /** Skip this step at execution time when the predicate returns true. */
   skipIf?: SkipPredicate;
+  /**
+   * Wait for this step's target to appear in the target registry before resolving.
+   * Use for steps that cross page boundaries — after clicking a nav element,
+   * the next target only exists once the new page mounts. Uses the action's
+   * `mountTimeout` (default 5000ms) instead of the normal 3s poll.
+   */
+  waitForMount?: boolean;
 }
 
 export interface ExecutionTarget extends StepDefinition {
@@ -60,8 +67,6 @@ export interface RegisteredAction {
   awaitResult?: () => void | Promise<void>;
   /** Client-side route for navigation before execution (from defineAction). */
   route?: (params: Record<string, unknown>) => string;
-  /** Chain of action names to execute sequentially before this action (from defineAction). */
-  navigateVia?: string[];
   /** How long (ms) to wait for this action's component to mount after navigation. */
   mountTimeout?: number;
   /** True when registered by an `<AgentAction>` component (vs schema-only from registry). */
@@ -96,12 +101,15 @@ export interface ExecutorConfig {
   tooltipEnabled: boolean;
   cursorEnabled: boolean;
   signal?: AbortSignal;
+  /** Timeout (ms) for waitForMount steps. Defaults to 5000. */
+  mountTimeout?: number;
   /** Resolve an element from the AgentTarget registry. Used by fromParam steps. */
   resolveTarget?: (
     actionName: string,
     param: string,
     value: string,
     signal?: AbortSignal,
+    timeout?: number,
   ) => Promise<HTMLElement | null>;
   /** Resolve a named target from the AgentTarget registry. Used by fromTarget steps. */
   resolveNamedTarget?: (
@@ -109,6 +117,7 @@ export interface ExecutorConfig {
     name: string,
     signal?: AbortSignal,
     params?: Record<string, unknown>,
+    timeout?: number,
   ) => Promise<HTMLElement | null>;
 }
 

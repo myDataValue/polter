@@ -81,6 +81,28 @@ useAgentAction({
 });
 ```
 
+## Use `waitForMount` for cross-page steps
+
+When a step click causes a page navigation, the next step's target doesn't exist yet — it's on the new page. Use `waitForMount: true` on steps that cross page boundaries. The executor will poll the target registry (using `mountTimeout`) until the target appears, instead of the default 3s poll.
+
+Define these steps on `defineAction` since they're static and don't need React closures:
+
+```ts
+export const grantAccess = defineAction({
+  name: 'grant_access',
+  description: 'Grant bot access',
+  steps: [
+    { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
+    { label: 'Click Grant Access', fromTarget: 'grant-link', waitForMount: true },
+  ],
+  mountTimeout: 30_000,
+});
+```
+
+The `<AgentTarget>` elements on each page register themselves globally. After the executor clicks 'settings-tab' and the Settings page mounts, 'grant-link' appears in the target registry — the executor finds it and clicks it.
+
+If a component also provides steps via `useAgentAction`, those override the `defineAction` steps. Use this when you need `skipIf` or other runtime closures.
+
 ## Design actions around outcomes, not interactions
 
 Actions should describe *what the user wants to achieve* — not the mechanical

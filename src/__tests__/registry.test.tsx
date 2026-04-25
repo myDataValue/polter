@@ -24,7 +24,10 @@ const exportCsv = defineAction({
 const grantAccess = defineAction({
   name: 'grant_access',
   description: 'Grant access',
-  navigateVia: ['nav_settings', 'nav_grant'],
+  steps: [
+    { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
+    { label: 'Click Grant', fromTarget: 'grant-link', waitForMount: true },
+  ],
   mountTimeout: 60_000,
   parameters: z.object({
     property_ids: z.array(z.number()).describe('Property IDs'),
@@ -82,7 +85,7 @@ describe('Registry', () => {
     expect(ctx!.availableActions[0].name).toBe('export_csv');
   });
 
-  it('preserves navigateVia from registry when component registers', async () => {
+  it('preserves mountTimeout from registry when component registers', async () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" registry={[grantAccess]}>

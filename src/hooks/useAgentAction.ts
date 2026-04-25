@@ -1,25 +1,13 @@
 import { useContext, useEffect, useRef } from 'react';
-import type { ExecutionTarget, SkipPredicate } from '../core/types';
+import type { ExecutionTarget, StepDefinition } from '../core/types';
 import type { ActionDefinition } from '../core/defineAction';
 import { AgentActionContext } from '../components/AgentActionProvider';
-
-export interface StepConfig {
-  label: string;
-  fromParam?: string;
-  fromTarget?: string;
-  setParam?: string;
-  setValue?: string;
-  onSetValue?: (value: unknown) => void;
-  defaultValue?: string;
-  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
-  skipIf?: SkipPredicate;
-}
 
 export interface AgentActionConfig {
   /** The action definition — provides name, description, parameters. */
   action: ActionDefinition<any>;
-  /** Steps the agent walks through to drive the UI. Required. */
-  steps: StepConfig[];
+  /** Steps the agent walks through to drive the UI. Overrides defineAction steps when provided. */
+  steps: StepDefinition[];
   disabled?: boolean;
   disabledReason?: string;
   /**

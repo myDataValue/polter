@@ -10,18 +10,23 @@ describe('defineAction', () => {
     });
     expect(action.name).toBe('export_csv');
     expect(action.description).toBe('Export to CSV');
-    expect(action.navigateVia).toBeUndefined();
+    expect(action.steps).toBeUndefined();
     expect(action.mountTimeout).toBeUndefined();
     expect(action.route).toBeUndefined();
   });
 
-  it('includes navigateVia chain', () => {
+  it('includes steps with waitForMount', () => {
     const action = defineAction({
       name: 'grant_access',
       description: 'Grant access',
-      navigateVia: ['navigate_to_settings', 'navigate_to_grant_access'],
+      steps: [
+        { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
+        { label: 'Click Grant', fromTarget: 'grant-link', waitForMount: true },
+      ],
     });
-    expect(action.navigateVia).toEqual(['navigate_to_settings', 'navigate_to_grant_access']);
+    expect(action.steps).toHaveLength(2);
+    expect(action.steps![0].waitForMount).toBe(true);
+    expect(action.steps![1].fromTarget).toBe('grant-link');
   });
 
   it('includes mountTimeout', () => {
@@ -48,11 +53,14 @@ describe('defineAction', () => {
       name: 'full_action',
       description: 'Full action',
       parameters: z.object({ ids: z.array(z.number()) }),
-      navigateVia: ['step1', 'step2'],
+      steps: [
+        { label: 'Step 1', fromTarget: 'btn-1', waitForMount: true },
+        { label: 'Step 2', fromTarget: 'btn-2' },
+      ],
       mountTimeout: 60_000,
     });
     expect(action.name).toBe('full_action');
-    expect(action.navigateVia).toEqual(['step1', 'step2']);
+    expect(action.steps).toHaveLength(2);
     expect(action.mountTimeout).toBe(60_000);
     expect(action.parameters).toBeDefined();
   });
