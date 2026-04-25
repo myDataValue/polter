@@ -241,6 +241,9 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
     setNativeInputValue(input, value.slice(0, i + 1));
     await delay(charDelay, signal);
   }
+
+  // Blur after typing to commit the value — triggers onBlur save handlers
+  input.blur();
 }
 
 /**
