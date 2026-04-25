@@ -6,8 +6,9 @@ import { AgentActionContext } from '../components/AgentActionProvider';
 export interface AgentActionConfig {
   /** The action definition — provides name, description, parameters. */
   action: ActionDefinition<any>;
-  /** Steps the agent walks through to drive the UI. Overrides defineAction steps when provided. */
-  steps: StepDefinition[];
+  /** Steps the agent walks through to drive the UI. Overrides defineAction steps when provided.
+   *  Omit to keep defineAction steps and only provide waitFor/disabled from the component. */
+  steps?: StepDefinition[];
   disabled?: boolean;
   disabledReason?: string;
   /**
@@ -54,6 +55,7 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
         parameters: item.action.parameters,
         disabled: item.disabled ?? false,
         disabledReason: item.disabledReason,
+        componentBacked: true,
         waitFor: waitFor
           ? typeof waitFor === 'function'
             ? () => waitFor()
