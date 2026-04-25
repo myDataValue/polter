@@ -128,8 +128,13 @@ export function AgentActionProvider({
     setVersion((v) => v + 1);
   }, []);
 
+  // Track target names that have been registered at least once — used to detect
+  // conditional rendering (target mounted then unmounted instead of disabled).
+  const seenTargetNamesRef = useRef<Set<string>>(new Set());
+
   const registerTarget = useCallback((id: string, entry: AgentTargetEntry) => {
     targetsRef.current.set(id, entry);
+    if (entry.name) seenTargetNamesRef.current.add(entry.name);
   }, []);
 
   const unregisterTarget = useCallback((id: string) => {
@@ -156,7 +161,8 @@ export function AgentActionProvider({
             (!entry.action || entry.action === actionName) &&
             entry.param === param &&
             entry.value?.toLowerCase() === normalizedValue &&
-            entry.element.isConnected
+            entry.element.isConnected &&
+            !(entry.element as HTMLButtonElement).disabled
           ) {
             return entry.element;
           }
@@ -188,7 +194,8 @@ export function AgentActionProvider({
           if (
             (!entry.action || entry.action === actionName) &&
             entry.name === name &&
-            entry.element.isConnected
+            entry.element.isConnected &&
+            !(entry.element as HTMLButtonElement).disabled
           ) {
             if (entry.scrollTo && params) {
               await entry.scrollTo(params);
@@ -198,6 +205,17 @@ export function AgentActionProvider({
         }
 
         await new Promise((r) => setTimeout(r, pollInterval));
+      }
+
+      // If the target was previously registered but is now gone, the component
+      // conditionally unmounted it (e.g. early return during loading). Throw a
+      // clear error so the developer renders the target with disabled instead.
+      if (seenTargetNamesRef.current.has(name)) {
+        throw new Error(
+          `[polter] AgentTarget "${name}" was previously mounted but is now gone. ` +
+          `This usually means the component conditionally unmounts it during loading. ` +
+          `Render the target with disabled={isLoading} instead of unmounting it.`,
+        );
       }
 
       return null;
