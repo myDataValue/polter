@@ -309,7 +309,26 @@ export function AgentActionProvider({
           return result;
         }
 
-        const result = await executeAction(action, params ?? {}, executorConfig);
+        let result = await executeAction(action, params ?? {}, executorConfig);
+
+        // After defineAction steps complete (e.g. navigation), the component may
+        // have mounted and provided its own steps. If so, continue with those.
+        if (result.success && !action.componentBacked) {
+          const upgraded = await waitForActionMount(actionName, controller.signal, action.mountTimeout);
+          if (upgraded && upgraded.componentBacked) {
+            // Re-check disabled — the mounted version may have dynamic state.
+            if (upgraded.disabled) {
+              result = {
+                success: false,
+                actionName,
+                error: upgraded.disabledReason || 'Action is disabled',
+              };
+            } else {
+              result = await executeAction(upgraded, params ?? {}, executorConfig);
+            }
+          }
+        }
+
         onExecutionComplete?.(result);
         return result;
       } catch (err) {
