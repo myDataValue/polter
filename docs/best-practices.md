@@ -108,7 +108,41 @@ export const grantAccess = defineAction({
 
 The `<AgentTarget>` elements on each page register themselves globally. After the executor clicks 'settings-tab' and the Settings page mounts, 'grant-link' appears in the target registry — the executor finds it and clicks it.
 
-If a component also provides steps via `useAgentAction`, those override the `defineAction` steps. Use this when you need `skipIf` or other runtime closures.
+**Put ALL steps for cross-page actions in `defineAction` — never split between `defineAction` and component steps.** If some steps navigate to a page and other steps interact with elements on that page, all of them belong in `defineAction` with `waitForMount: true`. The components on the target page should only have `<AgentTarget>` markers, not `<AgentAction>` wrappers with their own steps.
+
+Splitting steps between `defineAction` (navigation) and component `<AgentStep>` children (interaction) creates a two-phase executor flow that is racy — the component might not mount before the executor checks for it, causing the second phase to silently drop.
+
+```tsx
+// Bad — navigation in defineAction, interaction in component (race condition)
+export const grantAccess = defineAction({
+  steps: [
+    { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
+    { label: 'Click Grant', fromTarget: 'grant-link', waitForMount: true },
+  ],
+});
+
+// Component on target page — steps may never execute
+<AgentAction action={grantAccess}>
+  <AgentStep label="Select all" fromTarget="select-all" />
+  <AgentStep label="Confirm"><ConfirmButton /></AgentStep>
+</AgentAction>
+
+// Good — all steps in defineAction, component just has targets
+export const grantAccess = defineAction({
+  steps: [
+    { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
+    { label: 'Click Grant', fromTarget: 'grant-link', waitForMount: true },
+    { label: 'Select all', fromTarget: 'select-all', waitForMount: true },
+    { label: 'Confirm', fromTarget: 'confirm-btn', waitForMount: true },
+  ],
+});
+
+// Component on target page — just markers
+<AgentTarget name="select-all"><Checkbox /></AgentTarget>
+<AgentTarget name="confirm-btn"><Button>Confirm</Button></AgentTarget>
+```
+
+If a component also provides steps via `useAgentAction`, those override the `defineAction` steps. Use this when you need `skipIf` or other runtime closures on same-page actions.
 
 ## Design actions around outcomes, not interactions
 
