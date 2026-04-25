@@ -110,11 +110,7 @@ checks whether its interaction is still needed to reach that state:
 
 ```tsx
 useAgentAction({
-  name: 'filter_and_export',
-  description: 'Filter by status and export',
-  parameters: z.object({
-    status: z.enum(['all', 'active', 'archived']),
-  }),
+  action: filterAndExport,
   steps: [
     { label: 'Clear search', setParam: 'query', defaultValue: '', fromTarget: 'search',
       skipIf: () => query === '' },
@@ -140,10 +136,7 @@ components mark the DOM elements the agent interacts with:
 ```tsx
 // Action definition — lives in the component that owns the state
 useAgentAction({
-  name: 'delete_item',
-  description: 'Delete an item by ID',
-  parameters: z.object({ item_id: z.number() }),
-  onExecute: (p) => handleDelete(p.item_id),
+  action: deleteItem,
   steps: [{ label: 'Click Delete', fromParam: 'item_id' }],
 });
 
@@ -157,9 +150,9 @@ Batch-register multiple actions in one call:
 
 ```tsx
 useAgentAction([
-  { name: 'view_item', ... },
-  { name: 'delete_item', ... },
-  { name: 'edit_item', ... },
+  { action: viewItem, steps: [...] },
+  { action: deleteItem, steps: [...] },
+  { action: editItem, steps: [...] },
 ]);
 ```
 

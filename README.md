@@ -75,10 +75,17 @@ import { z } from 'zod';
 
 ### 2. Register actions
 
-**Simple actions** — wrap a single element with `<AgentAction>`:
+**Simple actions** — define with `defineAction`, then wrap a single element with `<AgentAction>`:
 
 ```tsx
-<AgentAction name="export_data" description="Export the current view to CSV">
+// actions.ts
+const exportData = defineAction({
+  name: 'export_data',
+  description: 'Export the current view to CSV',
+});
+
+// Component
+<AgentAction action={exportData}>
   <ExportButton />
 </AgentAction>
 ```
@@ -89,12 +96,18 @@ predicates that check current state, so only the interactions still needed
 actually fire:
 
 ```tsx
-useAgentAction({
+// actions.ts
+const filterAndExport = defineAction({
   name: 'filter_and_export',
   description: 'Filter items by status and export',
   parameters: z.object({
     status: z.enum(['all', 'active', 'archived']),
   }),
+});
+
+// Component
+useAgentAction({
+  action: filterAndExport,
   steps: [
     { label: 'Open filter', fromTarget: 'status-toggle',
       skipIf: ({ status }) => statusFilter === status || dropdownOpen },
@@ -197,7 +210,7 @@ import { agentRegistry } from './registry';
 // features/items/EditPage.tsx
 import { editItem } from './actions';
 
-<AgentAction action={editItem} onExecute={(p) => openEditor(p.item_id)}>
+<AgentAction action={editItem}>
   <EditButton />
 </AgentAction>
 ```
@@ -214,9 +227,9 @@ import { editItem } from './actions';
 3. When the component unmounts (user navigates away), the action reverts to
    schema-only — never disappears from the agent's view
 
-If an action has no corresponding UI element anywhere in the app, you can
-provide `onExecute` directly on the definition as an escape hatch — it will
-execute without navigation or spotlight.
+If an action's last step triggers async work (a mutation, a streaming response),
+use `awaitResult` on the component or hook to hold the action open until it
+completes.
 
 ## API
 
@@ -244,13 +257,13 @@ execute without navigation or spotlight.
 | `onExecutionComplete` | `(result: ExecutionResult) => void` | — |
 | `registry` | `ActionDefinition[]` | — |
 | `navigate` | `(path: string) => void \| Promise<void>` | — |
+| `devWarnings` | `boolean` | `false` |
 
 ### Disabled actions
 
 ```tsx
 <AgentAction
-  name="save_changes"
-  description="Save pending changes"
+  action={saveChanges}
   disabled={!hasUnsavedChanges}
   disabledReason="No unsaved changes"
 >
