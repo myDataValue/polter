@@ -290,8 +290,8 @@ async function executeInstant(
       if (target.skipIf?.(params)) continue;
       target.element?.click();
     }
-    if (action.awaitResult) {
-      await action.awaitResult();
+    if (action.waitFor) {
+      await action.waitFor();
     }
     return { success: true, actionName: action.name };
   } catch (err) {
@@ -320,8 +320,8 @@ async function executeGuided(
 
   // No targets and no awaitResult — nothing to do
   if (targets.length === 0 || targets.every((t) => t.element && !isElementVisible(t.element))) {
-    if (action.awaitResult) {
-      await action.awaitResult();
+    if (action.waitFor) {
+      await action.waitFor();
     }
     return { success: true, actionName: action.name };
   }
@@ -396,8 +396,8 @@ async function executeGuided(
     }
 
     // 6. Await async work triggered by step clicks
-    if (action.awaitResult) {
-      await action.awaitResult();
+    if (action.waitFor) {
+      await action.waitFor();
     }
 
     blocker.remove();

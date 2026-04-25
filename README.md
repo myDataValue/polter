@@ -244,8 +244,9 @@ export const grantAccess = defineAction({
 ```
 
 If an action's last step triggers async work (a mutation, a streaming response),
-use `awaitResult` on the component or hook to hold the action open until it
-completes.
+use `waitFor` on the component or hook to hold the action open until it
+completes. Pass a React ref (safe — can't do work in a ref) or a function
+(escape hatch for custom promise construction).
 
 ## API
 

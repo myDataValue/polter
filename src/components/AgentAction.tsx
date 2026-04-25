@@ -16,11 +16,14 @@ interface AgentActionProps {
   disabled?: boolean;
   disabledReason?: string;
   /**
-   * Awaited after all steps complete. Use for waiting on async work triggered
-   * by a step click (e.g. a mutation or streaming response). This should WAIT
-   * for work, not DO work — the steps drive the UI.
+   * Waited on after all steps complete. Holds the action open until async work
+   * triggered by a step click finishes.
+   *
+   * Pass a React ref whose `.current` is set to a Promise by the click handler
+   * (safe — impossible to do work in a ref), or a function returning a Promise
+   * (escape hatch for custom promise construction).
    */
-  awaitResult?: () => void | Promise<void>;
+  waitFor?: React.RefObject<Promise<unknown> | undefined> | (() => void | Promise<void>);
   children?: React.ReactNode;
 }
 
@@ -29,7 +32,7 @@ export function AgentAction(props: AgentActionProps) {
     action,
     disabled = false,
     disabledReason,
-    awaitResult,
+    waitFor,
     children,
   } = props;
 
@@ -45,13 +48,16 @@ export function AgentAction(props: AgentActionProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stepsRef = useRef<Map<string, ExecutionTarget>>(new Map());
 
-  const awaitResultRef = useRef(awaitResult);
-  awaitResultRef.current = awaitResult;
+  const waitForRef = useRef(waitFor);
+  waitForRef.current = waitFor;
   const parametersRef = useRef(parameters);
   parametersRef.current = parameters;
 
-  const stableAwaitResult = useCallback(() => {
-    return awaitResultRef.current?.();
+  const stableWaitFor = useCallback(async () => {
+    const wf = waitForRef.current;
+    if (!wf) return;
+    if (typeof wf === 'function') { await wf(); return; }
+    await wf.current;
   }, []);
 
   const getExecutionTargets = useCallback((): ExecutionTarget[] => {
@@ -64,8 +70,11 @@ export function AgentAction(props: AgentActionProps) {
       );
     }
 
-    // Single element: use wrapper's first child
-    const el = wrapperRef.current?.firstElementChild as HTMLElement | null;
+    // Single element: use wrapper's first child, skipping display:contents wrappers.
+    let el = wrapperRef.current?.firstElementChild as HTMLElement | null;
+    while (el && getComputedStyle(el).display === 'contents' && el.firstElementChild) {
+      el = el.firstElementChild as HTMLElement;
+    }
     return el ? [{ label: description, element: el }] : [];
   }, [description]);
 
@@ -78,12 +87,12 @@ export function AgentAction(props: AgentActionProps) {
       parameters: parametersRef.current,
       disabled,
       disabledReason,
-      awaitResult: awaitResultRef.current ? stableAwaitResult : undefined,
+      waitFor: waitForRef.current ? stableWaitFor : undefined,
       getExecutionTargets,
       componentBacked: true,
     });
     return () => unregisterAction(name);
-  }, [name, description, disabled, disabledReason, stableAwaitResult, getExecutionTargets, registerAction, unregisterAction]);
+  }, [name, description, disabled, disabledReason, stableWaitFor, getExecutionTargets, registerAction, unregisterAction]);
 
   const registerStep = useCallback(
     (id: string, data: ExecutionTarget) => {

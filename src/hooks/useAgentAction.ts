@@ -11,11 +11,14 @@ export interface AgentActionConfig {
   disabled?: boolean;
   disabledReason?: string;
   /**
-   * Awaited after all steps complete. Use for waiting on async work triggered
-   * by a step click (e.g. a mutation or streaming response). This should WAIT
-   * for work, not DO work — the steps drive the UI.
+   * Waited on after all steps complete. Holds the action open until async work
+   * triggered by a step click finishes.
+   *
+   * Pass a React ref whose `.current` is set to a Promise by the click handler
+   * (safe — impossible to do work in a ref), or a function returning a Promise
+   * (escape hatch for custom promise construction).
    */
-  awaitResult?: () => void | Promise<void>;
+  waitFor?: React.RefObject<Promise<unknown> | undefined> | (() => void | Promise<void>);
 }
 
 /**
@@ -43,7 +46,7 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
 
   useEffect(() => {
     for (const item of configRef.current) {
-      const awaitResult = item.awaitResult;
+      const waitFor = item.waitFor;
 
       registerAction({
         name: item.action.name,
@@ -51,7 +54,11 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
         parameters: item.action.parameters,
         disabled: item.disabled ?? false,
         disabledReason: item.disabledReason,
-        awaitResult: awaitResult ? () => awaitResult() : undefined,
+        waitFor: waitFor
+          ? typeof waitFor === 'function'
+            ? () => waitFor()
+            : async () => { await waitFor.current; }
+          : undefined,
         // Look up `steps` fresh per execute so inline step closures see the
         // latest render's values; other fields are snapshot at mount.
         getExecutionTargets: (): ExecutionTarget[] => {

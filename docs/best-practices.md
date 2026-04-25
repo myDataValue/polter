@@ -67,17 +67,24 @@ useAgentAction({
 
 For bulk operations, the agent selects properties first (via filter/selection actions), then performs the action on the selection — same as human users.
 
-## Use `awaitResult` to wait for async side effects
+## Use `waitFor` to wait for async side effects
 
-When the last step click triggers async work (a mutation, a streaming response), use `awaitResult` to hold the action open until it completes. `awaitResult` should **wait** for work, not **do** work.
+When the last step click triggers async work (a mutation, a streaming response), use `waitFor` to hold the action open until it completes.
+
+**Prefer the ref form** — a React ref whose `.current` is set to a Promise by the click handler. It's impossible to accidentally "do work" in a ref:
 
 ```tsx
+const pushRef = useRef<Promise<void>>();
+
+// Button's onClick sets the ref
+<Button onClick={() => { pushRef.current = pushMutation(); }} />
+
 useAgentAction({
   action: pushChanges,
   steps: [
     { label: 'Click Push', fromTarget: 'push-btn' },
   ],
-  awaitResult: () => pushMutationPromiseRef.current,
+  waitFor: pushRef,
 });
 ```
 

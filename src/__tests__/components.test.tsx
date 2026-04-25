@@ -177,12 +177,12 @@ describe('AgentAction execute', () => {
     expect(result.error).toBe('Not ready');
   });
 
-  it('calls awaitResult in instant mode', async () => {
-    const awaitResult = vi.fn();
+  it('calls waitFor function in instant mode', async () => {
+    const waitFor = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant">
-        <AgentAction action={runAction} awaitResult={awaitResult}>
+        <AgentAction action={runAction} waitFor={waitFor}>
           <button>Run</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -190,7 +190,28 @@ describe('AgentAction execute', () => {
     );
     const result = await act(() => ctx!.execute('run', { foo: 'bar' }));
     expect(result.success).toBe(true);
-    expect(awaitResult).toHaveBeenCalled();
+    expect(waitFor).toHaveBeenCalled();
+  });
+
+  it('waits for ref promise in instant mode', async () => {
+    let resolve: () => void;
+    const promiseRef = { current: new Promise<void>((r) => { resolve = r; }) };
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={runAction} waitFor={promiseRef}>
+          <button>Run</button>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    let done = false;
+    const exec = act(() => ctx!.execute('run', { foo: 'bar' }).then((r) => { done = true; return r; }));
+    expect(done).toBe(false);
+    resolve!();
+    const result = await exec;
+    expect(result.success).toBe(true);
+    expect(done).toBe(true);
   });
 
   it('clicks element in instant mode', async () => {

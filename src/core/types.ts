@@ -60,11 +60,14 @@ export interface RegisteredAction {
   disabledReason?: string;
   getExecutionTargets: () => ExecutionTarget[];
   /**
-   * Awaited after all steps complete. Use for waiting on async work triggered
-   * by a step click (e.g. a mutation or streaming response). This should WAIT
-   * for work, not DO work — the steps drive the UI.
+   * Waited on after all steps complete. Holds the action open until async work
+   * triggered by a step click (e.g. a mutation or streaming response) finishes.
+   *
+   * Resolved form — always a function. The ref-vs-function distinction exists
+   * only at the AgentAction/useAgentAction API surface; registration converts
+   * refs to functions so the executor doesn't need to know about them.
    */
-  awaitResult?: () => void | Promise<void>;
+  waitFor?: () => void | Promise<void>;
   /** Client-side route for navigation before execution (from defineAction). */
   route?: (params: Record<string, unknown>) => string;
   /** How long (ms) to wait for this action's component to mount after navigation. */
