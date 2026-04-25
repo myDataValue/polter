@@ -230,7 +230,7 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
                 onToggle={() => setExpandedAction(expandedAction === action.name ? null : action.name)}
                 fieldValues={paramInputs[action.name] ?? {}}
                 onFieldChange={(field, value) => setFieldValue(action.name, field, value)}
-                onExecute={() => handleExecute(action)}
+                onRun={() => handleExecute(action)}
                 isExecuting={isExecuting}
               />
             ))}
@@ -286,7 +286,7 @@ function ActionRow({
   onToggle,
   fieldValues,
   onFieldChange,
-  onExecute,
+  onRun,
   isExecuting,
   badge,
 }: {
@@ -296,7 +296,7 @@ function ActionRow({
   onToggle: () => void;
   fieldValues: Record<string, string>;
   onFieldChange: (field: string, value: string) => void;
-  onExecute: () => void;
+  onRun: () => void;
   isExecuting: boolean;
   badge?: string;
 }) {
@@ -313,7 +313,7 @@ function ActionRow({
       onKeyDown={(e) => {
         if (e.key === 'Enter' && expanded && !action.disabled && !isExecuting) {
           e.preventDefault();
-          onExecute();
+          onRun();
         }
       }}
     >
@@ -358,7 +358,7 @@ function ActionRow({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onExecute();
+            onRun();
           }}
           disabled={action.disabled || isExecuting}
           style={{

@@ -51,10 +51,9 @@ Both `useAgentAction` and `<AgentAction>` require an `action` prop — you canno
 
 ## Steps are the only way to build actions
 
-There is no `onExecute`. The agent drives the UI by clicking through steps — the same way a human user would. Every action needs `steps` (or child `<AgentStep>` elements).
+The agent drives the UI by clicking through steps — the same way a human user would. Every action needs `steps` (or child `<AgentStep>` elements).
 
 ```tsx
-// Good — agent clicks through the UI
 useAgentAction({
   action: editMarkup,
   steps: [
@@ -63,12 +62,6 @@ useAgentAction({
     { label: 'Save', fromTarget: 'save-btn' },
     { label: 'Confirm', fromTarget: 'confirm-btn' },
   ],
-});
-
-// Bad — there is no onExecute in the API
-useAgentAction({
-  action: editMarkup,
-  onExecute: (p) => saveMutation(p), // ❌ does not exist
 });
 ```
 
