@@ -256,8 +256,8 @@ async function resolveStepElement(
   params: Record<string, unknown>,
   config: ExecutorConfig,
 ): Promise<HTMLElement | null> {
-  // waitForMount steps use mountTimeout; normal steps use the default 3s.
-  const timeout = target.waitForMount ? (config.mountTimeout ?? 5000) : undefined;
+  // All steps poll up to mountTimeout (default 5s) for their target to appear.
+  const timeout = config.mountTimeout ?? 5000;
 
   // scrollTo runs first (e.g. scroll virtualized list into view)
   if (target.scrollTo) {

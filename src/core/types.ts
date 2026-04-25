@@ -25,13 +25,6 @@ export interface StepDefinition {
   scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
   /** Skip this step at execution time when the predicate returns true. */
   skipIf?: SkipPredicate;
-  /**
-   * Wait for this step's target to appear in the target registry before resolving.
-   * Use for steps that cross page boundaries — after clicking a nav element,
-   * the next target only exists once the new page mounts. Uses the action's
-   * `mountTimeout` (default 5000ms) instead of the normal 3s poll.
-   */
-  waitForMount?: boolean;
 }
 
 export interface ExecutionTarget extends StepDefinition {
@@ -126,7 +119,7 @@ export interface ExecutorConfig {
   tooltipEnabled: boolean;
   cursorEnabled: boolean;
   signal?: AbortSignal;
-  /** Timeout (ms) for waitForMount steps. Defaults to 5000. */
+  /** Timeout (ms) for polling until a step's target appears. Defaults to 5000. */
   mountTimeout?: number;
   /** Resolve an element from the AgentTarget registry. Used by fromParam steps. */
   resolveTarget?: (

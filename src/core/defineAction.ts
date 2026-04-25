@@ -24,13 +24,11 @@ export interface ActionDefinition<TParams = Record<string, unknown>> {
   /**
    * Static steps the agent walks through. Used when no component provides
    * runtime steps via `useAgentAction` or `<AgentAction>`.
-   * Steps with `waitForMount: true` wait for the target to appear after
-   * page transitions instead of using the default 3s poll.
    */
   readonly steps?: StepDefinition[];
   /**
-   * How long (ms) to wait for this action's component to mount after navigation.
-   * Also used as the timeout for `waitForMount` steps. Defaults to 5000ms.
+   * How long (ms) to poll for each step's target to appear. Defaults to 5000ms.
+   * Increase for actions whose steps cross slow page transitions.
    */
   readonly mountTimeout?: number;
 }

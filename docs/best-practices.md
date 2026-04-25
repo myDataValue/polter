@@ -88,9 +88,9 @@ useAgentAction({
 });
 ```
 
-## Use `waitForMount` for cross-page steps
+## Put cross-page steps in `defineAction`
 
-When a step click causes a page navigation, the next step's target doesn't exist yet — it's on the new page. Use `waitForMount: true` on steps that cross page boundaries. The executor will poll the target registry (using `mountTimeout`) until the target appears, instead of the default 3s poll.
+When a step click causes a page navigation, the next step's target doesn't exist yet — it's on the new page. The executor polls up to `mountTimeout` (default 5s) for each step's target to appear, so cross-page actions work automatically.
 
 Define these steps on `defineAction` since they're static and don't need React closures:
 
@@ -99,16 +99,16 @@ export const grantAccess = defineAction({
   name: 'grant_access',
   description: 'Grant bot access',
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
-    { label: 'Click Grant Access', fromTarget: 'grant-link', waitForMount: true },
+    { label: 'Click Settings', fromTarget: 'settings-tab' },
+    { label: 'Click Grant Access', fromTarget: 'grant-link' },
   ],
-  mountTimeout: 30_000,
+  mountTimeout: 30_000, // increase for slow page transitions
 });
 ```
 
 The `<AgentTarget>` elements on each page register themselves globally. After the executor clicks 'settings-tab' and the Settings page mounts, 'grant-link' appears in the target registry — the executor finds it and clicks it.
 
-**Put ALL steps for cross-page actions in `defineAction` — never split between `defineAction` and component steps.** If some steps navigate to a page and other steps interact with elements on that page, all of them belong in `defineAction` with `waitForMount: true`. The components on the target page should only have `<AgentTarget>` markers, not `<AgentAction>` wrappers with their own steps.
+**Put ALL steps for cross-page actions in `defineAction` — never split between `defineAction` and component steps.** If some steps navigate to a page and other steps interact with elements on that page, all of them belong in `defineAction`. The components on the target page should only have `<AgentTarget>` markers, not `<AgentAction>` wrappers with their own steps.
 
 Splitting steps between `defineAction` (navigation) and component `<AgentStep>` children (interaction) creates a two-phase executor flow that is racy — the component might not mount before the executor checks for it, causing the second phase to silently drop.
 
@@ -116,8 +116,8 @@ Splitting steps between `defineAction` (navigation) and component `<AgentStep>` 
 // Bad — navigation in defineAction, interaction in component (race condition)
 export const grantAccess = defineAction({
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
-    { label: 'Click Grant', fromTarget: 'grant-link', waitForMount: true },
+    { label: 'Click Settings', fromTarget: 'settings-tab' },
+    { label: 'Click Grant', fromTarget: 'grant-link' },
   ],
 });
 
@@ -130,10 +130,10 @@ export const grantAccess = defineAction({
 // Good — all steps in defineAction, component just has targets
 export const grantAccess = defineAction({
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
-    { label: 'Click Grant', fromTarget: 'grant-link', waitForMount: true },
-    { label: 'Select all', fromTarget: 'select-all', waitForMount: true },
-    { label: 'Confirm', fromTarget: 'confirm-btn', waitForMount: true },
+    { label: 'Click Settings', fromTarget: 'settings-tab' },
+    { label: 'Click Grant', fromTarget: 'grant-link' },
+    { label: 'Select all', fromTarget: 'select-all' },
+    { label: 'Confirm', fromTarget: 'confirm-btn' },
   ],
 });
 

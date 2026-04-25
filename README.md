@@ -227,19 +227,19 @@ import { editItem } from './actions';
 3. When the component unmounts (user navigates away), the action reverts to
    schema-only — never disappears from the agent's view
 
-**Cross-page actions** — use `steps` on `defineAction` with `waitForMount` for
-steps that cross page boundaries. After a click causes navigation, the executor
-waits for the next step's target to appear:
+**Cross-page actions** — use `steps` on `defineAction` for steps that cross page
+boundaries. The executor polls up to `mountTimeout` (default 5s) for each
+step's target to appear:
 
 ```ts
 export const grantAccess = defineAction({
   name: 'grant_access',
   description: 'Grant bot access to properties',
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
-    { label: 'Click Grant Access', fromTarget: 'grant-link', waitForMount: true },
+    { label: 'Click Settings', fromTarget: 'settings-tab' },
+    { label: 'Click Grant Access', fromTarget: 'grant-link' },
   ],
-  mountTimeout: 30_000,
+  mountTimeout: 30_000, // increase for slow transitions
 });
 ```
 

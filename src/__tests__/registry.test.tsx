@@ -25,8 +25,8 @@ const grantAccess = defineAction({
   name: 'grant_access',
   description: 'Grant access',
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
-    { label: 'Click Grant', fromTarget: 'grant-link', waitForMount: true },
+    { label: 'Click Settings', fromTarget: 'settings-tab' },
+    { label: 'Click Grant', fromTarget: 'grant-link' },
   ],
   mountTimeout: 60_000,
   parameters: z.object({

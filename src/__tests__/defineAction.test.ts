@@ -15,17 +15,17 @@ describe('defineAction', () => {
     expect(action.route).toBeUndefined();
   });
 
-  it('includes steps with waitForMount', () => {
+  it('includes steps with fromTarget', () => {
     const action = defineAction({
       name: 'grant_access',
       description: 'Grant access',
       steps: [
-        { label: 'Click Settings', fromTarget: 'settings-tab', waitForMount: true },
-        { label: 'Click Grant', fromTarget: 'grant-link', waitForMount: true },
+        { label: 'Click Settings', fromTarget: 'settings-tab' },
+        { label: 'Click Grant', fromTarget: 'grant-link' },
       ],
     });
     expect(action.steps).toHaveLength(2);
-    expect(action.steps![0].waitForMount).toBe(true);
+    expect(action.steps![0].fromTarget).toBe('settings-tab');
     expect(action.steps![1].fromTarget).toBe('grant-link');
   });
 
@@ -54,7 +54,7 @@ describe('defineAction', () => {
       description: 'Full action',
       parameters: z.object({ ids: z.array(z.number()) }),
       steps: [
-        { label: 'Step 1', fromTarget: 'btn-1', waitForMount: true },
+        { label: 'Step 1', fromTarget: 'btn-1' },
         { label: 'Step 2', fromTarget: 'btn-2' },
       ],
       mountTimeout: 60_000,

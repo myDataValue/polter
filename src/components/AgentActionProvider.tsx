@@ -142,7 +142,7 @@ export function AgentActionProvider({
       param: string,
       value: string,
       signal?: AbortSignal,
-      timeout = 3000,
+      timeout = 5000,
     ): Promise<HTMLElement | null> => {
       const normalizedValue = value.toLowerCase();
       const pollInterval = 50;
@@ -176,7 +176,7 @@ export function AgentActionProvider({
       name: string,
       signal?: AbortSignal,
       params?: Record<string, unknown>,
-      timeout = 3000,
+      timeout = 5000,
     ): Promise<HTMLElement | null> => {
       const pollInterval = 50;
       const start = Date.now();
