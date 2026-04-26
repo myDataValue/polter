@@ -341,6 +341,8 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
 
   return {
     async before(element, label) {
+      // Tab backgrounded — skip all visuals, browser throttles setTimeout to 1s+
+      if (document.hidden) return;
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await delay(300, config.signal);
       if (cursor) await moveCursorTo(element, config.signal);
@@ -350,13 +352,19 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
     async after(isLast) {
       spotlight?.remove();
       spotlight = null;
+      if (document.hidden) return;
       if (!isLast) await delay(200, config.signal);
     },
     async type(input, value) {
+      if (document.hidden) {
+        setNativeInputValue(input as HTMLInputElement, value);
+        (input as HTMLInputElement).blur();
+        return;
+      }
       await simulateTyping(input, value, config.signal);
     },
     click(element) {
-      animateCursorClick();
+      if (!document.hidden) animateCursorClick();
       simulateFullClick(element);
     },
     cleanup() {
