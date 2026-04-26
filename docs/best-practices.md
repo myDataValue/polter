@@ -473,24 +473,20 @@ useAgentAction([
 ]);
 ```
 
-## Use `AgentTarget prepareView` for modal interactions
+## Modal interactions use steps, not programmatic state
 
-When an action involves a modal or dialog with internal state, use `prepareView` on `AgentTarget` to prepare the child component's state before polter interacts with it. Use `setParam` on the step to visually type values into inputs — don't set values programmatically when the user should see the interaction.
+When an action involves a modal or dialog, each interaction is a step. Use `setParam` on the step to visually type values into inputs. If the dialog has modes (e.g. preset vs custom), the agent clicks the mode selector as a step — don't set state programmatically.
 
 ```tsx
-// Parent component — 3-step flow: open modal → type value → click confirm
+// 4-step flow: open modal → select mode → type value → confirm
 <AgentAction action={runDiscount}>
   <AgentStep label="Open settings">
     <OpenButton />
   </AgentStep>
+  <AgentStep label="Select custom mode" fromTarget="custom-mode-radio" />
   <AgentStep label="Set discount" fromTarget="discount-input" setParam="pct" />
   <AgentStep label="Confirm" fromTarget="done-btn" />
 </AgentAction>
-
-// Parent component
-<AgentTarget name="settings-btn">
-  <SettingsButton />
-</AgentTarget>
 
 // Child component (dialog) — targets wrap interactive elements
 function SettingsDialog({ onSave }) {
@@ -499,12 +495,15 @@ function SettingsDialog({ onSave }) {
 
   return (
     <Dialog>
-      {/* prepareView switches to custom mode so the input is enabled */}
-      <AgentTarget name="setting-input" prepareView={() => setMode("custom")}>
-        <Input value={value} onChange={e => setValue(+e.target.value)} />
+      <AgentTarget name="custom-mode-radio">
+        <Radio checked={mode === "custom"} onChange={() => setMode("custom")} />
       </AgentTarget>
 
-      <AgentTarget name="save-btn">
+      <AgentTarget name="discount-input">
+        <Input value={value} onChange={e => setValue(+e.target.value)} disabled={mode !== "custom"} />
+      </AgentTarget>
+
+      <AgentTarget name="done-btn">
         <Button onClick={() => onSave(value)}>Save</Button>
       </AgentTarget>
     </Dialog>
