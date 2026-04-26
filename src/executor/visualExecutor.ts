@@ -242,8 +242,11 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
     await delay(charDelay, signal);
   }
 
-  // Blur after typing to commit the value — triggers onBlur save handlers
+  // Blur after typing to commit the value — triggers onBlur save handlers.
+  // The delay lets React process the blur event and flush synchronous state
+  // updates before the next step or action starts interacting with the DOM.
   input.blur();
+  await delay(100, signal);
 }
 
 /**
@@ -349,6 +352,7 @@ function createInstantEffects(): StepEffects {
     async type(input, value) {
       setNativeInputValue(input as HTMLInputElement, value);
       (input as HTMLInputElement).blur();
+      await delay(100);
     },
     click(element) {
       element.click();
