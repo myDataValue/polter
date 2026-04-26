@@ -42,20 +42,37 @@ export function AgentTarget({ action, param, value, name, scrollTo, children }: 
   const { registerTarget, unregisterTarget } = context;
 
   useEffect(() => {
-    let element = wrapperRef.current?.firstElementChild as HTMLElement | null;
-    // Skip display:contents wrappers (e.g. nested AgentAction div) that have zero dimensions.
-    // Check getComputedStyle instead of getBoundingClientRect — it works in jsdom.
-    while (
-      element &&
-      getComputedStyle(element).display === 'contents' &&
-      element.firstElementChild
-    ) {
-      element = element.firstElementChild as HTMLElement;
-    }
-    if (element) {
-      registerTarget(id, { action, param, value, name, element, scrollTo: scrollToRef.current });
-    }
-    return () => unregisterTarget(id);
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const resolveAndRegister = () => {
+      let element = wrapper.firstElementChild as HTMLElement | null;
+      // Skip display:contents wrappers (e.g. nested AgentAction div) that have zero dimensions.
+      // Check getComputedStyle instead of getBoundingClientRect — it works in jsdom.
+      while (
+        element &&
+        getComputedStyle(element).display === 'contents' &&
+        element.firstElementChild
+      ) {
+        element = element.firstElementChild as HTMLElement;
+      }
+      if (element) {
+        registerTarget(id, { action, param, value, name, element, scrollTo: scrollToRef.current });
+      } else {
+        unregisterTarget(id);
+      }
+    };
+
+    resolveAndRegister();
+
+    // Re-register when children mount/unmount (e.g. conditional rendering inside the target).
+    const observer = new MutationObserver(resolveAndRegister);
+    observer.observe(wrapper, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      unregisterTarget(id);
+    };
   }, [id, action, param, value, name, registerTarget, unregisterTarget]);
 
   return (

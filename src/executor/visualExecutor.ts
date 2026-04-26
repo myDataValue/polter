@@ -312,6 +312,20 @@ interface StepEffects {
   cleanup(): void;
 }
 
+/**
+ * Dispatch the full pointer/mouse event sequence so that Radix primitives
+ * (Tabs, Select, DropdownMenu, etc.) respond. Plain `element.click()` only
+ * fires a `click` event, but Radix activates on `pointerdown`.
+ */
+function simulateFullClick(element: HTMLElement): void {
+  const opts: PointerEventInit = { bubbles: true, cancelable: true, composed: true };
+  element.dispatchEvent(new PointerEvent('pointerdown', opts));
+  element.dispatchEvent(new MouseEvent('mousedown', opts));
+  element.dispatchEvent(new PointerEvent('pointerup', opts));
+  element.dispatchEvent(new MouseEvent('mouseup', opts));
+  element.click();
+}
+
 function createGuidedEffects(config: ExecutorConfig): StepEffects {
   const blocker = createBlockingOverlay();
   const cursor = config.cursorEnabled ? createCursor() : null;
@@ -335,7 +349,7 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
     },
     click(element) {
       animateCursorClick();
-      element.click();
+      simulateFullClick(element);
     },
     cleanup() {
       spotlight?.remove();
@@ -347,17 +361,17 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
 
 function createInstantEffects(): StepEffects {
   return {
-    async before() {},
-    async after() {},
+    async before() { },
+    async after() { },
     async type(input, value) {
       setNativeInputValue(input as HTMLInputElement, value);
       (input as HTMLInputElement).blur();
       await delay(100);
     },
     click(element) {
-      element.click();
+      simulateFullClick(element);
     },
-    cleanup() {},
+    cleanup() { },
   };
 }
 
