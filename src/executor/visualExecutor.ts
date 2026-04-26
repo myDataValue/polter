@@ -250,9 +250,10 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
     }
   }
 
-  // Blur after typing to commit the value — triggers onBlur save handlers.
-  // The delay lets React process the blur event and flush synchronous state
-  // updates before the next step or action starts interacting with the DOM.
+  // Commit the value: dispatch Enter keydown (triggers onKeyDown save
+  // handlers), then blur. Enter is more reliable than blur alone because
+  // browsers defer blur/focus events when the tab is hidden.
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   input.blur();
   await delay(100, signal);
 }
@@ -358,7 +359,9 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
     async type(input, value) {
       if (document.hidden) {
         setNativeInputValue(input as HTMLInputElement, value);
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         (input as HTMLInputElement).blur();
+        await delay(100, config.signal);
         return;
       }
       await simulateTyping(input, value, config.signal);
@@ -381,6 +384,7 @@ function createInstantEffects(): StepEffects {
     async after() { },
     async type(input, value) {
       setNativeInputValue(input as HTMLInputElement, value);
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       (input as HTMLInputElement).blur();
       await delay(100);
     },
