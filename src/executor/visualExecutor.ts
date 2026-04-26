@@ -234,12 +234,20 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
     await delay(30, signal);
   }
 
-  // Type each character with a small delay
-  const charDelay = Math.max(15, Math.min(40, 800 / value.length));
-  for (let i = 0; i < value.length; i++) {
-    if (signal?.aborted) return;
-    setNativeInputValue(input, value.slice(0, i + 1));
-    await delay(charDelay, signal);
+  // For long values (bulk IDs, etc.) skip the character-by-character animation
+  // and set the value in one shot — typing 1000+ chars at 15ms each is ~16s of
+  // dead time with no UX benefit.
+  if (value.length > 50) {
+    setNativeInputValue(input, value);
+    await delay(30, signal);
+  } else {
+    // Type each character with a small delay
+    const charDelay = Math.max(15, Math.min(40, 800 / value.length));
+    for (let i = 0; i < value.length; i++) {
+      if (signal?.aborted) return;
+      setNativeInputValue(input, value.slice(0, i + 1));
+      await delay(charDelay, signal);
+    }
   }
 
   // Blur after typing to commit the value — triggers onBlur save handlers.
