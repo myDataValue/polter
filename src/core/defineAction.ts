@@ -1,3 +1,5 @@
+import type { StepDefinition } from './types';
+
 /**
  * Define an action at import time so its schema is available before the component mounts.
  * Pass defined actions to `<AgentActionProvider registry={[...]}>` for single-roundtrip execution.
@@ -19,20 +21,11 @@ export interface ActionDefinition<TParams = Record<string, unknown>> {
   readonly parameters?: unknown;
   /** Client-side route to navigate to before executing. */
   readonly route?: (params: TParams) => string;
-  /** Handler for background execution (no UI component needed). */
-  readonly onExecute?: (params: TParams) => void | Promise<void>;
   /**
-   * Chain of action names to execute sequentially before this action.
-   * Each action in the chain is visually executed (spotlight → click), and the next
-   * action is waited on to mount before proceeding. This lets the user see the full
-   * navigation path instead of being teleported directly to a route.
+   * Static steps the agent walks through. Used when no component provides
+   * runtime steps via `useAgentAction` or `<AgentAction>`.
    */
-  readonly navigateVia?: string[];
-  /**
-   * How long (ms) to wait for this action's component to mount after navigation.
-   * Defaults to 5000ms. Set higher for pages that load slowly
-   */
-  readonly mountTimeout?: number;
+  readonly steps?: StepDefinition[];
 }
 
 export function defineAction<TParams = Record<string, unknown>>(config: {
@@ -40,17 +33,13 @@ export function defineAction<TParams = Record<string, unknown>>(config: {
   description: string;
   parameters?: unknown;
   route?: (params: TParams) => string;
-  onExecute?: (params: TParams) => void | Promise<void>;
-  navigateVia?: string[];
-  mountTimeout?: number;
+  steps?: StepDefinition[];
 }): ActionDefinition<TParams> {
   return {
     name: config.name,
     description: config.description,
     parameters: config.parameters,
     route: config.route,
-    onExecute: config.onExecute,
-    navigateVia: config.navigateVia,
-    mountTimeout: config.mountTimeout,
+    steps: config.steps,
   };
 }

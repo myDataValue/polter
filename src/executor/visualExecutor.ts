@@ -1,4 +1,4 @@
-import type { RegisteredAction, ExecutionResult, ExecutionTarget, ExecutorConfig } from '../core/types';
+import type { RegisteredAction, ExecutionResult, ExecutionTarget, ExecutorConfig, StepTrace } from '../core/types';
 
 let stylesInjected = false;
 
@@ -241,6 +241,12 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
     setNativeInputValue(input, value.slice(0, i + 1));
     await delay(charDelay, signal);
   }
+
+  // Blur after typing to commit the value — triggers onBlur save handlers.
+  // The delay lets React process the blur event and flush synchronous state
+  // updates before the next step or action starts interacting with the DOM.
+  input.blur();
+  await delay(100, signal);
 }
 
 /**
@@ -253,48 +259,32 @@ async function resolveStepElement(
   params: Record<string, unknown>,
   config: ExecutorConfig,
 ): Promise<HTMLElement | null> {
-  // prepareView runs first (e.g. scroll virtualized list into view)
-  if (target.prepareView) {
-    await target.prepareView(params);
+  const timeout = 5000;
+
+  // scrollTo runs first (e.g. scroll virtualized list into view)
+  if (target.scrollTo) {
+    await target.scrollTo(params);
     await delay(200, config.signal);
   }
 
   // fromParam: resolve lazily from AgentTarget registry by param value.
   // For array params, resolve against the first element (spotlight one representative target).
   if (target.fromParam && config.resolveTarget) {
-    const raw = params[target.fromParam];
+    const paramKey = typeof target.fromParam === 'function' ? target.fromParam(params) : target.fromParam;
+    const raw = params[paramKey];
     const first = Array.isArray(raw) ? raw[0] : raw;
     const paramValue = String(first ?? target.defaultValue ?? '');
-    return config.resolveTarget(actionName, target.fromParam, paramValue, config.signal);
+    return config.resolveTarget(actionName, paramKey, paramValue, config.signal, timeout);
   }
 
   // fromTarget: resolve lazily from AgentTarget registry by name
   if (target.fromTarget && config.resolveNamedTarget) {
-    return config.resolveNamedTarget(actionName, target.fromTarget, config.signal, params);
+    const targetName = typeof target.fromTarget === 'function' ? target.fromTarget(params) : target.fromTarget;
+    return config.resolveNamedTarget(actionName, targetName, config.signal, params, timeout);
   }
 
   // Static element
   return target.element;
-}
-
-async function executeInstant(
-  action: RegisteredAction,
-  params: Record<string, unknown>,
-): Promise<ExecutionResult> {
-  try {
-    if (action.onExecute) {
-      await action.onExecute(params);
-    } else {
-      const targets = action.getExecutionTargets();
-      for (const target of targets) {
-        if (target.skipIf?.(params)) continue;
-        target.element?.click();
-      }
-    }
-    return { success: true, actionName: action.name };
-  } catch (err) {
-    return { success: false, actionName: action.name, error: String(err) };
-  }
 }
 
 /**
@@ -309,129 +299,234 @@ function isElementVisible(el: HTMLElement | null): el is HTMLElement {
   return rect.width > 0 && rect.height > 0;
 }
 
-async function executeGuided(
-  action: RegisteredAction,
-  params: Record<string, unknown>,
-  config: ExecutorConfig,
-): Promise<ExecutionResult> {
-  const targets = action.getExecutionTargets();
+// ---------------------------------------------------------------------------
+// Step effects — encapsulate all mode-specific visual behavior so the
+// execution loop stays mode-agnostic.
+// ---------------------------------------------------------------------------
 
-  // No targets, or all targets are invisible (e.g. display:contents wrappers) — run directly
-  if (targets.length === 0 || targets.every((t) => t.element && !isElementVisible(t.element))) {
-    if (action.onExecute) {
-      await action.onExecute(params);
-    }
-    return { success: true, actionName: action.name };
-  }
+interface StepEffects {
+  before(element: HTMLElement, label: string): Promise<void>;
+  after(isLast: boolean): Promise<void>;
+  type(input: HTMLElement, value: string): Promise<void>;
+  click(element: HTMLElement): void;
+  cleanup(): void;
+}
 
-  let spotlight: SpotlightHandle | null = null;
-  let cursor: OverlayHandle | null = null;
+function createGuidedEffects(config: ExecutorConfig): StepEffects {
   const blocker = createBlockingOverlay();
+  const cursor = config.cursorEnabled ? createCursor() : null;
+  let spotlight: SpotlightHandle | null = null;
 
-  if (config.cursorEnabled) {
-    cursor = createCursor();
-  }
-
-  try {
-    for (let i = 0; i < targets.length; i++) {
-      const target = targets[i];
-      const isLast = i === targets.length - 1;
-
-      // Skip when the step declares a precondition is already satisfied.
-      if (target.skipIf?.(params)) continue;
-
-      // Resolve element (may be lazy for fromParam steps).
-      // Multi-step actions abort on miss; single-step actions continue silently.
-      const element = await resolveStepElement(target, action.name, params, config);
-      if (!isElementVisible(element)) {
-        if (targets.length > 1) {
-          blocker.remove();
-          cursor?.remove();
-          const reason = !element ? `target not found for step "${target.label}"` : `element not visible: "${target.label}"`;
-          return { success: false, actionName: action.name, error: reason };
-        }
-        continue;
-      }
-
-      // 1. Scroll into view
+  return {
+    async before(element, label) {
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await delay(300, config.signal);
-
-      // 2. Move cursor to element
-      if (cursor) {
-        await moveCursorTo(element, config.signal);
-      }
-
-      // 3. Spotlight
-      spotlight = createSpotlight(element, target.label, config);
+      if (cursor) await moveCursorTo(element, config.signal);
+      spotlight = createSpotlight(element, label, config);
       await delay(config.stepDelay, config.signal);
-
-      // 4. Interact based on step type
-      if (target.setParam) {
-        // Type the param value into the input — find the actual input/textarea within the element
-        const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
-          ? element
-          : element.querySelector('input, textarea') ?? element;
-        const value = String(params[target.setParam] ?? target.defaultValue ?? '');
-        await simulateTyping(inputEl as HTMLElement, value, config.signal);
-      } else if (target.setValue && target.onSetValue) {
-        // Set value programmatically via callback
-        const value = params[target.setValue] ?? target.defaultValue;
-        target.onSetValue(value);
-      } else if (target.fromParam || target.fromTarget) {
-        // Lazy-resolved step: always click the resolved target (dropdown option, popover button, etc.)
-        animateCursorClick();
-        element.click();
-      } else if (action.onExecute) {
-        // With onExecute: click intermediate steps (e.g. open dropdown),
-        // skip clicking the last step (onExecute handles the action)
-        if (!isLast) {
-          animateCursorClick();
-          element.click();
-        }
-      } else {
-        // Without onExecute: click every step
-        animateCursorClick();
-        element.click();
-      }
-
-      // 5. Remove spotlight
-      spotlight.remove();
+    },
+    async after(isLast) {
+      spotlight?.remove();
       spotlight = null;
-
-      if (!isLast) {
-        await delay(200, config.signal);
-      }
-    }
-
-    // 6. Call onExecute after visual sequence
-    if (action.onExecute) {
-      await action.onExecute(params);
-    }
-
-    blocker.remove();
-    cursor?.remove();
-    return { success: true, actionName: action.name };
-  } catch (err) {
-    // Clean up on error
-    spotlight?.remove();
-    blocker.remove();
-    cursor?.remove();
-
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      return { success: false, actionName: action.name, error: 'Execution cancelled' };
-    }
-    return { success: false, actionName: action.name, error: String(err) };
-  }
+      if (!isLast) await delay(200, config.signal);
+    },
+    async type(input, value) {
+      await simulateTyping(input, value, config.signal);
+    },
+    click(element) {
+      animateCursorClick();
+      element.click();
+    },
+    cleanup() {
+      spotlight?.remove();
+      blocker.remove();
+      cursor?.remove();
+    },
+  };
 }
+
+function createInstantEffects(): StepEffects {
+  return {
+    async before() {},
+    async after() {},
+    async type(input, value) {
+      setNativeInputValue(input as HTMLInputElement, value);
+      (input as HTMLInputElement).blur();
+      await delay(100);
+    },
+    click(element) {
+      element.click();
+    },
+    cleanup() {},
+  };
+}
+
+// ---------------------------------------------------------------------------
 
 export async function executeAction(
   action: RegisteredAction,
   params: Record<string, unknown>,
   config: ExecutorConfig,
 ): Promise<ExecutionResult> {
-  if (config.mode === 'instant') {
-    return executeInstant(action, params);
+  const executionStart = performance.now();
+  const targets = action.getExecutionTargets();
+  const stepTraces: StepTrace[] = [];
+
+  // No targets and no awaitResult — nothing to do.
+  // Visibility check only in guided mode — instant mode doesn't need measurable elements.
+  if (targets.length === 0 || (config.mode === 'guided' && targets.every((t) => t.element && !isElementVisible(t.element)))) {
+    if (action.waitFor) {
+      await action.waitFor();
+    }
+    return { success: true, actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
   }
-  return executeGuided(action, params, config);
+
+  const fx = config.mode === 'instant'
+    ? createInstantEffects()
+    : createGuidedEffects(config);
+
+  // Track in-progress step for the catch block
+  let activeStep: { index: number; target: ExecutionTarget; start: number } | null = null;
+
+  try {
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const isLast = i === targets.length - 1;
+      const stepStart = performance.now();
+
+      // Skip when the step declares a precondition is already satisfied.
+      if (target.skipIf?.(params)) {
+        stepTraces.push({
+          index: i,
+          label: target.label,
+          status: 'skipped',
+          targetFound: false,
+          interactionType: 'none',
+          durationMs: performance.now() - stepStart,
+        });
+        continue;
+      }
+
+      activeStep = { index: i, target, start: stepStart };
+
+      const resolvedFromParam = typeof target.fromParam === 'function' ? target.fromParam(params) : target.fromParam;
+      const resolvedFromTarget = typeof target.fromTarget === 'function' ? target.fromTarget(params) : target.fromTarget;
+      const targetType = resolvedFromParam ? 'fromParam' as const : resolvedFromTarget ? 'fromTarget' as const : 'static' as const;
+      const targetName = resolvedFromParam || resolvedFromTarget;
+      const targetValue = resolvedFromParam
+        ? String(params[resolvedFromParam] ?? target.defaultValue ?? '')
+        : resolvedFromTarget || undefined;
+
+      // Resolve element (may be lazy for fromParam steps).
+      // Multi-step actions abort on miss; single-step actions continue silently.
+      // Instant mode only needs the element to exist; guided mode needs it measurable (for spotlight).
+      const resolved = await resolveStepElement(target, action.name, params, config);
+      const element = config.mode === 'instant'
+        ? (resolved?.isConnected ? resolved : null)
+        : (isElementVisible(resolved) ? resolved : null);
+      if (!element) {
+        if (targets.length > 1) {
+          fx.cleanup();
+          const reason = !element ? `target not found for step "${target.label}"` : `element not visible: "${target.label}"`;
+          stepTraces.push({
+            index: i,
+            label: target.label,
+            status: 'failed',
+            targetType,
+            targetName,
+            targetValue,
+            targetFound: !!element,
+            interactionType: 'none',
+            error: reason,
+            durationMs: performance.now() - stepStart,
+          });
+          return { success: false, actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
+        }
+        stepTraces.push({
+          index: i,
+          label: target.label,
+          status: 'skipped',
+          targetType,
+          targetName,
+          targetValue,
+          targetFound: false,
+          interactionType: 'none',
+          durationMs: performance.now() - stepStart,
+        });
+        continue;
+      }
+
+      await fx.before(element, target.label);
+
+      // Interact based on step type
+      let interactionType: StepTrace['interactionType'] = 'click';
+      if (target.setParam) {
+        interactionType = 'type';
+        const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
+          ? element
+          : element.querySelector('input, textarea') ?? element;
+        const value = String(params[target.setParam] ?? target.defaultValue ?? '');
+        await fx.type(inputEl as HTMLElement, value);
+      } else if (target.setValue && target.onSetValue) {
+        interactionType = 'setValue';
+        const value = params[target.setValue] ?? target.defaultValue;
+        target.onSetValue(value);
+      } else {
+        fx.click(element);
+      }
+
+      await fx.after(isLast);
+
+      stepTraces.push({
+        index: i,
+        label: target.label,
+        status: 'completed',
+        targetType,
+        targetName,
+        targetValue,
+        targetFound: true,
+        interactionType,
+        durationMs: performance.now() - stepStart,
+      });
+
+      activeStep = null;
+    }
+
+    // Remove overlay before awaiting async work — steps are done,
+    // user should be able to interact while waitFor runs.
+    fx.cleanup();
+
+    // Await async work triggered by step clicks
+    if (action.waitFor) {
+      await action.waitFor();
+    }
+
+    return { success: true, actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
+  } catch (err) {
+    fx.cleanup();
+
+    const errorMsg = err instanceof DOMException && err.name === 'AbortError'
+      ? 'Execution cancelled'
+      : String(err);
+
+    // Trace the step that was in progress when the error occurred
+    if (activeStep) {
+      const { index, target: t, start } = activeStep;
+      const fp = typeof t.fromParam === 'function' ? t.fromParam(params) : t.fromParam;
+      const ft = typeof t.fromTarget === 'function' ? t.fromTarget(params) : t.fromTarget;
+      stepTraces.push({
+        index,
+        label: t.label,
+        status: 'failed',
+        targetType: fp ? 'fromParam' : ft ? 'fromTarget' : 'static',
+        targetName: fp || ft,
+        targetFound: false,
+        interactionType: 'none',
+        error: errorMsg,
+        durationMs: performance.now() - start,
+      });
+    }
+
+    return { success: false, actionName: action.name, error: errorMsg, trace: stepTraces, durationMs: performance.now() - executionStart };
+  }
 }

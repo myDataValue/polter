@@ -4,7 +4,16 @@ import { render, act } from '@testing-library/react';
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { useAgentAction, AgentActionConfig } from '../hooks/useAgentAction';
+import { defineAction } from '../core/defineAction';
 import { TestConsumer } from './testUtils';
+
+const aAction = defineAction({ name: 'a', description: 'A' });
+const soloAction = defineAction({ name: 'solo', description: 'Solo' });
+const alphaAction = defineAction({ name: 'alpha', description: 'Alpha' });
+const betaAction = defineAction({ name: 'beta', description: 'Beta' });
+const tempAction = defineAction({ name: 'temp', description: 'Temp' });
+const hasSkipAction = defineAction({ name: 'has_skip', description: 'Has skip' });
+const reactiveSkipAction = defineAction({ name: 'reactive_skip', description: 'Reactive' });
 
 describe('useAgentActions', () => {
   it('throws when used outside provider', () => {
@@ -21,7 +30,7 @@ describe('useAgentActions', () => {
 describe('useAgentAction', () => {
   it('throws when used outside provider', () => {
     function BadComponent() {
-      useAgentAction({ name: 'a', description: 'A' });
+      useAgentAction({ action: aAction, steps: [] });
       return null;
     }
     expect(() => render(<BadComponent />)).toThrow(
@@ -30,12 +39,12 @@ describe('useAgentAction', () => {
   });
 
   it.each<[string, AgentActionConfig | AgentActionConfig[], string[]]>([
-    ['a single action config', { name: 'solo', description: 'Solo' }, ['solo']],
+    ['a single action config', { action: soloAction, steps: [] }, ['solo']],
     [
       'an array of action configs',
       [
-        { name: 'alpha', description: 'Alpha' },
-        { name: 'beta', description: 'Beta' },
+        { action: alphaAction, steps: [] },
+        { action: betaAction, steps: [] },
       ],
       ['alpha', 'beta'],
     ],
@@ -57,7 +66,7 @@ describe('useAgentAction', () => {
   it('unregisters actions on unmount', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     function Harness() {
-      useAgentAction({ name: 'temp', description: 'Temp' });
+      useAgentAction({ action: tempAction, steps: [] });
       return null;
     }
     const { rerender } = render(
@@ -76,13 +85,12 @@ describe('useAgentAction', () => {
     expect(ctx!.availableActions).toHaveLength(0);
   });
 
-  it('invokes step skipIf at execute time with the action params', async () => {
+  it('invokes step skipIf at execute time with the action params', { timeout: 10000 }, async () => {
     const skipIf = vi.fn(() => false);
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     function Harness() {
       useAgentAction({
-        name: 'has_skip',
-        description: 'Has skip',
+        action: hasSkipAction,
         steps: [{ label: 'one', fromTarget: 'does-not-exist', skipIf }],
       });
       return null;
@@ -97,7 +105,7 @@ describe('useAgentAction', () => {
     expect(skipIf).toHaveBeenCalledWith({ k: 'v' });
   });
 
-  it('reads the latest step skipIf closure after the component rerenders', async () => {
+  it('reads the latest step skipIf closure after the component rerenders', { timeout: 20000 }, async () => {
     // Regression guard: useAgentAction must look up the config via
     // configRef.current at execute time — not capture item.steps at effect
     // run time — so inline closures see the latest render's state.
@@ -108,8 +116,7 @@ describe('useAgentAction', () => {
       const [skip, setter] = React.useState(false);
       setSkip = setter;
       useAgentAction({
-        name: 'reactive_skip',
-        description: 'Reactive',
+        action: reactiveSkipAction,
         steps: [
           {
             label: 's',

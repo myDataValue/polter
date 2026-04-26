@@ -35,7 +35,7 @@ export function useAgentCommandRouter<T>(
       const match = availableActions.find((a) => a.name === actionName);
 
       if (match?.disabled) {
-        return { success: false, actionName, error: match.disabledReason || 'Action is currently unavailable' };
+        return { success: false, actionName, error: match.disabledReason || 'Action is currently unavailable', trace: [], durationMs: 0 };
       }
 
       if (match) {

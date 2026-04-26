@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAgentActions } from '../hooks/useAgentActions';
-import type { AvailableAction, ExecutionResult, ToolSchema } from '../core/types';
+import type { AvailableAction, ExecutionResult, StepTrace, ToolSchema } from '../core/types';
 
 interface AgentDevToolsProps {
   /** Default open state. */
@@ -91,7 +91,7 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
                   id: entryId,
                   action: action.name,
                   timestamp: Date.now(),
-                  result: { success: false, actionName: action.name, error: `Invalid JSON for ${field.name}` },
+                  result: { success: false, actionName: action.name, error: `Invalid JSON for ${field.name}`, trace: [], durationMs: 0 },
                 },
               ]);
               return;
@@ -230,7 +230,7 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
                 onToggle={() => setExpandedAction(expandedAction === action.name ? null : action.name)}
                 fieldValues={paramInputs[action.name] ?? {}}
                 onFieldChange={(field, value) => setFieldValue(action.name, field, value)}
-                onExecute={() => handleExecute(action)}
+                onRun={() => handleExecute(action)}
                 isExecuting={isExecuting}
               />
             ))}
@@ -260,12 +260,42 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
                       <StatusDot result={entry.result} />
                       <span style={{ fontWeight: 600, fontSize: 13 }}>{entry.action}</span>
                       <span style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>
+                        {entry.result?.durationMs != null && `${(entry.result.durationMs / 1000).toFixed(1)}s · `}
                         {new Date(entry.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
                     {entry.params && <pre style={logParamsStyle}>{JSON.stringify(entry.params, null, 2)}</pre>}
                     {entry.result && !entry.result.success && (
                       <div style={{ marginTop: 4, fontSize: 12, color: '#f87171' }}>{entry.result.error}</div>
+                    )}
+                    {entry.result?.trace && entry.result.trace.length > 0 && (
+                      <div style={{ marginTop: 6, borderTop: '1px solid #1e293b', paddingTop: 6 }}>
+                        {entry.result.trace.map((step) => (
+                          <div key={step.index} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', fontSize: 11 }}>
+                            <StepStatusIcon status={step.status} />
+                            <span style={{ color: '#64748b', minWidth: 16 }}>{step.index + 1}.</span>
+                            <span style={{
+                              color: step.status === 'failed' ? '#f87171' : step.status === 'skipped' ? '#475569' : '#e2e8f0',
+                              flex: 1,
+                              minWidth: 0,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              {step.label}
+                              {step.targetName && (
+                                <span style={{ color: '#64748b', marginLeft: 6, fontSize: 10 }}>
+                                  {step.targetType}:{step.targetName}
+                                  {step.targetValue && step.targetValue !== step.targetName && ` = "${step.targetValue}"`}
+                                </span>
+                              )}
+                            </span>
+                            <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>
+                              {step.durationMs < 1 ? '<1ms' : `${Math.round(step.durationMs)}ms`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -286,7 +316,7 @@ function ActionRow({
   onToggle,
   fieldValues,
   onFieldChange,
-  onExecute,
+  onRun,
   isExecuting,
   badge,
 }: {
@@ -296,7 +326,7 @@ function ActionRow({
   onToggle: () => void;
   fieldValues: Record<string, string>;
   onFieldChange: (field: string, value: string) => void;
-  onExecute: () => void;
+  onRun: () => void;
   isExecuting: boolean;
   badge?: string;
 }) {
@@ -313,7 +343,7 @@ function ActionRow({
       onKeyDown={(e) => {
         if (e.key === 'Enter' && expanded && !action.disabled && !isExecuting) {
           e.preventDefault();
-          onExecute();
+          onRun();
         }
       }}
     >
@@ -358,7 +388,7 @@ function ActionRow({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onExecute();
+            onRun();
           }}
           disabled={action.disabled || isExecuting}
           style={{
@@ -456,6 +486,17 @@ function StatusDot({ result }: { result?: ExecutionResult }) {
         flexShrink: 0,
       }}
     />
+  );
+}
+
+const stepStatusSymbols: Record<StepTrace['status'], string> = { completed: '\u2713', skipped: '\u25CB', failed: '\u2717' };
+const stepStatusColors: Record<StepTrace['status'], string> = { completed: '#4ade80', skipped: '#475569', failed: '#f87171' };
+
+function StepStatusIcon({ status }: { status: StepTrace['status'] }) {
+  return (
+    <span style={{ fontSize: 10, color: stepStatusColors[status], flexShrink: 0, width: 12, textAlign: 'center' }}>
+      {stepStatusSymbols[status]}
+    </span>
   );
 }
 

@@ -10,48 +10,54 @@ interface AgentStepContextValue {
 
 export const AgentStepContext = createContext<AgentStepContextValue | null>(null);
 
-type AgentActionProps = {
-  onExecute?: (params: Record<string, unknown>) => void | Promise<void>;
+interface AgentActionProps {
+  /** The action definition — provides name, description, parameters. */
+  action: ActionDefinition<any>;
   disabled?: boolean;
   disabledReason?: string;
+  /**
+   * Waited on after all steps complete. Holds the action open until async work
+   * triggered by a step click finishes.
+   *
+   * Pass a React ref whose `.current` is set to a Promise by the click handler
+   * (safe — impossible to do work in a ref), or a function returning a Promise
+   * (escape hatch for custom promise construction).
+   */
+  waitFor?: React.RefObject<Promise<unknown> | undefined> | (() => void | Promise<void>);
   children?: React.ReactNode;
-} & (
-  | { action: ActionDefinition<any>; name?: string; description?: string; parameters?: unknown }
-  | { action?: never; name: string; description: string; parameters?: unknown }
-);
+}
 
 export function AgentAction(props: AgentActionProps) {
   const {
     action,
-    onExecute,
     disabled = false,
     disabledReason,
+    waitFor,
     children,
   } = props;
 
-  // Resolve from action definition, with inline props as overrides.
-  const name = props.name ?? action?.name;
-  const description = props.description ?? action?.description ?? '';
-  const parameters = props.parameters ?? action?.parameters;
+  const name = action.name;
+  const description = action.description;
+  const parameters = action.parameters;
 
   const context = useContext(AgentActionContext);
   if (!context) {
     throw new Error('AgentAction must be used within an AgentActionProvider');
   }
-  if (!name) {
-    throw new Error('AgentAction requires either a "name" prop or an "action" prop');
-  }
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stepsRef = useRef<Map<string, ExecutionTarget>>(new Map());
 
-  const onExecuteRef = useRef(onExecute);
-  onExecuteRef.current = onExecute;
+  const waitForRef = useRef(waitFor);
+  waitForRef.current = waitFor;
   const parametersRef = useRef(parameters);
   parametersRef.current = parameters;
 
-  const stableOnExecute = useCallback((params: Record<string, unknown>) => {
-    return onExecuteRef.current?.(params);
+  const stableWaitFor = useCallback(async () => {
+    const wf = waitForRef.current;
+    if (!wf) return;
+    if (typeof wf === 'function') { await wf(); return; }
+    await wf.current;
   }, []);
 
   const getExecutionTargets = useCallback((): ExecutionTarget[] => {
@@ -64,8 +70,11 @@ export function AgentAction(props: AgentActionProps) {
       );
     }
 
-    // Single element: use wrapper's first child
-    const el = wrapperRef.current?.firstElementChild as HTMLElement | null;
+    // Single element: use wrapper's first child, skipping display:contents wrappers.
+    let el = wrapperRef.current?.firstElementChild as HTMLElement | null;
+    while (el && getComputedStyle(el).display === 'contents' && el.firstElementChild) {
+      el = el.firstElementChild as HTMLElement;
+    }
     return el ? [{ label: description, element: el }] : [];
   }, [description]);
 
@@ -76,14 +85,14 @@ export function AgentAction(props: AgentActionProps) {
       name,
       description,
       parameters: parametersRef.current,
-      onExecute: onExecuteRef.current ? stableOnExecute : undefined,
       disabled,
       disabledReason,
+      waitFor: waitForRef.current ? stableWaitFor : undefined,
       getExecutionTargets,
       componentBacked: true,
     });
     return () => unregisterAction(name);
-  }, [name, description, disabled, disabledReason, stableOnExecute, getExecutionTargets, registerAction, unregisterAction]);
+  }, [name, description, disabled, disabledReason, stableWaitFor, getExecutionTargets, registerAction, unregisterAction]);
 
   const registerStep = useCallback(
     (id: string, data: ExecutionTarget) => {

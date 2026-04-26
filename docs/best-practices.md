@@ -6,6 +6,150 @@ from that core principle: register actions where the real UI lives, keep them in
 sync with what's on screen, and let users watch the agent click the same buttons
 they'd click themselves.
 
+**The #1 mistake: reaching for programmatic shortcuts.** When you need to select
+rows, filter a table, or prepare state for a step — don't dispatch events, set
+refs, or call `setState` behind the scenes. Instead, ask: "what would a human
+click?" Then add steps that click those same elements. If the target belongs to
+another action, make it a shared `<AgentTarget>` (no `action` prop) so any action
+can reach it. Every interaction the agent performs should be visible to the user.
+
+## Every action starts with `defineAction`
+
+All actions must be defined via `defineAction` in a static `actions.ts` file. This provides the schema (name, description, parameters, route) upfront — before any component mounts. The registry collects these definitions so the agent backend knows all available actions for tool discovery.
+
+```ts
+// actions.ts — single source of truth for schema
+export const exportCsv = defineAction({
+  name: 'export_csv',
+  description: 'Export the current table to CSV',
+  route: () => '/dashboard',
+});
+
+export const editMarkup = defineAction({
+  name: 'edit_markup',
+  description: 'Edit markup for a property',
+  parameters: z.object({
+    property_id: z.number(),
+    markup: z.number(),
+  }),
+  route: () => '/dashboard',
+});
+```
+
+Then provide runtime behavior (steps) via `useAgentAction` or `<AgentAction>`:
+
+```tsx
+// Hook — for per-row and programmatic actions
+useAgentAction({
+  action: exportCsv,
+  steps: [
+    { label: 'Open menu', fromTarget: 'overflow-menu-btn' },
+    { label: 'Click Export', fromTarget: 'export-btn' },
+  ],
+});
+
+// Component — for wrapping a single visible element
+<AgentAction action={pushChanges}>
+  <PushButton />
+</AgentAction>
+```
+
+Both `useAgentAction` and `<AgentAction>` require an `action` prop — you cannot pass inline `name`/`description`/`parameters`. This ensures every action goes through `defineAction` and appears in the registry.
+
+## Steps are the only way to build actions
+
+The agent drives the UI by clicking through steps — the same way a human user would. Every action needs `steps` (or child `<AgentStep>` elements).
+
+```tsx
+useAgentAction({
+  action: editMarkup,
+  steps: [
+    { label: 'Click edit', fromParam: 'property_id' },
+    { label: 'Set value', fromTarget: 'markup-input', setParam: 'markup' },
+    { label: 'Save', fromTarget: 'save-btn' },
+    { label: 'Confirm', fromTarget: 'confirm-btn' },
+  ],
+});
+```
+
+For bulk operations, the agent selects properties first (via filter/selection actions), then performs the action on the selection — same as human users.
+
+## Use `waitFor` to wait for async side effects
+
+When the last step click triggers async work (a mutation, a streaming response), use `waitFor` to hold the action open until it completes.
+
+**Prefer the ref form** — a React ref whose `.current` is set to a Promise by the click handler. It's impossible to accidentally "do work" in a ref:
+
+```tsx
+const pushRef = useRef<Promise<void>>();
+
+// Button's onClick sets the ref
+<Button onClick={() => { pushRef.current = pushMutation(); }} />
+
+useAgentAction({
+  action: pushChanges,
+  steps: [
+    { label: 'Click Push', fromTarget: 'push-btn' },
+  ],
+  waitFor: pushRef,
+});
+```
+
+## Put cross-page steps in `defineAction`
+
+When a step click causes a page navigation, the next step's target doesn't exist yet — it's on the new page. The executor polls up to 5s for each step's target to appear, so cross-page actions work automatically. For targets that take longer to load (API calls), render them with `disabled` during loading — polter polls past disabled elements and clicks when they become enabled.
+
+Define these steps on `defineAction` since they're static and don't need React closures:
+
+```ts
+export const grantAccess = defineAction({
+  name: 'grant_access',
+  description: 'Grant bot access',
+  steps: [
+    { label: 'Click Settings', fromTarget: 'settings-tab' },
+    { label: 'Click Grant Access', fromTarget: 'grant-link' },
+  ],
+});
+```
+
+The `<AgentTarget>` elements on each page register themselves globally. After the executor clicks 'settings-tab' and the Settings page mounts, 'grant-link' appears in the target registry — the executor finds it and clicks it.
+
+**Put ALL steps for cross-page actions in `defineAction` — never split between `defineAction` and component steps.** If some steps navigate to a page and other steps interact with elements on that page, all of them belong in `defineAction`. The components on the target page should only have `<AgentTarget>` markers, not `<AgentAction>` wrappers with their own steps.
+
+Splitting steps between `defineAction` (navigation) and component `<AgentStep>` children (interaction) creates a two-phase executor flow that is racy — the component might not mount before the executor checks for it, causing the second phase to silently drop.
+
+```tsx
+// Bad — navigation in defineAction, interaction in component (race condition)
+export const grantAccess = defineAction({
+  steps: [
+    { label: 'Click Settings', fromTarget: 'settings-tab' },
+    { label: 'Click Grant', fromTarget: 'grant-link' },
+  ],
+});
+
+// Component on target page — steps may never execute
+<AgentAction action={grantAccess}>
+  <AgentStep label="Select all" fromTarget="select-all" />
+  <AgentStep label="Confirm"><ConfirmButton /></AgentStep>
+</AgentAction>
+
+// Good — all steps in defineAction, component just has targets
+export const grantAccess = defineAction({
+  steps: [
+    { label: 'Click Settings', fromTarget: 'settings-tab' },
+    { label: 'Click Grant', fromTarget: 'grant-link' },
+    { label: 'Select all', fromTarget: 'select-all' },
+    { label: 'Confirm', fromTarget: 'confirm-btn' },
+  ],
+});
+
+// Component on target page — just markers
+<AgentTarget name="select-all"><Checkbox /></AgentTarget>
+<AgentTarget name="confirm-btn"><Button>Confirm</Button></AgentTarget>
+```
+
+If a component also provides steps via `useAgentAction`, those override the `defineAction` steps. Use this when you need `skipIf` or other runtime closures on same-page actions.
+
 ## Design actions around outcomes, not interactions
 
 Actions should describe *what the user wants to achieve* — not the mechanical
@@ -28,11 +172,7 @@ checks whether its interaction is still needed to reach that state:
 
 ```tsx
 useAgentAction({
-  name: 'filter_and_export',
-  description: 'Filter by status and export',
-  parameters: z.object({
-    status: z.enum(['all', 'active', 'archived']),
-  }),
+  action: filterAndExport,
   steps: [
     { label: 'Clear search', setParam: 'query', defaultValue: '', fromTarget: 'search',
       skipIf: () => query === '' },
@@ -58,10 +198,7 @@ components mark the DOM elements the agent interacts with:
 ```tsx
 // Action definition — lives in the component that owns the state
 useAgentAction({
-  name: 'delete_item',
-  description: 'Delete an item by ID',
-  parameters: z.object({ item_id: z.number() }),
-  onExecute: (p) => handleDelete(p.item_id),
+  action: deleteItem,
   steps: [{ label: 'Click Delete', fromParam: 'item_id' }],
 });
 
@@ -75,9 +212,9 @@ Batch-register multiple actions in one call:
 
 ```tsx
 useAgentAction([
-  { name: 'view_item', ... },
-  { name: 'delete_item', ... },
-  { name: 'edit_item', ... },
+  { action: viewItem, steps: [...] },
+  { action: deleteItem, steps: [...] },
+  { action: editItem, steps: [...] },
 ]);
 ```
 
@@ -154,24 +291,49 @@ For anything involving parameters, `skipIf`, or targets resolved at runtime
 
 ## Wrap conditionally rendered elements with `<AgentAction>` on the outside
 
-`<AgentAction>` always registers the action regardless of whether its children
-are rendered. Keep the wrapper always-rendered and put the condition inside —
-`onExecute` works even when there's nothing visible to spotlight:
+`<AgentAction>` always registers the action regardless of whether its children are rendered. Keep the wrapper always-rendered and put the condition inside:
 
 ```tsx
 // Bad — conditionally rendering the AgentAction itself, action disappears when button is hidden
-{selectedIds.size > 0 && (
-  <AgentAction name="bulk_delete" description="Delete selected items" onExecute={() => handleDelete()}>
-    <Button onClick={handleDelete}>Delete ({selectedIds.size})</Button>
+{isReady && (
+  <AgentAction action={grantAccess}>
+    <Button onClick={handleGrant}>Grant Access</Button>
   </AgentAction>
 )}
 
 // Good — AgentAction always registered, button conditionally rendered inside
-<AgentAction name="bulk_delete" description="Delete selected items" onExecute={() => handleDelete()}>
-  {selectedIds.size > 0 && (
-    <Button onClick={handleDelete}>Delete ({selectedIds.size})</Button>
+<AgentAction action={grantAccess} disabled={!isReady} disabledReason="Not ready">
+  {isReady && (
+    <Button onClick={handleGrant}>Grant Access</Button>
   )}
 </AgentAction>
+```
+
+## Use `useAgentAction` hook for per-row and programmatic actions
+
+When N rows each have their own button (sync, edit, navigate), you can't wrap each with `<AgentAction>` — same name would register N times, each overwriting the last. Use the hook + `<AgentTarget>` on each row's element:
+
+```tsx
+// Hook registers the action once
+useAgentAction({
+  action: syncProperty,
+  steps: [{ label: 'Click Sync', fromParam: 'property_id' }],
+});
+
+// AgentTarget on each row's button (in a column renderer)
+<AgentTarget action="sync_property" param="property_id" value={String(propertyId)}>
+  <SyncButton />
+</AgentTarget>
+```
+
+The hook also accepts an array to batch-register multiple actions in one call:
+
+```tsx
+useAgentAction([
+  { action: navigateToProperty, steps: [...] },
+  { action: syncProperty, steps: [...] },
+  { action: editMarkup, steps: [...] },
+]);
 ```
 
 ## Never nest `AgentTarget` inside Radix `asChild` components
@@ -202,6 +364,84 @@ style="display:contents">` wrapper that breaks this:
 Since `Popover.Root` renders no DOM element, `AgentTarget`'s `firstElementChild`
 resolves to the Button directly.
 
+## `AgentTarget` must resolve to the interactive element
+
+`element.click()` fires on the target element and bubbles **up** — it does not
+propagate down to children. If `AgentTarget` resolves to a wrapper (span, div)
+with the actual interactive element (button, checkbox, input) nested inside,
+polter's click never reaches it.
+
+```tsx
+// Bad — AgentTarget resolves to the <span>, click doesn't reach Checkbox
+<AgentTarget name="select-all">
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <span>
+        <Checkbox onCheckedChange={handleChange} />
+      </span>
+    </TooltipTrigger>
+  </Tooltip>
+</AgentTarget>
+
+// Good — AgentTarget wraps the Checkbox directly
+<Tooltip>
+  <TooltipTrigger asChild>
+    <span>
+      <AgentTarget name="select-all">
+        <Checkbox onCheckedChange={handleChange} />
+      </AgentTarget>
+    </span>
+  </TooltipTrigger>
+</Tooltip>
+```
+
+This is the inverse of the Radix `asChild` rule above. Both come from the same
+principle: polter clicks whatever element `AgentTarget` resolves to, so that
+element must be the one with the click handler.
+
+## Bulk operations: search + select + act
+
+When an action accepts an array of IDs and needs to apply to all of them, compose
+shared targets from the existing UI — don't reach for programmatic state
+manipulation. The pattern is: filter the table to the target rows, select them,
+then edit one — the save callback applies to the full selection.
+
+```tsx
+useAgentAction({
+  action: editMarkup, // parameters: { property_ids: number[], markup: number }
+  steps: [
+    // 1. Type IDs into the search box — String([1,2,3]) produces "1,2,3"
+    { label: 'Filter to target properties', fromTarget: 'search-input',
+      setParam: 'property_ids',
+      skipIf: (p) => (p.property_ids as number[]).length <= 1 },
+
+    // 2. Select all filtered rows
+    { label: 'Select all filtered', fromTarget: 'select-all-checkbox',
+      skipIf: (p) => (p.property_ids as number[]).length <= 1 },
+
+    // 3. Click edit on the first property
+    { label: 'Click edit', fromTarget: (p) => `edit-${(p.property_ids as number[])[0]}` },
+
+    // 4. Type the value — save callback sees the selection and applies to all
+    { label: 'Set value', fromTarget: 'markup-input', setParam: 'markup' },
+  ],
+});
+```
+
+Key ingredients:
+- **Shared targets** — `search-input` and `select-all-checkbox` have no `action`
+  prop, so any action can resolve them
+- **`skipIf`** — single-ID calls skip the search/select steps and edit directly
+- **`setParam` on arrays** — `String([id1, id2])` produces `"id1,id2"`, which the
+  search box accepts as a comma-separated filter
+- **Existing save callback** — the table's save handler already checks
+  `getSelectedRowIds()` and applies to all selected rows, showing a confirmation
+  dialog for the user to approve
+
+This is pure ADUI: the user sees polter type IDs into the search box, click
+select-all, click edit, and type the value. No programmatic state preparation,
+no `scrollTo` hacks, no event dispatching.
+
 ## Use shared targets for elements used by multiple actions
 
 When two actions need the same trigger (e.g. both open the same overflow menu),
@@ -222,46 +462,31 @@ omit the `action` prop to make a shared target:
 
 // Both actions find the same trigger
 useAgentAction([
-  { name: 'export_data', steps: [
+  { action: exportCsv, steps: [
     { label: 'Open menu', fromTarget: 'overflow-menu-btn' },
     { label: 'Click Export', fromTarget: 'export-btn' },
   ]},
-  { name: 'archive_selected', steps: [
+  { action: archiveSelected, steps: [
     { label: 'Open menu', fromTarget: 'overflow-menu-btn' },
     { label: 'Click Archive', fromTarget: 'archive-btn' },
   ]},
 ]);
 ```
 
-## Use `AgentTarget prepareView` for modal interactions
+## Modal interactions use steps, not programmatic state
 
-When an action involves a modal or dialog with internal state, use `prepareView`
-on `AgentTarget` to prepare the child component's state before polter interacts
-with it. Use `setParam` on the step to visually type values into inputs — don't
-set values programmatically when the user should see the interaction.
+When an action involves a modal or dialog, each interaction is a step. Use `setParam` on the step to visually type values into inputs. If the dialog has modes (e.g. preset vs custom), the agent clicks the mode selector as a step — don't set state programmatically.
 
 ```tsx
-// Action definition — 3-step flow: open dialog → type value → save
-useAgentAction({
-  name: 'update_setting',
-  description: 'Update a numeric setting',
-  parameters: z.object({ value: z.number() }),
-  onExecute: async () => {
-    // The save click starts async work — await it so the action
-    // doesn't complete until the work is done.
-    await savePromiseRef.current;
-  },
-  steps: [
-    { label: 'Open settings', fromTarget: 'settings-btn' },
-    { label: 'Set value', fromTarget: 'setting-input', setParam: 'value' },
-    { label: 'Save', fromTarget: 'save-btn' },
-  ],
-});
-
-// Parent component
-<AgentTarget name="settings-btn">
-  <SettingsButton />
-</AgentTarget>
+// 4-step flow: open modal → select mode → type value → confirm
+<AgentAction action={runDiscount}>
+  <AgentStep label="Open settings">
+    <OpenButton />
+  </AgentStep>
+  <AgentStep label="Select custom mode" fromTarget="custom-mode-radio" />
+  <AgentStep label="Set discount" fromTarget="discount-input" setParam="pct" />
+  <AgentStep label="Confirm" fromTarget="done-btn" />
+</AgentAction>
 
 // Child component (dialog) — targets wrap interactive elements
 function SettingsDialog({ onSave }) {
@@ -270,12 +495,15 @@ function SettingsDialog({ onSave }) {
 
   return (
     <Dialog>
-      {/* prepareView switches to custom mode so the input is enabled */}
-      <AgentTarget name="setting-input" prepareView={() => setMode("custom")}>
-        <Input value={value} onChange={e => setValue(+e.target.value)} />
+      <AgentTarget name="custom-mode-radio">
+        <Radio checked={mode === "custom"} onChange={() => setMode("custom")} />
       </AgentTarget>
 
-      <AgentTarget name="save-btn">
+      <AgentTarget name="discount-input">
+        <Input value={value} onChange={e => setValue(+e.target.value)} disabled={mode !== "custom"} />
+      </AgentTarget>
+
+      <AgentTarget name="done-btn">
         <Button onClick={() => onSave(value)}>Save</Button>
       </AgentTarget>
     </Dialog>
@@ -283,62 +511,25 @@ function SettingsDialog({ onSave }) {
 }
 ```
 
-The flow:
-1. Polter clicks the settings button → dialog opens
-2. Polter polls for `setting-input` → `prepareView` switches to custom mode →
-   polter **types** the value into the input
-3. Polter polls for `save-btn` → spotlights and clicks Save
-4. `onExecute` awaits the async work started by the click
+## Multi-step is required for dropdowns
 
-**Key rules:**
-- Use `prepareView` on `AgentTarget` for state changes that enable interaction
-  (e.g. switching a mode so an input becomes enabled)
-- Use `setParam` on the step to visually type values — don't set them
-  programmatically
-- Use `onExecute` to await async operations that the final click triggers
-  (polter doesn't await click handlers)
-
-## Dropdowns require at least two steps
-
-With `onExecute`, the executor skips clicking the last step (to avoid
-double-firing). If your action has only one step, the click never happens — the
-dropdown won't open.
-
-Use two steps — open, then select — and add `skipIf` to avoid redundant
-interactions:
+Polter clicks every step in sequence. If your action has only one step wrapping a dropdown, the click opens it — but there's no second step to select an option:
 
 ```tsx
+// Bad — single step, dropdown opens but nothing is selected
 useAgentAction({
-  name: 'filter_by_status',
-  description: 'Filter items by status',
-  parameters: z.object({
-    status: z.enum(['all', 'active', 'archived']),
-  }),
-  steps: [
-    { label: 'Open filter', fromTarget: 'status-toggle',
-      skipIf: ({ status }) => statusFilter === status || dropdownOpen },
-    { label: 'Select option', fromParam: 'status',
-      skipIf: ({ status }) => statusFilter === status },
-  ],
+  action: filterAction,
+  steps: [{ label: 'Open filter', fromTarget: 'filter-trigger' }],
 });
 
-// DOM
-<AgentTarget name="status-toggle">
-  <button onClick={() => setDropdownOpen(v => !v)}>
-    Status: {statusFilter} ▾
-  </button>
-</AgentTarget>
-{dropdownOpen && (
-  <div className="dropdown-menu">
-    {statuses.map(s => (
-      <AgentTarget key={s} param="status" value={s}>
-        <button onClick={() => { setStatusFilter(s); setDropdownOpen(false); }}>
-          {s}
-        </button>
-      </AgentTarget>
-    ))}
-  </div>
-)}
+// Good — two steps: click to open, then select option
+useAgentAction({
+  action: filterAction,
+  steps: [
+    { label: 'Open filter', fromTarget: 'filter-trigger' },
+    { label: 'Select option', fromParam: 'status' },
+  ],
+});
 ```
 
 ## Communicating state to the agent
@@ -369,10 +560,9 @@ actions are removed from the tool schema entirely — the LLM cannot call them.
 
 ```tsx
 <AgentAction
-  name="save_changes"
-  description="Save pending changes"
-  disabled={!hasUnsavedChanges}
-  disabledReason="No unsaved changes"
+  action={pushChanges}
+  disabled={!hasPendingChanges}
+  disabledReason="No pending changes to push"
 >
   <SaveButton />
 </AgentAction>
@@ -430,19 +620,19 @@ returns all zeros, causing spotlights to appear at (0,0):
 
 ```tsx
 // Bad — nested wrappers, inner actions resolve to display:contents divs
-<AgentAction name="action_a">
-  <AgentAction name="action_b">
-    <AgentAction name="action_c">
+<AgentAction action={actionA}>
+  <AgentAction action={actionB}>
+    <AgentAction action={actionC}>
       <ActualContent />
     </AgentAction>
   </AgentAction>
 </AgentAction>
 
 // Good — flat siblings, each wrapping its own element (or use the hook)
-<AgentAction name="action_a">
+<AgentAction action={actionA}>
   <ButtonA />
 </AgentAction>
-<AgentAction name="action_b">
+<AgentAction action={actionB}>
   <ButtonB />
 </AgentAction>
 ```

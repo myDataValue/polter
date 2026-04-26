@@ -19,13 +19,12 @@ function definitionToRegisteredAction(def: ActionDefinition<any>): RegisteredAct
     name: def.name,
     description: def.description,
     parameters: def.parameters,
-    onExecute: def.onExecute as RegisteredAction['onExecute'],
     disabled: false,
     disabledReason: undefined,
-    getExecutionTargets: () => [],
+    // Use defineAction steps as fallback when no component provides runtime steps.
+    getExecutionTargets: () =>
+      def.steps?.length ? def.steps.map((s) => ({ ...s, element: null })) : [],
     route: def.route as RegisteredAction['route'],
-    navigateVia: def.navigateVia,
-    mountTimeout: def.mountTimeout,
   };
 }
 
@@ -41,6 +40,7 @@ export function AgentActionProvider({
   onExecutionComplete,
   registry,
   navigate,
+  devWarnings = false,
 }: AgentActionProviderProps) {
   const actionsRef = useRef<Map<string, RegisteredAction>>(new Map());
   const targetsRef = useRef<Map<string, AgentTargetEntry>>(new Map());
@@ -87,12 +87,18 @@ export function AgentActionProvider({
   const registerAction = useCallback((action: RegisteredAction) => {
     const existing = actionsRef.current.get(action.name);
 
-    // Preserve route/navigateVia from registry definition when a component upgrades the action.
+    // Preserve route from registry definition when a component upgrades the action.
     const registryAction = registryRef.current.get(action.name);
     if (registryAction) {
       if (!action.route) action.route = registryAction.route;
-      if (!action.navigateVia) action.navigateVia = registryAction.navigateVia;
-      if (action.mountTimeout == null) action.mountTimeout = registryAction.mountTimeout;
+    }
+
+    // Dev-mode warning: action registered by component but not in registry
+    if (devWarnings && !registryAction && action.componentBacked) {
+      console.warn(
+        `[polter] Action "${action.name}" is registered by a component but missing from the registry. ` +
+        `Add a defineAction() export to an actions.ts file so it appears in the tool schema before mount.`,
+      );
     }
 
     actionsRef.current.set(action.name, action);
@@ -120,8 +126,13 @@ export function AgentActionProvider({
     setVersion((v) => v + 1);
   }, []);
 
+  // Track target names that have been registered at least once — used to detect
+  // conditional rendering (target mounted then unmounted instead of disabled).
+  const seenTargetNamesRef = useRef<Set<string>>(new Set());
+
   const registerTarget = useCallback((id: string, entry: AgentTargetEntry) => {
     targetsRef.current.set(id, entry);
+    if (entry.name) seenTargetNamesRef.current.add(entry.name);
   }, []);
 
   const unregisterTarget = useCallback((id: string) => {
@@ -134,13 +145,17 @@ export function AgentActionProvider({
       param: string,
       value: string,
       signal?: AbortSignal,
+      timeout = 5000,
     ): Promise<HTMLElement | null> => {
       const normalizedValue = value.toLowerCase();
-      const maxWait = 3000;
       const pollInterval = 50;
       const start = Date.now();
+      let seenDisabled = false;
 
-      while (Date.now() - start < maxWait) {
+      // Poll until the target appears and is enabled.
+      // If a disabled match is found, the element is loading — poll indefinitely.
+      // If no match at all, give up after timeout.
+      while (seenDisabled || Date.now() - start < timeout) {
         if (signal?.aborted) return null;
 
         for (const entry of targetsRef.current.values()) {
@@ -150,7 +165,11 @@ export function AgentActionProvider({
             entry.value?.toLowerCase() === normalizedValue &&
             entry.element.isConnected
           ) {
-            return entry.element;
+            if ((entry.element as HTMLButtonElement).disabled) {
+              seenDisabled = true;
+            } else {
+              return entry.element;
+            }
           }
         }
 
@@ -168,12 +187,16 @@ export function AgentActionProvider({
       name: string,
       signal?: AbortSignal,
       params?: Record<string, unknown>,
+      timeout = 5000,
     ): Promise<HTMLElement | null> => {
-      const maxWait = 3000;
       const pollInterval = 50;
       const start = Date.now();
+      let seenDisabled = false;
 
-      while (Date.now() - start < maxWait) {
+      // Poll until the target appears and is enabled.
+      // If a disabled match is found, the element is loading — poll indefinitely.
+      // If no match at all, give up after timeout.
+      while (seenDisabled || Date.now() - start < timeout) {
         if (signal?.aborted) return null;
 
         for (const entry of targetsRef.current.values()) {
@@ -182,14 +205,29 @@ export function AgentActionProvider({
             entry.name === name &&
             entry.element.isConnected
           ) {
-            if (entry.prepareView && params) {
-              await entry.prepareView(params);
+            if ((entry.element as HTMLButtonElement).disabled) {
+              seenDisabled = true;
+            } else {
+              if (entry.scrollTo && params) {
+                await entry.scrollTo(params);
+              }
+              return entry.element;
             }
-            return entry.element;
           }
         }
 
         await new Promise((r) => setTimeout(r, pollInterval));
+      }
+
+      // If the target was previously registered but is now gone, the component
+      // conditionally unmounted it (e.g. early return during loading). Throw a
+      // clear error so the developer renders the target with disabled instead.
+      if (seenTargetNamesRef.current.has(name)) {
+        throw new Error(
+          `[polter] AgentTarget "${name}" was previously mounted but is now gone. ` +
+          `This usually means the component conditionally unmounts it during loading. ` +
+          `Render the target with disabled={isLoading} instead of unmounting it.`,
+        );
       }
 
       return null;
@@ -232,16 +270,19 @@ export function AgentActionProvider({
       currentExecutionRef.current?.abort();
       const controller = new AbortController();
       currentExecutionRef.current = controller;
+      const start = performance.now();
 
       let action = actionsRef.current.get(actionName);
       if (!action) {
-        return { success: false, actionName, error: `Action "${actionName}" not found` };
+        return { success: false, actionName, error: `Action "${actionName}" not found`, trace: [], durationMs: performance.now() - start };
       }
       if (action.disabled) {
         return {
           success: false,
           actionName,
           error: action.disabledReason || 'Action is disabled',
+          trace: [],
+          durationMs: performance.now() - start,
         };
       }
 
@@ -257,12 +298,12 @@ export function AgentActionProvider({
           tooltipEnabled,
           cursorEnabled,
           signal: controller.signal,
+          mountTimeout: 5000,
           resolveTarget,
           resolveNamedTarget,
         };
 
-        // Validate params against the Zod schema before navigating — prevents
-        // wasted navigateVia chains when required params are missing.
+        // Validate params against the Zod schema before executing.
         const schema = action.parameters as any;
         if (schema?.safeParse) {
           const validation = schema.safeParse(params ?? {});
@@ -273,65 +314,19 @@ export function AgentActionProvider({
             const error = missing.length > 0
               ? `Required parameters missing: ${missing.join(', ')}`
               : validation.error.issues.map((i: any) => i.message).join('; ');
-            return { success: false, actionName, error };
+            return { success: false, actionName, error, trace: [], durationMs: performance.now() - start };
           }
         }
 
-        if (action.navigateVia && action.navigateVia.length > 0) {
-          // Execute each action in the chain sequentially — spotlight, click, wait for next mount.
-          for (const viaName of action.navigateVia) {
-            if (controller.signal.aborted) break;
+        // If this is a registry action with no DOM targets, navigate first.
+        const targets = action.getExecutionTargets();
+        if (targets.length === 0 && action.route && navigateRef.current) {
+          await navigateToRoute(action, params);
 
-            const viaRegistered = actionsRef.current.get(viaName);
-            const viaTimeout = viaRegistered?.mountTimeout ?? 10000;
-            const viaAction = await waitForActionMount(viaName, controller.signal, viaTimeout);
-
-            if (!viaAction || viaAction.getExecutionTargets().length === 0) {
-              // Route fallback: navigate directly if the action has a route defined.
-              if (viaAction?.route && navigateRef.current) {
-                await navigateToRoute(viaAction, params);
-                continue;
-              }
-
-              return {
-                success: false,
-                actionName,
-                error: `Navigation chain action "${viaName}" not found or has no targets`,
-              };
-            }
-
-            const viaResult = await executeAction(viaAction, {}, executorConfig);
-            if (!viaResult.success) {
-              return {
-                success: false,
-                actionName,
-                error: `Navigation chain failed at "${viaName}": ${viaResult.error}`,
-              };
-            }
-          }
-
-          // After the chain, wait for the terminal action to mount with DOM targets.
-          const mounted = await waitForActionMount(actionName, controller.signal, action.mountTimeout ?? 10000);
-          if (!mounted || !mounted.componentBacked) {
-            // Still schema-only — component never mounted on the page
-            return {
-              success: false,
-              actionName,
-              error: `Action "${actionName}" did not mount after navigation chain — the page may require authentication or failed to load`,
-            };
-          }
-          action = mounted;
-        } else {
-          // If this is a registry action with no DOM targets, navigate first.
-          const targets = action.getExecutionTargets();
-          if (targets.length === 0 && action.route && navigateRef.current) {
-            await navigateToRoute(action, params);
-
-            // Wait for the <AgentAction> component to mount on the new page.
-            const mounted = await waitForActionMount(actionName, controller.signal, action.mountTimeout);
-            if (mounted) {
-              action = mounted;
-            }
+          // Wait for the <AgentAction> component to mount on the new page.
+          const mounted = await waitForActionMount(actionName, controller.signal, 5000);
+          if (mounted) {
+            action = mounted;
           }
         }
 
@@ -342,12 +337,42 @@ export function AgentActionProvider({
             success: false,
             actionName,
             error: action.disabledReason || 'Action is disabled',
+            trace: [],
+            durationMs: performance.now() - start,
           };
           onExecutionComplete?.(result);
           return result;
         }
 
-        const result = await executeAction(action, params ?? {}, executorConfig);
+        let result = await executeAction(action, params ?? {}, executorConfig);
+
+        // After defineAction steps complete (e.g. navigation), the component may
+        // have mounted and provided its own steps. If so, continue with those.
+        if (result.success && !action.componentBacked) {
+          const upgraded = await waitForActionMount(actionName, controller.signal, 5000);
+          if (upgraded && upgraded.componentBacked) {
+            // Re-check disabled — the mounted version may have dynamic state.
+            if (upgraded.disabled) {
+              result = {
+                success: false,
+                actionName,
+                error: upgraded.disabledReason || 'Action is disabled',
+                trace: result.trace,
+                durationMs: performance.now() - start,
+              };
+            } else {
+              const phase2 = await executeAction(upgraded, params ?? {}, executorConfig);
+              result = {
+                ...phase2,
+                trace: [...result.trace, ...phase2.trace],
+                durationMs: performance.now() - start,
+              };
+            }
+          }
+        }
+
+        // Override durationMs with total end-to-end time from provider
+        result = { ...result, durationMs: performance.now() - start };
         onExecutionComplete?.(result);
         return result;
       } catch (err) {
@@ -358,6 +383,8 @@ export function AgentActionProvider({
             err instanceof DOMException && err.name === 'AbortError'
               ? 'Execution cancelled'
               : String(err),
+          trace: [],
+          durationMs: performance.now() - start,
         };
         onExecutionComplete?.(result);
         return result;

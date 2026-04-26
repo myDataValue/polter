@@ -7,6 +7,7 @@ export { AgentDevTools } from './components/AgentDevTools';
 
 // Hooks
 export { useAgentAction } from './hooks/useAgentAction';
+export type { AgentActionConfig } from './hooks/useAgentAction';
 export { useAgentActions } from './hooks/useAgentActions';
 export { useAgentCommandRouter } from './hooks/useAgentCommandRouter';
 
@@ -25,6 +26,7 @@ export type {
   AgentTargetEntry,
   RegisteredAction,
   ToolSchema,
+  StepTrace,
   ExecutionResult,
   AvailableAction,
   ExecutorConfig,

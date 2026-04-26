@@ -5,10 +5,10 @@ export type SkipPredicate = (params: Record<string, unknown>) => boolean;
 /** Shared fields describing an agent step's behavior — consumed by AgentStep props, useAgentAction config, and ExecutionTarget. */
 export interface StepDefinition {
   label: string;
-  /** Resolve element from AgentTarget registry by matching this param's value. */
-  fromParam?: string;
-  /** Resolve element from AgentTarget registry by matching a named target. */
-  fromTarget?: string;
+  /** Resolve element from AgentTarget registry by matching this param's value. Static string or function receiving params. */
+  fromParam?: string | ((params: Record<string, unknown>) => string);
+  /** Resolve element from AgentTarget registry by matching a named target. Static string or function receiving params. */
+  fromTarget?: string | ((params: Record<string, unknown>) => string);
   /** Simulate typing the value of this param into the element. */
   setParam?: string;
   /** Set a value programmatically via onSetValue callback. */
@@ -17,8 +17,12 @@ export interface StepDefinition {
   onSetValue?: (value: unknown) => void;
   /** Fallback for params[fromParam/setParam/setValue] when the param is absent — lets a step target a fixed value without a matching param. */
   defaultValue?: string;
-  /** Run a callback to prepare the DOM (e.g. scroll virtualized list) before resolving. */
-  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  /**
+   * Scroll a virtualized list or viewport so the target element renders in DOM.
+   * This is the ONLY legitimate use — if you're tempted to set state, call a
+   * mutation, or switch a mode, that should be a step the agent clicks instead.
+   */
+  scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
   /** Skip this step at execution time when the predicate returns true. */
   skipIf?: SkipPredicate;
 }
@@ -37,8 +41,11 @@ export interface TargetDefinition {
   value?: string;
   /** Named target key (for fromTarget resolution — static elements inside popovers/dropdowns). */
   name?: string;
-  /** Run a callback to prepare component state before the agent interacts with this target. Runs in the child's scope so it can access internal state. */
-  prepareView?: (params: Record<string, unknown>) => void | Promise<void>;
+  /**
+   * Scroll a virtualized list or viewport so this target's element renders in DOM.
+   * Only for making targets reachable — not for state changes or business logic.
+   */
+  scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
 }
 
 export interface AgentTargetEntry extends TargetDefinition {
@@ -49,16 +56,20 @@ export interface RegisteredAction {
   name: string;
   description: string;
   parameters?: unknown;
-  onExecute?: (params: Record<string, unknown>) => void | Promise<void>;
   disabled: boolean;
   disabledReason?: string;
   getExecutionTargets: () => ExecutionTarget[];
+  /**
+   * Waited on after all steps complete. Holds the action open until async work
+   * triggered by a step click (e.g. a mutation or streaming response) finishes.
+   *
+   * Resolved form — always a function. The ref-vs-function distinction exists
+   * only at the AgentAction/useAgentAction API surface; registration converts
+   * refs to functions so the executor doesn't need to know about them.
+   */
+  waitFor?: () => void | Promise<void>;
   /** Client-side route for navigation before execution (from defineAction). */
   route?: (params: Record<string, unknown>) => string;
-  /** Chain of action names to execute sequentially before this action (from defineAction). */
-  navigateVia?: string[];
-  /** How long (ms) to wait for this action's component to mount after navigation. */
-  mountTimeout?: number;
   /** True when registered by an `<AgentAction>` component (vs schema-only from registry). */
   componentBacked?: boolean;
 }
@@ -69,10 +80,25 @@ export interface ToolSchema {
   parameters: Record<string, unknown>;
 }
 
+export interface StepTrace {
+  index: number;
+  label: string;
+  status: 'completed' | 'skipped' | 'failed';
+  targetType?: 'fromParam' | 'fromTarget' | 'static';
+  targetName?: string;
+  targetValue?: string;
+  targetFound: boolean;
+  interactionType: 'click' | 'type' | 'setValue' | 'none';
+  error?: string;
+  durationMs: number;
+}
+
 export interface ExecutionResult {
   success: boolean;
   actionName: string;
   error?: string;
+  trace: StepTrace[];
+  durationMs: number;
 }
 
 export interface AvailableAction {
@@ -97,6 +123,7 @@ export interface ExecutorConfig {
     param: string,
     value: string,
     signal?: AbortSignal,
+    timeout?: number,
   ) => Promise<HTMLElement | null>;
   /** Resolve a named target from the AgentTarget registry. Used by fromTarget steps. */
   resolveNamedTarget?: (
@@ -104,6 +131,7 @@ export interface ExecutorConfig {
     name: string,
     signal?: AbortSignal,
     params?: Record<string, unknown>,
+    timeout?: number,
   ) => Promise<HTMLElement | null>;
 }
 
@@ -121,6 +149,8 @@ export interface AgentActionProviderProps {
   registry?: import('./defineAction').ActionDefinition<any>[];
   /** Router integration — called when executing a registry action that needs navigation. */
   navigate?: (path: string) => void | Promise<void>;
+  /** Enable dev-mode console warnings for actions missing from the registry. */
+  devWarnings?: boolean;
 }
 
 export interface AgentActionContextValue {
