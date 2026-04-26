@@ -259,7 +259,7 @@ async function resolveStepElement(
   params: Record<string, unknown>,
   config: ExecutorConfig,
 ): Promise<HTMLElement | null> {
-  const timeout = config.mountTimeout ?? 5000;
+  const timeout = 5000;
 
   // scrollTo runs first (e.g. scroll virtualized list into view)
   if (target.scrollTo) {
