@@ -36,8 +36,10 @@ const CURSOR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="2
 </svg>`;
 
 /**
- * Full-screen overlay that blocks user interaction during guided execution.
- * Persists across steps so there's no gap where clicks can leak through.
+ * Full-screen overlay during guided execution. pointer-events:none so the
+ * page (including chat stop button and modals) stays interactive — polter
+ * dispatches clicks programmatically via simulateFullClick, so it doesn't
+ * need to block user interaction.
  */
 function createBlockingOverlay(): OverlayHandle {
   const overlay = document.createElement('div');
@@ -46,7 +48,7 @@ function createBlockingOverlay(): OverlayHandle {
     position:fixed;
     inset:0;
     z-index:99997;
-    cursor:not-allowed;
+    pointer-events:none;
   `;
   document.body.appendChild(overlay);
   return { remove: () => overlay.remove() };

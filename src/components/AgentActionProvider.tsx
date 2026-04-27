@@ -417,6 +417,13 @@ export function AgentActionProvider({
     [version],
   );
 
+  const abortExecution = useCallback(() => {
+    if (currentExecutionRef.current) {
+      currentExecutionRef.current.abort();
+      currentExecutionRef.current = null;
+    }
+  }, []);
+
   const contextValue = useMemo<AgentActionContextValue>(
     () => ({
       registerAction,
@@ -424,6 +431,7 @@ export function AgentActionProvider({
       registerTarget,
       unregisterTarget,
       execute,
+      abortExecution,
       availableActions,
       schemas,
       isExecuting,
@@ -435,6 +443,7 @@ export function AgentActionProvider({
       registerTarget,
       unregisterTarget,
       execute,
+      abortExecution,
       availableActions,
       schemas,
       isExecuting,
