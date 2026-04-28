@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   AgentActionProvider,
   AgentTarget,
+  AgentDevTools,
   useAgentAction,
   useAgentActions,
 } from '@mydatavalue/polter';
@@ -387,6 +388,7 @@ export default function App() {
       </div>
       <ExecutionBadge />
       <Toaster />
+      <AgentDevTools />
     </AgentActionProvider>
   );
 }
