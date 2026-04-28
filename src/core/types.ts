@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import type { ActionDefinition } from './defineAction';
 
 export type ExecutionMode = 'guided' | 'instant';
@@ -51,11 +52,11 @@ export interface AgentTargetEntry extends TargetDefinition {
   element: HTMLElement;
 }
 
-export interface RegisteredAction extends ActionDefinition<any> {
+export interface RegisteredAction<TSchema extends z.ZodType = any> extends ActionDefinition<TSchema> {
   disabled: boolean;
   disabledReason?: string;
   /** Returns the current steps with fresh closures (via useEffectEvent). */
-  resolveSteps: () => StepDefinition[];
+  resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
   /**
    * Waited on after all steps complete. Holds the action open until async work
    * triggered by a step click finishes.

@@ -4,6 +4,7 @@ import {
   AgentActionProvider,
   AgentTarget,
   AgentDevTools,
+  action,
   defineAction,
   fromParam,
   useAgentAction,
@@ -114,9 +115,8 @@ function Dashboard() {
     return true;
   });
 
-  useAgentAction([
-    {
-      action: findAndEmail,
+  useAgentAction(
+    action(findAndEmail, {
       steps: [
         { label: 'Type the name', value: fromParam('name'), target: 'search', skipIf: ({ name }) => selected?.name === name || search === name },
         { label: 'Open status filter', target: 'status-toggle', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' || dropdownOpen },
@@ -124,17 +124,16 @@ function Dashboard() {
         { label: 'Click the customer', target: (p) => `customer:${p.name}`, skipIf: ({ name }) => selected?.name === name },
         { label: "Click 'Send email'", target: 'send-email-btn' },
       ],
-    },
-    {
-      action: filterAndExport,
+    }),
+    action(filterAndExport, {
       steps: [
         { label: 'Clear search', value: '', target: 'search', skipIf: () => search === '' },
-        { label: 'Open status filter', target: 'status-toggle', skipIf: ({status}) => statusFilter === status || dropdownOpen },
-        { label: 'Pick a status', target: (p) => `status:${p.status}`, skipIf: ({status}) => statusFilter === status },
+        { label: 'Open status filter', target: 'status-toggle', skipIf: ({ status }) => statusFilter === status || dropdownOpen },
+        { label: 'Pick a status', target: (p) => `status:${p.status}`, skipIf: ({ status }) => statusFilter === status },
         { label: 'Click export', target: 'export-btn' },
       ],
-    },
-  ]);
+    }),
+  );
 
   return (
     <main className="dashboard">

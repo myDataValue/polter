@@ -8,7 +8,7 @@ import { AgentTarget } from '../components/AgentTarget';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { useAgentAction } from '../hooks/useAgentAction';
 import { defineAction } from '../core/defineAction';
-import type { StepDefinition } from '../core/types';
+import { action } from '../core/stepHelpers';
 import { z } from 'zod';
 import { TestConsumer } from './testUtils';
 
@@ -160,30 +160,31 @@ describe('AgentAction registration', () => {
 // ---------------------------------------------------------------------------
 
 describe('useAgentAction registration', () => {
-  it.each([
-    {
-      label: 'a single config',
-      config: { action: defineAction({ name: 'solo', description: 'Solo' }), steps: [] as StepDefinition[] },
-      expectedNames: ['solo'],
-    },
-    {
-      label: 'an array of configs',
-      config: [
-        { action: defineAction({ name: 'alpha', description: 'Alpha' }), steps: [] as StepDefinition[] },
-        { action: defineAction({ name: 'beta', description: 'Beta' }), steps: [] as StepDefinition[] },
-      ],
-      expectedNames: ['alpha', 'beta'],
-    },
-  ])('should register $label', ({ config, expectedNames }) => {
+  it('should register a single action', () => {
+    const solo = defineAction({ name: 'solo', description: 'Solo' });
     let ctx: ReturnType<typeof useAgentActions> | null = null;
-    function Harness() { useAgentAction(config); return null; }
+    function Harness() { useAgentAction(action(solo)); return null; }
     render(
       <AgentActionProvider>
         <Harness />
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
-    expect(ctx!.availableActions.map((a) => a.name).sort()).toEqual(expectedNames);
+    expect(ctx!.availableActions.map((a) => a.name)).toEqual(['solo']);
+  });
+
+  it('should register multiple actions in one call', () => {
+    const alpha = defineAction({ name: 'alpha', description: 'Alpha' });
+    const beta = defineAction({ name: 'beta', description: 'Beta' });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() { useAgentAction(action(alpha), action(beta)); return null; }
+    render(
+      <AgentActionProvider>
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    expect(ctx!.availableActions.map((a) => a.name).sort()).toEqual(['alpha', 'beta']);
   });
 
   it('should unregister on unmount', () => {
