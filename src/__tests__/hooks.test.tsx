@@ -91,7 +91,7 @@ describe('useAgentAction', () => {
     function Harness() {
       useAgentAction({
         action: hasSkipAction,
-        steps: [{ label: 'one', fromTarget: 'does-not-exist', skipIf }],
+        steps: [{ label: 'one', target: 'does-not-exist', skipIf }],
       });
       return null;
     }
@@ -120,7 +120,7 @@ describe('useAgentAction', () => {
         steps: [
           {
             label: 's',
-            fromTarget: 'does-not-exist',
+            target: 'does-not-exist',
             skipIf: () => {
               observed.push(skip);
               return skip;

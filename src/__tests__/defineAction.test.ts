@@ -14,18 +14,18 @@ describe('defineAction', () => {
     expect(action.route).toBeUndefined();
   });
 
-  it('includes steps with fromTarget', () => {
+  it('includes steps with target', () => {
     const action = defineAction({
       name: 'grant_access',
       description: 'Grant access',
       steps: [
-        { label: 'Click Settings', fromTarget: 'settings-tab' },
-        { label: 'Click Grant', fromTarget: 'grant-link' },
+        { label: 'Click Settings', target: 'settings-tab' },
+        { label: 'Click Grant', target: 'grant-link' },
       ],
     });
     expect(action.steps).toHaveLength(2);
-    expect(action.steps![0].fromTarget).toBe('settings-tab');
-    expect(action.steps![1].fromTarget).toBe('grant-link');
+    expect(action.steps![0].target).toBe('settings-tab');
+    expect(action.steps![1].target).toBe('grant-link');
   });
 
   it('includes route function', () => {
@@ -44,8 +44,8 @@ describe('defineAction', () => {
       description: 'Full action',
       parameters: z.object({ ids: z.array(z.number()) }),
       steps: [
-        { label: 'Step 1', fromTarget: 'btn-1' },
-        { label: 'Step 2', fromTarget: 'btn-2' },
+        { label: 'Step 1', target: 'btn-1' },
+        { label: 'Step 2', target: 'btn-2' },
       ],
     });
     expect(action.name).toBe('full_action');

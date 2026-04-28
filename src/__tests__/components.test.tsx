@@ -582,7 +582,7 @@ describe('AgentTarget', () => {
   it('throws when used outside provider', () => {
     expect(() =>
       render(
-        <AgentTarget action="test" param="id" value="1">
+        <AgentTarget action="test" name="row:1">
           <div>Target</div>
         </AgentTarget>,
       ),
@@ -592,7 +592,7 @@ describe('AgentTarget', () => {
   it('renders children inside provider', () => {
     render(
       <AgentActionProvider>
-        <AgentTarget action="filter" param="tag" value="urgent">
+        <AgentTarget action="filter" name="tag:urgent">
           <span data-testid="target-el">Urgent</span>
         </AgentTarget>
       </AgentActionProvider>,

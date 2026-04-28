@@ -25,8 +25,8 @@ const grantAccess = defineAction({
   name: 'grant_access',
   description: 'Grant access',
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab' },
-    { label: 'Click Grant', fromTarget: 'grant-link' },
+    { label: 'Click Settings', target: 'settings-tab' },
+    { label: 'Click Grant', target: 'grant-link' },
   ],
   parameters: z.object({
     property_ids: z.array(z.number()).describe('Property IDs'),
