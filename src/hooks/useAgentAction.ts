@@ -45,7 +45,7 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
   const getSteps = useEffectEvent((actionName: string) => {
     const item = normalized.find((i) => i.action.name === actionName);
     if (!item?.steps?.length) return [];
-    return item.steps.map((s) => ({ ...s, element: null }));
+    return item.steps;
   });
 
   const resolveWaitFor = useEffectEvent(async (actionName: string) => {

@@ -31,10 +31,6 @@ export interface StepDefinition {
   skipIf?: SkipPredicate;
 }
 
-export interface ExecutionTarget extends StepDefinition {
-  element: HTMLElement | null;
-}
-
 /** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */
 export interface TargetDefinition {
   /** The action name this target belongs to. Omit to make a shared target that any action can resolve. */
@@ -61,7 +57,7 @@ export interface RegisteredAction {
   parameters?: unknown;
   disabled: boolean;
   disabledReason?: string;
-  getExecutionTargets: () => ExecutionTarget[];
+  getExecutionTargets: () => StepDefinition[];
   /**
    * Waited on after all steps complete. Holds the action open until async work
    * triggered by a step click (e.g. a mutation or streaming response) finishes.

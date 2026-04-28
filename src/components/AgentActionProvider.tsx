@@ -23,7 +23,7 @@ function definitionToRegisteredAction(def: ActionDefinition<any>): RegisteredAct
     disabledReason: undefined,
     // Use defineAction steps as fallback when no component provides runtime steps.
     getExecutionTargets: () =>
-      def.steps?.length ? def.steps.map((s) => ({ ...s, element: null })) : [],
+      def.steps ?? [],
     route: def.route as RegisteredAction['route'],
   };
 }

@@ -1,7 +1,7 @@
-import React, { useContext, useEffect, useEffectEvent, useRef } from 'react';
-import type { ExecutionTarget } from '../core/types';
+import React from 'react';
 import type { ActionDefinition } from '../core/defineAction';
-import { AgentActionContext } from './AgentActionProvider';
+import { useAgentAction } from '../hooks/useAgentAction';
+import { AgentTarget } from './AgentTarget';
 
 interface AgentActionProps {
   /** The action definition — provides name, description, parameters. */
@@ -20,60 +20,20 @@ interface AgentActionProps {
   children?: React.ReactNode;
 }
 
-export function AgentAction(props: AgentActionProps) {
-  const {
+export function AgentAction({ action, disabled, disabledReason, waitFor, children }: AgentActionProps) {
+  useAgentAction({
     action,
-    disabled = false,
+    disabled,
     disabledReason,
     waitFor,
-    children,
-  } = props;
-
-  const name = action.name;
-  const description = action.description;
-
-  const context = useContext(AgentActionContext);
-  if (!context) {
-    throw new Error('AgentAction must be used within an AgentActionProvider');
-  }
-
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  const stableWaitFor = useEffectEvent(async () => {
-    if (!waitFor) return;
-    if (typeof waitFor === 'function') { await waitFor(); return; }
-    await waitFor.current;
+    steps: children ? [{ label: action.description, target: action.name }] : [],
   });
-
-  const getExecutionTargets = useEffectEvent((): ExecutionTarget[] => {
-    let el = wrapperRef.current?.firstElementChild as HTMLElement | null;
-    while (el && getComputedStyle(el).display === 'contents' && el.firstElementChild) {
-      el = el.firstElementChild as HTMLElement;
-    }
-    return el ? [{ label: description, element: el }] : [];
-  });
-
-  const { registerAction, unregisterAction } = context;
-
-  useEffect(() => {
-    registerAction({
-      name,
-      description,
-      parameters: action.parameters,
-      disabled,
-      disabledReason,
-      waitFor: waitFor ? stableWaitFor : undefined,
-      getExecutionTargets,
-      componentBacked: true,
-    });
-    return () => unregisterAction(name);
-  }, [name, description, disabled, disabledReason, !!waitFor, registerAction, unregisterAction]);
 
   if (!children) return null;
 
   return (
-    <div ref={wrapperRef} style={{ display: 'contents' }}>
+    <AgentTarget action={action.name} name={action.name}>
       {children}
-    </div>
+    </AgentTarget>
   );
 }
