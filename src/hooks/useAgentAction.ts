@@ -42,10 +42,22 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
   const normalized = Array.isArray(config) ? config : [config];
   const { registerAction, unregisterAction } = context;
 
+  const getSteps = useEffectEvent((actionName: string) => {
+    const item = normalized.find((i) => i.action.name === actionName);
+    if (!item?.steps?.length) return [];
+    return item.steps.map((s) => ({ ...s, element: null }));
+  });
+
+  const resolveWaitFor = useEffectEvent(async (actionName: string) => {
+    const item = normalized.find((i) => i.action.name === actionName);
+    const wf = item?.waitFor;
+    if (!wf) return;
+    if (typeof wf === 'function') { await wf(); return; }
+    await wf.current;
+  });
+
   useEffect(() => {
     for (const item of normalized) {
-      const waitFor = item.waitFor;
-
       registerAction({
         name: item.action.name,
         description: item.action.description,
@@ -53,11 +65,7 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
         disabled: item.disabled ?? false,
         disabledReason: item.disabledReason,
         componentBacked: true,
-        waitFor: waitFor
-          ? typeof waitFor === 'function'
-            ? () => waitFor()
-            : async () => { await waitFor.current; }
-          : undefined,
+        waitFor: item.waitFor ? () => resolveWaitFor(item.action.name) : undefined,
         getExecutionTargets: () => getSteps(item.action.name),
       });
     }
@@ -68,10 +76,4 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
       }
     };
   }, [registerAction, unregisterAction]);
-
-  const getSteps = useEffectEvent((actionName: string) => {
-    const steps = normalized.find((i) => i.action.name === actionName)?.steps;
-    if (!steps?.length) return [];
-    return steps.map((s) => ({ ...s, element: null }));
-  });
 }

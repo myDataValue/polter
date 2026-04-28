@@ -67,7 +67,7 @@ export function AgentAction(props: AgentActionProps) {
       componentBacked: true,
     });
     return () => unregisterAction(name);
-  }, [name, description, disabled, disabledReason, registerAction, unregisterAction]);
+  }, [name, description, disabled, disabledReason, !!waitFor, registerAction, unregisterAction]);
 
   if (!children) return null;
 

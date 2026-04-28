@@ -58,7 +58,7 @@ Both `useAgentAction` and `<AgentAction>` require an `action` prop — you canno
 
 ## Steps are the only way to build actions
 
-The agent drives the UI by clicking through steps — the same way a human user would. Every action needs `steps` (or child `<AgentStep>` elements).
+The agent drives the UI by clicking through steps — the same way a human user would. Every action needs `steps`.
 
 ```tsx
 useAgentAction({
@@ -116,7 +116,7 @@ The `<AgentTarget>` elements on each page register themselves globally. After th
 
 **Put ALL steps for cross-page actions in `defineAction` — never split between `defineAction` and component steps.** If some steps navigate to a page and other steps interact with elements on that page, all of them belong in `defineAction`. The components on the target page should only have `<AgentTarget>` markers, not `<AgentAction>` wrappers with their own steps.
 
-Splitting steps between `defineAction` (navigation) and component `<AgentStep>` children (interaction) creates a two-phase executor flow that is racy — the component might not mount before the executor checks for it, causing the second phase to silently drop.
+Splitting steps between `defineAction` (navigation) and component `useAgentAction` (interaction) creates a two-phase executor flow that is racy — the component might not mount before the executor checks for it, causing the second phase to silently drop.
 
 ```tsx
 // Bad — navigation in defineAction, interaction in component (race condition)
@@ -281,11 +281,9 @@ For the simplest case — one visible element, no parameters, no conditional ste
 ```
 
 For anything involving multiple steps, parameters, `skipIf`, or targets
-resolved at runtime, use `useAgentAction` with `steps[]` — the inline
-`<AgentStep>` JSX form exists but should be avoided. `steps[]` keeps the
-action's full shape in one place, side-steps mount-order races between
-`<AgentStep>` siblings, and matches how cross-page steps in `defineAction`
-already work.
+resolved at runtime, use `useAgentAction` with `steps[]`. This keeps the
+action's full shape in one place and matches how cross-page steps in
+`defineAction` already work.
 
 ## Wrap conditionally rendered elements with `<AgentAction>` on the outside
 
@@ -481,8 +479,7 @@ useAgentAction([
 When an action involves a modal or dialog, each interaction is a step. Use `value` on the step to visually type values into inputs. If the dialog has modes (e.g. preset vs custom), the agent clicks the mode selector as a step — don't set state programmatically.
 
 Use `useAgentAction` with `steps[]` for these flows — keeping the steps as
-data (rather than scattered `<AgentStep>` JSX elements) makes the action's
-shape obvious in one place and avoids mount-order races between siblings.
+data makes the action's shape obvious in one place.
 
 ```tsx
 // 4-step flow: open modal → select mode → type value → confirm
@@ -496,7 +493,7 @@ useAgentAction({
   ],
 });
 
-// Trigger button — just a target, no <AgentStep> needed
+// Trigger button — just a target
 <AgentTarget name="open-settings-btn">
   <OpenButton />
 </AgentTarget>

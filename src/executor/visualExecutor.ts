@@ -261,9 +261,9 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
 }
 
 /**
- * Resolve the element for a step. For element-bound steps (AgentStep wrapping a
- * child), returns the element directly. For `target` steps, polls the
- * AgentTarget registry until a match is found.
+ * Resolve the element for a step. For `target` steps, polls the AgentTarget
+ * registry until a match is found. For element-bound steps (AgentAction
+ * wrapping a child), returns the element directly.
  */
 async function resolveStepElement(
   step: ExecutionTarget,
@@ -285,7 +285,7 @@ async function resolveStepElement(
     return config.resolveTarget(actionName, name, config.signal, params, timeout);
   }
 
-  // Element bound at JSX time (AgentStep wrapping a child).
+  // Element bound at JSX time (AgentAction wrapping a child).
   return step.element;
 }
 
