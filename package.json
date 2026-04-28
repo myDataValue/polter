@@ -46,8 +46,8 @@
     "prepare": "tsup"
   },
   "peerDependencies": {
-    "react": ">=18.0.0",
-    "react-dom": ">=18.0.0",
+    "react": ">=19.2.0",
+    "react-dom": ">=19.2.0",
     "zod": ">=3.0.0"
   },
   "devDependencies": {
@@ -56,8 +56,8 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "jsdom": "^29.0.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^4.1.2",
