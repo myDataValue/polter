@@ -401,7 +401,7 @@ export default function App() {
       </div>
       <ExecutionBadge />
       <Toaster />
-      <AgentDevTools />
+      <AgentDevTools bottomOffset={80} />
     </AgentActionProvider>
   );
 }
