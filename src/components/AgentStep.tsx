@@ -22,6 +22,8 @@ export function AgentStep({
     throw new Error('AgentStep must be used within an AgentAction');
   }
 
+  const valueRef = useRef(value);
+  valueRef.current = value;
   const scrollToRef = useRef(scrollTo);
   scrollToRef.current = scrollTo;
   const skipIfRef = useRef(skipIf);
@@ -43,12 +45,12 @@ export function AgentStep({
       label,
       element,
       target,
-      value,
+      value: valueRef.current,
       scrollTo: scrollToRef.current,
       skipIf: stableSkipIfRef.current!,
     });
     return () => stepContext.unregisterStep(id);
-  }, [id, label, target, value, stepContext]);
+  }, [id, label, target, stepContext]);
 
   if (!children) return null;
 

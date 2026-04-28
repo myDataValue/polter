@@ -65,7 +65,7 @@ useAgentAction({
   action: editMarkup,
   steps: [
     { label: 'Click edit', target: (p) => `edit:${p.property_id}` },
-    { label: 'Set value', target: 'markup-input', setParam: 'markup' },
+    { label: 'Set value', target: 'markup-input', value: fromParam('markup') },
     { label: 'Save', target: 'save-btn' },
     { label: 'Confirm', target: 'confirm-btn' },
   ],
@@ -177,7 +177,7 @@ checks whether its interaction is still needed to reach that state:
 useAgentAction({
   action: filterAndExport,
   steps: [
-    { label: 'Clear search', setParam: 'query', defaultValue: '', target: 'search',
+    { label: 'Clear search', value: '', target: 'search',
       skipIf: () => query === '' },
     { label: 'Open filter', target: 'status-toggle',
       skipIf: ({ status }) => statusFilter === status || dropdownOpen },
@@ -255,13 +255,18 @@ plain string:
   skipIf: () => statusFilter === 'all' }
 ```
 
-`defaultValue` is a fallback for `setParam` when the param is absent — useful
-for clearing inputs:
+A literal string `value` types a fixed value — useful for clearing inputs:
 
 ```tsx
 // Clear search — types '' into the search input
-{ label: 'Clear search', setParam: 'query', defaultValue: '', target: 'search',
+{ label: 'Clear search', value: '', target: 'search',
   skipIf: () => query === '' }
+```
+
+Use `fromParam()` to extract a named param as the value:
+
+```tsx
+{ label: 'Type name', value: fromParam('name'), target: 'search' }
 ```
 
 ## Use `<AgentAction>` for simple single-element actions
@@ -406,7 +411,7 @@ useAgentAction({
   steps: [
     // 1. Type IDs into the search box — String([1,2,3]) produces "1,2,3"
     { label: 'Filter to target properties', target: 'search-input',
-      setParam: 'property_ids',
+      value: fromParam('property_ids'),
       skipIf: (p) => (p.property_ids as number[]).length <= 1 },
 
     // 2. Select all filtered rows
@@ -418,7 +423,7 @@ useAgentAction({
     { label: 'Click edit', target: (p) => `edit:${(p.property_ids as number[])[0]}` },
 
     // 4. Type the value — save callback sees the selection and applies to all
-    { label: 'Set value', target: 'markup-input', setParam: 'markup' },
+    { label: 'Set value', target: 'markup-input', value: fromParam('markup') },
   ],
 });
 ```
@@ -430,7 +435,7 @@ Key ingredients:
   from params (e.g. `(p) => `edit:${p.property_ids[0]}``); the matching
   `<AgentTarget name={`edit:${id}`}>` registers each row
 - **`skipIf`** — single-ID calls skip the search/select steps and edit directly
-- **`setParam` on arrays** — `String([id1, id2])` produces `"id1,id2"`, which the
+- **`fromParam` on arrays** — `String([id1, id2])` produces `"id1,id2"`, which the
   search box accepts as a comma-separated filter
 - **Existing save callback** — the table's save handler already checks
   `getSelectedRowIds()` and applies to all selected rows, showing a confirmation
@@ -473,7 +478,7 @@ useAgentAction([
 
 ## Modal interactions use steps, not programmatic state
 
-When an action involves a modal or dialog, each interaction is a step. Use `setParam` on the step to visually type values into inputs. If the dialog has modes (e.g. preset vs custom), the agent clicks the mode selector as a step — don't set state programmatically.
+When an action involves a modal or dialog, each interaction is a step. Use `value` on the step to visually type values into inputs. If the dialog has modes (e.g. preset vs custom), the agent clicks the mode selector as a step — don't set state programmatically.
 
 Use `useAgentAction` with `steps[]` for these flows — keeping the steps as
 data (rather than scattered `<AgentStep>` JSX elements) makes the action's
@@ -486,7 +491,7 @@ useAgentAction({
   steps: [
     { label: 'Open settings', target: 'open-settings-btn' },
     { label: 'Select custom mode', target: 'custom-mode-radio' },
-    { label: 'Set discount', target: 'discount-input', setParam: 'pct' },
+    { label: 'Set discount', target: 'discount-input', value: fromParam('pct') },
     { label: 'Confirm', target: 'done-btn' },
   ],
 });
