@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { defineAction } from '../core/defineAction';
+import { fromParam } from '../core/stepHelpers';
 import { z } from 'zod';
 
 describe('defineAction', () => {
@@ -51,5 +52,27 @@ describe('defineAction', () => {
     expect(action.name).toBe('full_action');
     expect(action.steps).toHaveLength(2);
     expect(action.parameters).toBeDefined();
+  });
+});
+
+describe('fromParam', () => {
+  it('extracts a string param', () => {
+    const fn = fromParam('name');
+    expect(fn({ name: 'Alice' })).toBe('Alice');
+  });
+
+  it('converts non-string values via String()', () => {
+    const fn = fromParam('count');
+    expect(fn({ count: 42 })).toBe('42');
+  });
+
+  it('converts arrays via String()', () => {
+    const fn = fromParam('ids');
+    expect(fn({ ids: [1, 2, 3] })).toBe('1,2,3');
+  });
+
+  it('returns undefined when param is missing', () => {
+    const fn = fromParam('name');
+    expect(fn({})).toBeUndefined();
   });
 });

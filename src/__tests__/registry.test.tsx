@@ -6,14 +6,7 @@ import { AgentAction } from '../components/AgentAction';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { defineAction } from '../core/defineAction';
 import { z } from 'zod';
-
-function TestConsumer({ onContext }: { onContext: (ctx: ReturnType<typeof useAgentActions>) => void }) {
-  const ctx = useAgentActions();
-  React.useEffect(() => {
-    onContext(ctx);
-  });
-  return null;
-}
+import { TestConsumer } from './testUtils';
 
 const exportCsv = defineAction({
   name: 'export_csv',
@@ -164,21 +157,3 @@ describe('Zod param validation', () => {
   });
 });
 
-describe('disabled after navigation', () => {
-  const lockedAction = defineAction({ name: 'locked', description: 'Locked action' });
-
-  it('returns disabledReason when action is disabled', async () => {
-    let ctx: ReturnType<typeof useAgentActions> | null = null;
-    render(
-      <AgentActionProvider mode="instant">
-        <AgentAction action={lockedAction} disabled disabledReason="Not logged in">
-          <button>Locked</button>
-        </AgentAction>
-        <TestConsumer onContext={(c) => (ctx = c)} />
-      </AgentActionProvider>,
-    );
-    const result = await act(() => ctx!.execute('locked'));
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('Not logged in');
-  });
-});

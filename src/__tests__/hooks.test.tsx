@@ -5,6 +5,8 @@ import { AgentActionProvider } from '../components/AgentActionProvider';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { useAgentAction, AgentActionConfig } from '../hooks/useAgentAction';
 import { defineAction } from '../core/defineAction';
+import { fromParam } from '../core/stepHelpers';
+import { AgentTarget } from '../components/AgentTarget';
 import { TestConsumer } from './testUtils';
 
 const aAction = defineAction({ name: 'a', description: 'A' });
@@ -14,6 +16,7 @@ const betaAction = defineAction({ name: 'beta', description: 'Beta' });
 const tempAction = defineAction({ name: 'temp', description: 'Temp' });
 const hasSkipAction = defineAction({ name: 'has_skip', description: 'Has skip' });
 const reactiveSkipAction = defineAction({ name: 'reactive_skip', description: 'Reactive' });
+const valueAction = defineAction({ name: 'value_test', description: 'Value test' });
 
 describe('useAgentActions', () => {
   it('throws when used outside provider', () => {
@@ -149,5 +152,91 @@ describe('useAgentAction', () => {
     act(() => setSkip(false));
     await act(() => ctx!.execute('reactive_skip'));
     expect(observed).toEqual([false, true, false]);
+  });
+
+  it('types a literal string value into the target element', async () => {
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        action: valueAction,
+        steps: [{ label: 'clear', value: '', target: 'search' }],
+      });
+      return <AgentTarget name="search"><input data-testid="input" defaultValue="old" /></AgentTarget>;
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('value_test'));
+    expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe('');
+  });
+
+  it('types a fromParam-resolved value into the target element', async () => {
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        action: valueAction,
+        steps: [{ label: 'type name', value: fromParam('name'), target: 'search' }],
+      });
+      return <AgentTarget name="search"><input data-testid="input" /></AgentTarget>;
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('value_test', { name: 'Alice' }));
+    expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe('Alice');
+  });
+
+  it('clicks instead of typing when value function returns undefined', async () => {
+    const onClick = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        action: valueAction,
+        steps: [{ label: 'maybe type', value: fromParam('missing'), target: 'btn' }],
+      });
+      return <AgentTarget name="btn"><button onClick={onClick}>Go</button></AgentTarget>;
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('value_test', {}));
+    expect(onClick).toHaveBeenCalled();
+  });
+
+  it('reads the latest value closure after rerender', { timeout: 20000 }, async () => {
+    let setSuffix: (v: string) => void = () => {};
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Harness() {
+      const [suffix, setter] = React.useState('first');
+      setSuffix = setter;
+      useAgentAction({
+        action: valueAction,
+        steps: [{ label: 'type', value: (p) => `${p.name}-${suffix}`, target: 'search' }],
+      });
+      return <AgentTarget name="search"><input data-testid="input" /></AgentTarget>;
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    await act(() => ctx!.execute('value_test', { name: 'test' }));
+    expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe('test-first');
+
+    act(() => setSuffix('second'));
+    await act(() => ctx!.execute('value_test', { name: 'test' }));
+    expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe('test-second');
   });
 });
