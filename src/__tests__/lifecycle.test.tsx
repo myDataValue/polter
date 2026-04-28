@@ -8,6 +8,7 @@ import { AgentTarget } from '../components/AgentTarget';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { useAgentAction } from '../hooks/useAgentAction';
 import { defineAction } from '../core/defineAction';
+import type { StepDefinition } from '../core/types';
 import { z } from 'zod';
 import { TestConsumer } from './testUtils';
 
@@ -162,14 +163,14 @@ describe('useAgentAction registration', () => {
   it.each([
     {
       label: 'a single config',
-      config: { action: defineAction({ name: 'solo', description: 'Solo' }), steps: [] },
+      config: { action: defineAction({ name: 'solo', description: 'Solo' }), steps: [] as StepDefinition[] },
       expectedNames: ['solo'],
     },
     {
       label: 'an array of configs',
       config: [
-        { action: defineAction({ name: 'alpha', description: 'Alpha' }), steps: [] },
-        { action: defineAction({ name: 'beta', description: 'Beta' }), steps: [] },
+        { action: defineAction({ name: 'alpha', description: 'Alpha' }), steps: [] as StepDefinition[] },
+        { action: defineAction({ name: 'beta', description: 'Beta' }), steps: [] as StepDefinition[] },
       ],
       expectedNames: ['alpha', 'beta'],
     },

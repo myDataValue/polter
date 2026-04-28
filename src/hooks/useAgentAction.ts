@@ -1,14 +1,15 @@
 import { useContext, useEffect, useEffectEvent } from 'react';
+import type { z } from 'zod';
 import type { StepDefinition } from '../core/types';
 import type { ActionDefinition } from '../core/defineAction';
 import { AgentActionContext } from '../components/AgentActionProvider';
 
-export interface AgentActionConfig {
+export interface AgentActionConfig<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>> {
   /** The action definition — provides name, description, parameters. */
-  action: ActionDefinition<any>;
+  action: ActionDefinition<TSchema>;
   /** Steps the agent walks through to drive the UI. Overrides defineAction steps when provided.
    *  Omit to keep defineAction steps and only provide waitFor/disabled from the component. */
-  steps?: StepDefinition[];
+  steps?: StepDefinition<z.infer<TSchema>>[];
   disabled?: boolean;
   disabledReason?: string;
   /**
@@ -23,17 +24,13 @@ export interface AgentActionConfig {
 }
 
 /**
- * Hook-based action registration for actions that don't wrap a single element.
- * Use this for per-row actions where AgentTargets are on scattered elements
- * and the action resolves to them via the step's `target` field.
- *
- * Every action requires an `action` definition (from `defineAction`) and `steps`.
- *
- * Accepts a single config or an array to batch-register multiple actions.
- *
- * For actions that wrap a visible element, prefer the <AgentAction> component.
+ * Hook-based action registration. Accepts a single config (type-safe) or
+ * an array (for batch registration).
  */
-export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]): void {
+export function useAgentAction<TSchema extends z.ZodType>(config: AgentActionConfig<TSchema>): void;
+export function useAgentAction(config: AgentActionConfig[]): void;
+export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]): void;
+export function useAgentAction(config: AgentActionConfig<any> | AgentActionConfig<any>[]): void {
   const context = useContext(AgentActionContext);
   if (!context) {
     throw new Error('useAgentAction must be used within an AgentActionProvider');
@@ -45,7 +42,7 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
   const getSteps = useEffectEvent((actionName: string) => {
     const item = normalized.find((i) => i.action.name === actionName);
     if (!item?.steps?.length) return [];
-    return item.steps;
+    return item.steps as StepDefinition[];
   });
 
   const resolveWaitFor = useEffectEvent(async (actionName: string) => {

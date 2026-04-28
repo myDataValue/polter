@@ -82,10 +82,14 @@ describe('zodToJsonSchema', () => {
     },
   );
 
+  const safeKey = fc.string({ minLength: 1 }).filter((s) =>
+    !Object.prototype.hasOwnProperty.call(Object.prototype, s),
+  );
+
   it.prop([
     fc.record({
-      required: fc.string({ minLength: 1 }),
-      optional: fc.string({ minLength: 1 }),
+      required: safeKey,
+      optional: safeKey,
     }).filter((r) => r.required !== r.optional),
   ])(
     'should mark required fields and omit optional from required array',

@@ -1,16 +1,14 @@
 export type ExecutionMode = 'guided' | 'instant';
 
-export type SkipPredicate = (params: Record<string, unknown>) => boolean;
-
-/** Describes a single step in an agent action — consumed by useAgentAction config and ExecutionTarget. */
-export interface StepDefinition {
+/** Describes a single step in an agent action. */
+export interface StepDefinition<TParams = Record<string, unknown>> {
   label: string;
   /**
    * Resolve element from the AgentTarget registry by matching `name`. Pass a
    * string for static targets, or a function receiving params for per-row
    * targets (e.g. `target: (p) => `edit:${p.property_id}``).
    */
-  target?: string | ((params: Record<string, unknown>) => string);
+  target?: string | ((params: TParams) => string);
   /**
    * Value to type into the target element. When present, the executor types
    * into the resolved element instead of clicking it.
@@ -20,15 +18,15 @@ export interface StepDefinition {
    *   action params. Return `undefined` to skip typing and fall through to
    *   a click.
    */
-  value?: string | ((params: Record<string, unknown>) => string | undefined);
+  value?: string | ((params: TParams) => string | undefined);
   /**
    * Scroll a virtualized list or viewport so the target element renders in DOM.
    * This is the ONLY legitimate use — if you're tempted to set state, call a
    * mutation, or switch a mode, that should be a step the agent clicks instead.
    */
-  scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
+  scrollTo?: (params: TParams) => void | Promise<void>;
   /** Skip this step at execution time when the predicate returns true. */
-  skipIf?: SkipPredicate;
+  skipIf?: (params: TParams) => boolean;
 }
 
 /** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */

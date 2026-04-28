@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import type { StepDefinition } from './types';
 
 /**
@@ -14,27 +15,27 @@ import type { StepDefinition } from './types';
  * });
  * ```
  */
-export interface ActionDefinition<TParams = Record<string, unknown>> {
+export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>> {
   readonly name: string;
   readonly description: string;
   /** Zod schema for action parameters. */
-  readonly parameters?: unknown;
+  readonly parameters?: TSchema;
   /** Client-side route to navigate to before executing. */
-  readonly route?: (params: TParams) => string;
+  readonly route?: (params: z.infer<TSchema>) => string;
   /**
    * Static steps the agent walks through. Used when no component provides
    * runtime steps via `useAgentAction` or `<AgentAction>`.
    */
-  readonly steps?: StepDefinition[];
+  readonly steps?: StepDefinition<z.infer<TSchema>>[];
 }
 
-export function defineAction<TParams = Record<string, unknown>>(config: {
+export function defineAction<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>>(config: {
   name: string;
   description: string;
-  parameters?: unknown;
-  route?: (params: TParams) => string;
-  steps?: StepDefinition[];
-}): ActionDefinition<TParams> {
+  parameters?: TSchema;
+  route?: (params: z.infer<TSchema>) => string;
+  steps?: StepDefinition<z.infer<TSchema>>[];
+}): ActionDefinition<TSchema> {
   return {
     name: config.name,
     description: config.description,
