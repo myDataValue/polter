@@ -134,7 +134,7 @@ const actionArb = fc.record({
     name,
     description,
     disabled,
-    getExecutionTargets: () => [],
+    resolveSteps: () => [],
   }),
 );
 

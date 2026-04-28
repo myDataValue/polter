@@ -1,3 +1,25 @@
+import type { z } from 'zod';
+import type { ActionDefinition } from './defineAction';
+import type { AgentActionConfig } from '../hooks/useAgentAction';
+
+/**
+ * Build a type-safe action config for use in `useAgentAction([...])`.
+ * Infers the Zod schema from the action definition so steps get typed params.
+ *
+ * @example
+ * useAgentAction([
+ *   action(editMarkup, {
+ *     steps: [{ label: 'Set value', target: 'input', value: fromParam('markup') }],
+ *   }),
+ * ]);
+ */
+export function action<TSchema extends z.ZodType>(
+  actionDef: ActionDefinition<TSchema>,
+  config: Omit<AgentActionConfig<TSchema>, 'action'>,
+): AgentActionConfig<TSchema> {
+  return { action: actionDef, ...config };
+}
+
 /**
  * Migration helper: produces a `value` function that extracts a named param.
  *

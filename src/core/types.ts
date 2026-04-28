@@ -1,3 +1,5 @@
+import type { ActionDefinition } from './defineAction';
+
 export type ExecutionMode = 'guided' | 'instant';
 
 /** Describes a single step in an agent action. */
@@ -49,25 +51,17 @@ export interface AgentTargetEntry extends TargetDefinition {
   element: HTMLElement;
 }
 
-export interface RegisteredAction {
-  name: string;
-  description: string;
-  parameters?: unknown;
+export interface RegisteredAction extends ActionDefinition<any> {
   disabled: boolean;
   disabledReason?: string;
-  getExecutionTargets: () => StepDefinition[];
+  /** Returns the current steps with fresh closures (via useEffectEvent). */
+  resolveSteps: () => StepDefinition[];
   /**
    * Waited on after all steps complete. Holds the action open until async work
-   * triggered by a step click (e.g. a mutation or streaming response) finishes.
-   *
-   * Resolved form — always a function. The ref-vs-function distinction exists
-   * only at the AgentAction/useAgentAction API surface; registration converts
-   * refs to functions so the executor doesn't need to know about them.
+   * triggered by a step click finishes.
    */
   waitFor?: () => void | Promise<void>;
-  /** Client-side route for navigation before execution (from defineAction). */
-  route?: (params: Record<string, unknown>) => string;
-  /** True when registered by an `<AgentAction>` component (vs schema-only from registry). */
+  /** True when registered by a component (vs schema-only from registry). */
   componentBacked?: boolean;
 }
 

@@ -377,7 +377,7 @@ export async function executeAction(
   config: ExecutorConfig,
 ): Promise<ExecutionResult> {
   const executionStart = performance.now();
-  const targets = action.getExecutionTargets();
+  const targets = action.resolveSteps();
   const stepTraces: StepTrace[] = [];
 
   if (targets.length === 0) {

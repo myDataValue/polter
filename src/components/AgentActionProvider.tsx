@@ -13,18 +13,11 @@ import { executeAction } from '../executor/visualExecutor';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
 
-/** Convert an ActionDefinition to a schema-only RegisteredAction (no DOM targets). */
 function definitionToRegisteredAction(def: ActionDefinition<any>): RegisteredAction {
   return {
-    name: def.name,
-    description: def.description,
-    parameters: def.parameters,
+    ...def,
     disabled: false,
-    disabledReason: undefined,
-    // Use defineAction steps as fallback when no component provides runtime steps.
-    getExecutionTargets: () =>
-      def.steps ?? [],
-    route: def.route as RegisteredAction['route'],
+    resolveSteps: () => def.steps ?? [],
   };
 }
 
@@ -64,7 +57,7 @@ export function AgentActionProvider({
       // Only set in actionsRef if no component has already registered a richer version
       // (a component-backed action has DOM targets).
       const existing = actionsRef.current.get(def.name);
-      if (!existing || existing.getExecutionTargets().length === 0) {
+      if (!existing || existing.resolveSteps().length === 0) {
         actionsRef.current.set(def.name, registryAction);
       }
     }
@@ -75,7 +68,7 @@ export function AgentActionProvider({
         registryRef.current.delete(name);
         // Only remove from actionsRef if it's still the registry version (no component override).
         const current = actionsRef.current.get(name);
-        if (current && current.getExecutionTargets().length === 0) {
+        if (current && current.resolveSteps().length === 0) {
           actionsRef.current.delete(name);
         }
       }
@@ -84,14 +77,13 @@ export function AgentActionProvider({
     setVersion((v) => v + 1);
   }, [registry]);
 
-  const registerAction = useCallback((action: RegisteredAction) => {
-    const existing = actionsRef.current.get(action.name);
+  const registerAction = useCallback((incoming: RegisteredAction) => {
+    const existing = actionsRef.current.get(incoming.name);
 
-    // Preserve route from registry definition when a component upgrades the action.
-    const registryAction = registryRef.current.get(action.name);
-    if (registryAction) {
-      if (!action.route) action.route = registryAction.route;
-    }
+    const registryAction = registryRef.current.get(incoming.name);
+    const action = registryAction && !incoming.route
+      ? { ...incoming, route: registryAction.route }
+      : incoming;
 
     // Dev-mode warning: action registered by component but not in registry
     if (devWarnings && !registryAction && action.componentBacked) {
@@ -203,7 +195,7 @@ export function AgentActionProvider({
       while (Date.now() - start < maxWait) {
         if (signal?.aborted) return null;
         const current = actionsRef.current.get(name);
-        if (current && (current.componentBacked || current.getExecutionTargets().length > 0)) {
+        if (current && (current.componentBacked || current.resolveSteps().length > 0)) {
           return current;
         }
         await new Promise((r) => setTimeout(r, pollInterval));
@@ -276,7 +268,7 @@ export function AgentActionProvider({
         }
 
         // If this is a registry action with no DOM targets, navigate first.
-        const targets = action.getExecutionTargets();
+        const targets = action.resolveSteps();
         if (targets.length === 0 && action.route && navigateRef.current) {
           await navigateToRoute(action, params);
 

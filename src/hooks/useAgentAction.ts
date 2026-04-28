@@ -56,14 +56,12 @@ export function useAgentAction(config: AgentActionConfig<any> | AgentActionConfi
   useEffect(() => {
     for (const item of normalized) {
       registerAction({
-        name: item.action.name,
-        description: item.action.description,
-        parameters: item.action.parameters,
+        ...item.action,
         disabled: item.disabled ?? false,
         disabledReason: item.disabledReason,
         componentBacked: true,
         waitFor: item.waitFor ? () => resolveWaitFor(item.action.name) : undefined,
-        getExecutionTargets: () => getSteps(item.action.name),
+        resolveSteps: () => getSteps(item.action.name),
       });
     }
 
