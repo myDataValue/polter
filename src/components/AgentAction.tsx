@@ -1,14 +1,7 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import React, { useContext, useEffect, useEffectEvent, useRef } from 'react';
 import type { ExecutionTarget } from '../core/types';
 import type { ActionDefinition } from '../core/defineAction';
 import { AgentActionContext } from './AgentActionProvider';
-
-interface AgentStepContextValue {
-  registerStep: (id: string, data: ExecutionTarget) => void;
-  unregisterStep: (id: string) => void;
-}
-
-export const AgentStepContext = createContext<AgentStepContextValue | null>(null);
 
 interface AgentActionProps {
   /** The action definition — provides name, description, parameters. */
@@ -38,7 +31,6 @@ export function AgentAction(props: AgentActionProps) {
 
   const name = action.name;
   const description = action.description;
-  const parameters = action.parameters;
 
   const context = useContext(AgentActionContext);
   if (!context) {
@@ -46,37 +38,20 @@ export function AgentAction(props: AgentActionProps) {
   }
 
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const stepsRef = useRef<Map<string, ExecutionTarget>>(new Map());
 
-  const waitForRef = useRef(waitFor);
-  waitForRef.current = waitFor;
-  const parametersRef = useRef(parameters);
-  parametersRef.current = parameters;
+  const stableWaitFor = useEffectEvent(async () => {
+    if (!waitFor) return;
+    if (typeof waitFor === 'function') { await waitFor(); return; }
+    await waitFor.current;
+  });
 
-  const stableWaitFor = useCallback(async () => {
-    const wf = waitForRef.current;
-    if (!wf) return;
-    if (typeof wf === 'function') { await wf(); return; }
-    await wf.current;
-  }, []);
-
-  const getExecutionTargets = useCallback((): ExecutionTarget[] => {
-    if (stepsRef.current.size > 0) {
-      // Map preserves insertion order, which matches JSX order via React's
-      // tree-order useEffect mounting. This lets you interleave element steps
-      // and lazy `target` steps in any sequence.
-      return Array.from(stepsRef.current.values()).filter(
-        (s) => s.element || s.target,
-      );
-    }
-
-    // Single element: use wrapper's first child, skipping display:contents wrappers.
+  const getExecutionTargets = useEffectEvent((): ExecutionTarget[] => {
     let el = wrapperRef.current?.firstElementChild as HTMLElement | null;
     while (el && getComputedStyle(el).display === 'contents' && el.firstElementChild) {
       el = el.firstElementChild as HTMLElement;
     }
     return el ? [{ label: description, element: el }] : [];
-  }, [description]);
+  });
 
   const { registerAction, unregisterAction } = context;
 
@@ -84,39 +59,21 @@ export function AgentAction(props: AgentActionProps) {
     registerAction({
       name,
       description,
-      parameters: parametersRef.current,
+      parameters: action.parameters,
       disabled,
       disabledReason,
-      waitFor: waitForRef.current ? stableWaitFor : undefined,
+      waitFor: waitFor ? stableWaitFor : undefined,
       getExecutionTargets,
       componentBacked: true,
     });
     return () => unregisterAction(name);
-  }, [name, description, disabled, disabledReason, stableWaitFor, getExecutionTargets, registerAction, unregisterAction]);
-
-  const registerStep = useCallback(
-    (id: string, data: ExecutionTarget) => {
-      stepsRef.current.set(id, data);
-    },
-    [],
-  );
-
-  const unregisterStep = useCallback((id: string) => {
-    stepsRef.current.delete(id);
-  }, []);
-
-  const stepContextValue = useMemo(
-    () => ({ registerStep, unregisterStep }),
-    [registerStep, unregisterStep],
-  );
+  }, [name, description, disabled, disabledReason, registerAction, unregisterAction]);
 
   if (!children) return null;
 
   return (
-    <AgentStepContext.Provider value={stepContextValue}>
-      <div ref={wrapperRef} style={{ display: 'contents' }}>
-        {children}
-      </div>
-    </AgentStepContext.Provider>
+    <div ref={wrapperRef} style={{ display: 'contents' }}>
+      {children}
+    </div>
   );
 }

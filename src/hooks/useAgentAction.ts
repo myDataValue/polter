@@ -1,5 +1,5 @@
-import { useContext, useEffect, useRef } from 'react';
-import type { ExecutionTarget, StepDefinition } from '../core/types';
+import { useContext, useEffect, useEffectEvent } from 'react';
+import type { StepDefinition } from '../core/types';
 import type { ActionDefinition } from '../core/defineAction';
 import { AgentActionContext } from '../components/AgentActionProvider';
 
@@ -40,13 +40,10 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
   }
 
   const normalized = Array.isArray(config) ? config : [config];
-  const configRef = useRef(normalized);
-  configRef.current = normalized;
-
   const { registerAction, unregisterAction } = context;
 
   useEffect(() => {
-    for (const item of configRef.current) {
+    for (const item of normalized) {
       const waitFor = item.waitFor;
 
       registerAction({
@@ -61,22 +58,20 @@ export function useAgentAction(config: AgentActionConfig | AgentActionConfig[]):
             ? () => waitFor()
             : async () => { await waitFor.current; }
           : undefined,
-        // Look up `steps` fresh per execute so inline step closures see the
-        // latest render's values; other fields are snapshot at mount.
-        getExecutionTargets: (): ExecutionTarget[] => {
-          const steps = configRef.current.find(
-            (i) => i.action.name === item.action.name,
-          )?.steps;
-          if (!steps?.length) return [];
-          return steps.map((s) => ({ ...s, element: null }));
-        },
+        getExecutionTargets: () => getSteps(item.action.name),
       });
     }
 
     return () => {
-      for (const item of configRef.current) {
+      for (const item of normalized) {
         unregisterAction(item.action.name);
       }
     };
   }, [registerAction, unregisterAction]);
+
+  const getSteps = useEffectEvent((actionName: string) => {
+    const steps = normalized.find((i) => i.action.name === actionName)?.steps;
+    if (!steps?.length) return [];
+    return steps.map((s) => ({ ...s, element: null }));
+  });
 }
