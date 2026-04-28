@@ -117,20 +117,20 @@ function Dashboard() {
     {
       action: findAndEmail,
       steps: [
-        { label: 'Type the name', setParam: 'name', fromTarget: 'search', skipIf: ({ name }) => selected?.name === name || search === name },
-        { label: 'Open status filter', fromTarget: 'status-toggle', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' || dropdownOpen },
-        { label: 'Reset to all', fromParam: 'status', defaultValue: 'all', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' },
-        { label: 'Click the customer', fromParam: 'name', skipIf: ({ name }) => selected?.name === name },
-        { label: "Click 'Send email'", fromTarget: 'send-email-btn' },
+        { label: 'Type the name', setParam: 'name', target: 'search', skipIf: ({ name }) => selected?.name === name || search === name },
+        { label: 'Open status filter', target: 'status-toggle', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' || dropdownOpen },
+        { label: 'Reset to all', target: 'status:all', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' },
+        { label: 'Click the customer', target: (p) => `customer:${p.name}`, skipIf: ({ name }) => selected?.name === name },
+        { label: "Click 'Send email'", target: 'send-email-btn' },
       ],
     },
     {
       action: filterAndExport,
       steps: [
-        { label: 'Clear search', setParam: 'search', defaultValue: '', fromTarget: 'search', skipIf: () => search === '' },
-        { label: 'Open status filter', fromTarget: 'status-toggle', skipIf: ({status}) => statusFilter === status || dropdownOpen },
-        { label: 'Pick a status', fromParam: 'status', skipIf: ({status}) => statusFilter === status },
-        { label: 'Click export', fromTarget: 'export-btn' },
+        { label: 'Clear search', setParam: 'search', defaultValue: '', target: 'search', skipIf: () => search === '' },
+        { label: 'Open status filter', target: 'status-toggle', skipIf: ({status}) => statusFilter === status || dropdownOpen },
+        { label: 'Pick a status', target: (p) => `status:${p.status}`, skipIf: ({status}) => statusFilter === status },
+        { label: 'Click export', target: 'export-btn' },
       ],
     },
   ]);
@@ -174,7 +174,7 @@ function Dashboard() {
           {dropdownOpen && (
             <div className="dropdown-menu">
               {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
-                <AgentTarget key={s} param="status" value={s}>
+                <AgentTarget key={s} name={`status:${s}`}>
                   <button
                     className="dropdown-item"
                     onClick={() => {
@@ -208,7 +208,7 @@ function Dashboard() {
           <div>Plan</div>
         </div>
         {filtered.map((c) => (
-          <AgentTarget key={c.id} action="find_and_email" param="name" value={c.name}>
+          <AgentTarget key={c.id} action="find_and_email" name={`customer:${c.name}`}>
             <div
               className="table-row table-row-clickable"
               onClick={() => setSelected(c)}
