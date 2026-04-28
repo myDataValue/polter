@@ -9,7 +9,7 @@ export function fromParam(
   paramName: string,
 ): (params: Record<string, unknown>) => string | undefined {
   return (params) => {
-    const v = params[paramName];
-    return v !== undefined ? String(v) : undefined;
+    if (!Object.prototype.hasOwnProperty.call(params, paramName)) return undefined;
+    return String(params[paramName]);
   };
 }

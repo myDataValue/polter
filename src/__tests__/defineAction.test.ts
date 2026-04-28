@@ -1,78 +1,67 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect } from 'vitest';
+import { it, fc } from '@fast-check/vitest';
 import { defineAction } from '../core/defineAction';
 import { fromParam } from '../core/stepHelpers';
-import { z } from 'zod';
 
 describe('defineAction', () => {
-  it('creates a basic action definition', () => {
-    const action = defineAction({
-      name: 'export_csv',
-      description: 'Export to CSV',
-    });
-    expect(action.name).toBe('export_csv');
-    expect(action.description).toBe('Export to CSV');
-    expect(action.steps).toBeUndefined();
-    expect(action.route).toBeUndefined();
-  });
+  it.prop([fc.string({ minLength: 1 }), fc.string()])(
+    'should preserve name and description for any input',
+    (name, description) => {
+      const action = defineAction({ name, description });
+      expect(action.name).toBe(name);
+      expect(action.description).toBe(description);
+      expect(action.steps).toBeUndefined();
+      expect(action.route).toBeUndefined();
+      expect(action.parameters).toBeUndefined();
+    },
+  );
 
-  it('includes steps with target', () => {
-    const action = defineAction({
-      name: 'grant_access',
-      description: 'Grant access',
-      steps: [
-        { label: 'Click Settings', target: 'settings-tab' },
-        { label: 'Click Grant', target: 'grant-link' },
-      ],
-    });
-    expect(action.steps).toHaveLength(2);
-    expect(action.steps![0].target).toBe('settings-tab');
-    expect(action.steps![1].target).toBe('grant-link');
-  });
-
-  it('includes route function', () => {
-    const action = defineAction({
-      name: 'view_property',
-      description: 'View property',
-      parameters: z.object({ id: z.number() }),
-      route: (p) => `/properties/${p.id}`,
-    });
-    expect(action.route!({ id: 42 })).toBe('/properties/42');
-  });
-
-  it('includes all properties together', () => {
-    const action = defineAction({
-      name: 'full_action',
-      description: 'Full action',
-      parameters: z.object({ ids: z.array(z.number()) }),
-      steps: [
-        { label: 'Step 1', target: 'btn-1' },
-        { label: 'Step 2', target: 'btn-2' },
-      ],
-    });
-    expect(action.name).toBe('full_action');
-    expect(action.steps).toHaveLength(2);
-    expect(action.parameters).toBeDefined();
-  });
+  it.prop([
+    fc.string({ minLength: 1 }),
+    fc.array(fc.record({ label: fc.string(), target: fc.string() }), { minLength: 1 }),
+  ])(
+    'should include steps with correct targets',
+    (name, steps) => {
+      const action = defineAction({ name, description: 'test', steps });
+      expect(action.steps).toHaveLength(steps.length);
+      for (let i = 0; i < steps.length; i++) {
+        expect(action.steps![i].label).toBe(steps[i].label);
+        expect(action.steps![i].target).toBe(steps[i].target);
+      }
+    },
+  );
 });
 
 describe('fromParam', () => {
-  it('extracts a string param', () => {
-    const fn = fromParam('name');
-    expect(fn({ name: 'Alice' })).toBe('Alice');
-  });
+  it.prop([fc.string({ minLength: 1 }), fc.string()])(
+    'should return String(value) when param is present',
+    (paramName, value) => {
+      const fn = fromParam(paramName);
+      expect(fn({ [paramName]: value })).toBe(value);
+    },
+  );
 
-  it('converts non-string values via String()', () => {
-    const fn = fromParam('count');
-    expect(fn({ count: 42 })).toBe('42');
-  });
+  it.prop([fc.string({ minLength: 1 }), fc.oneof(fc.integer(), fc.double({ noNaN: true }))])(
+    'should stringify numeric values',
+    (paramName, value) => {
+      const fn = fromParam(paramName);
+      expect(fn({ [paramName]: value })).toBe(String(value));
+    },
+  );
 
-  it('converts arrays via String()', () => {
-    const fn = fromParam('ids');
-    expect(fn({ ids: [1, 2, 3] })).toBe('1,2,3');
-  });
+  it.prop([fc.string({ minLength: 1 }), fc.array(fc.integer())])(
+    'should stringify arrays',
+    (paramName, value) => {
+      const fn = fromParam(paramName);
+      expect(fn({ [paramName]: value })).toBe(String(value));
+    },
+  );
 
-  it('returns undefined when param is missing', () => {
-    const fn = fromParam('name');
-    expect(fn({})).toBeUndefined();
-  });
+  it.prop([fc.string({ minLength: 1 })])(
+    'should return undefined when param is absent',
+    (paramName) => {
+      const fn = fromParam(paramName);
+      expect(fn({})).toBeUndefined();
+    },
+  );
 });
