@@ -2,7 +2,7 @@ export type ExecutionMode = 'guided' | 'instant';
 
 export type SkipPredicate = (params: Record<string, unknown>) => boolean;
 
-/** Shared fields describing an agent step's behavior — consumed by AgentStep props, useAgentAction config, and ExecutionTarget. */
+/** Describes a single step in an agent action — consumed by useAgentAction config and ExecutionTarget. */
 export interface StepDefinition {
   label: string;
   /**
