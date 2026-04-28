@@ -5,6 +5,8 @@ import type { AvailableAction, ExecutionResult, StepTrace, ToolSchema } from '..
 interface AgentDevToolsProps {
   /** Default open state. */
   defaultOpen?: boolean;
+  /** Offset from the bottom of the viewport (px). Raise to avoid overlapping a chat panel. */
+  bottomOffset?: number;
 }
 
 interface LogEntry {
@@ -42,7 +44,7 @@ function getSchemaFields(
   }));
 }
 
-export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
+export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDevToolsProps) {
   const { availableActions, execute, isExecuting, mode, schemas } = useAgentActions();
   const [open, setOpen] = useState(defaultOpen);
   const [log, setLog] = useState<LogEntry[]>([]);
@@ -120,7 +122,7 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
         onClick={() => setOpen(true)}
         style={{
           position: 'fixed',
-          bottom: 16,
+          bottom: 16 + bottomOffset,
           right: 16,
           zIndex: 99990,
           height: 36,
@@ -165,7 +167,7 @@ export function AgentDevTools({ defaultOpen = false }: AgentDevToolsProps) {
           position: 'fixed',
           top: 0,
           right: 0,
-          bottom: 0,
+          bottom: bottomOffset,
           zIndex: 99990,
           width: PANEL_WIDTH,
           display: 'flex',

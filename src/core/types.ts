@@ -159,6 +159,8 @@ export interface AgentActionContextValue {
   registerTarget: (id: string, entry: AgentTargetEntry) => void;
   unregisterTarget: (id: string) => void;
   execute: (actionName: string, params?: Record<string, unknown>) => Promise<ExecutionResult>;
+  /** Abort the currently running guided execution, cleaning up overlays and cursors. */
+  abortExecution: () => void;
   availableActions: AvailableAction[];
   schemas: ToolSchema[];
   isExecuting: boolean;
