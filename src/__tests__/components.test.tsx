@@ -578,6 +578,40 @@ describe('AgentStep skipIf', () => {
   });
 });
 
+describe('AgentStep value', () => {
+  it('reads the latest value closure after the step rerenders', async () => {
+    let setSuffix: (v: string) => void = () => {};
+
+    function Harness() {
+      const [suffix, setter] = React.useState('first');
+      setSuffix = setter;
+      return (
+        <AgentStep label="type it" value={(p) => `${p.name}-${suffix}`}>
+          <input data-testid="input" />
+        </AgentStep>
+      );
+    }
+
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={aAction}>
+          <Harness />
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    await act(() => ctx!.execute('a', { name: 'test' }));
+    expect((screen.getByTestId('input') as HTMLInputElement).value).toBe('test-first');
+
+    act(() => setSuffix('second'));
+
+    await act(() => ctx!.execute('a', { name: 'test' }));
+    expect((screen.getByTestId('input') as HTMLInputElement).value).toBe('test-second');
+  });
+});
+
 describe('AgentTarget', () => {
   it('throws when used outside provider', () => {
     expect(() =>

@@ -29,8 +29,17 @@ export function AgentStep({
   const skipIfRef = useRef(skipIf);
   skipIfRef.current = skipIf;
 
-  // Stable wrapper reading the latest `skipIf` prop, so inline closures don't
+  // Stable wrappers reading the latest prop, so inline closures don't
   // re-fire the registration effect (which would reorder stepsRef's Map).
+  const stableValueRef = useRef<StepDefinition['value'] | null>(null);
+  if (!stableValueRef.current) {
+    stableValueRef.current = (params) => {
+      const v = valueRef.current;
+      if (v === undefined) return undefined;
+      return typeof v === 'function' ? v(params) : v;
+    };
+  }
+
   const stableSkipIfRef = useRef<SkipPredicate | null>(null);
   if (!stableSkipIfRef.current) {
     stableSkipIfRef.current = (params) => skipIfRef.current?.(params) ?? false;
@@ -45,7 +54,7 @@ export function AgentStep({
       label,
       element,
       target,
-      value: valueRef.current,
+      value: stableValueRef.current!,
       scrollTo: scrollToRef.current,
       skipIf: stableSkipIfRef.current!,
     });
