@@ -9,8 +9,7 @@ interface AgentStepProps extends StepDefinition {
 export function AgentStep({
   label,
   children,
-  fromParam,
-  fromTarget,
+  target,
   setParam,
   setValue,
   onSetValue,
@@ -48,8 +47,7 @@ export function AgentStep({
     stepContext.registerStep(id, {
       label,
       element,
-      fromParam,
-      fromTarget,
+      target,
       setParam,
       setValue,
       onSetValue: onSetValueRef.current,
@@ -58,7 +56,7 @@ export function AgentStep({
       skipIf: stableSkipIfRef.current!,
     });
     return () => stepContext.unregisterStep(id);
-  }, [id, label, fromParam, fromTarget, setParam, setValue, defaultValue, stepContext]);
+  }, [id, label, target, setParam, setValue, defaultValue, stepContext]);
 
   if (!children) return null;
 

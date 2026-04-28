@@ -5,17 +5,19 @@ export type SkipPredicate = (params: Record<string, unknown>) => boolean;
 /** Shared fields describing an agent step's behavior — consumed by AgentStep props, useAgentAction config, and ExecutionTarget. */
 export interface StepDefinition {
   label: string;
-  /** Resolve element from AgentTarget registry by matching this param's value. Static string or function receiving params. */
-  fromParam?: string | ((params: Record<string, unknown>) => string);
-  /** Resolve element from AgentTarget registry by matching a named target. Static string or function receiving params. */
-  fromTarget?: string | ((params: Record<string, unknown>) => string);
+  /**
+   * Resolve element from the AgentTarget registry by matching `name`. Pass a
+   * string for static targets, or a function receiving params for per-row
+   * targets (e.g. `target: (p) => `edit:${p.property_id}``).
+   */
+  target?: string | ((params: Record<string, unknown>) => string);
   /** Simulate typing the value of this param into the element. */
   setParam?: string;
   /** Set a value programmatically via onSetValue callback. */
   setValue?: string;
   /** Callback for setValue — receives the param value and sets it on the component. */
   onSetValue?: (value: unknown) => void;
-  /** Fallback for params[fromParam/setParam/setValue] when the param is absent — lets a step target a fixed value without a matching param. */
+  /** Fallback for params[setParam/setValue] when the param is absent. */
   defaultValue?: string;
   /**
    * Scroll a virtualized list or viewport so the target element renders in DOM.
@@ -35,11 +37,10 @@ export interface ExecutionTarget extends StepDefinition {
 export interface TargetDefinition {
   /** The action name this target belongs to. Omit to make a shared target that any action can resolve. */
   action?: string;
-  /** The parameter key this target maps to (for fromParam resolution). */
-  param?: string;
-  /** The parameter value this target represents (for fromParam resolution). */
-  value?: string;
-  /** Named target key (for fromTarget resolution — static elements inside popovers/dropdowns). */
+  /**
+   * Identifier the agent step's `target` resolves to. For per-row targets,
+   * encode the row identity into the name (e.g. `name={`edit:${id}`}`).
+   */
   name?: string;
   /**
    * Scroll a virtualized list or viewport so this target's element renders in DOM.
@@ -84,9 +85,9 @@ export interface StepTrace {
   index: number;
   label: string;
   status: 'completed' | 'skipped' | 'failed';
-  targetType?: 'fromParam' | 'fromTarget' | 'static';
+  /** 'dynamic' = function target resolved per-execution; 'static' = constant string; 'element' = DOM-bound JSX child. */
+  targetType?: 'dynamic' | 'static' | 'element';
   targetName?: string;
-  targetValue?: string;
   targetFound: boolean;
   interactionType: 'click' | 'type' | 'setValue' | 'none';
   error?: string;
@@ -117,16 +118,8 @@ export interface ExecutorConfig {
   tooltipEnabled: boolean;
   cursorEnabled: boolean;
   signal?: AbortSignal;
-  /** Resolve an element from the AgentTarget registry. Used by fromParam steps. */
+  /** Resolve a named target from the AgentTarget registry. */
   resolveTarget?: (
-    actionName: string,
-    param: string,
-    value: string,
-    signal?: AbortSignal,
-    timeout?: number,
-  ) => Promise<HTMLElement | null>;
-  /** Resolve a named target from the AgentTarget registry. Used by fromTarget steps. */
-  resolveNamedTarget?: (
     actionName: string,
     name: string,
     signal?: AbortSignal,

@@ -25,7 +25,7 @@ export interface AgentActionConfig {
 /**
  * Hook-based action registration for actions that don't wrap a single element.
  * Use this for per-row actions where AgentTargets are on scattered elements
- * and the action resolves to them via fromParam/fromTarget.
+ * and the action resolves to them via the step's `target` field.
  *
  * Every action requires an `action` definition (from `defineAction`) and `steps`.
  *

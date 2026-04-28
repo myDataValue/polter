@@ -288,7 +288,6 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
                               {step.targetName && (
                                 <span style={{ color: '#64748b', marginLeft: 6, fontSize: 10 }}>
                                   {step.targetType}:{step.targetName}
-                                  {step.targetValue && step.targetValue !== step.targetName && ` = "${step.targetValue}"`}
                                 </span>
                               )}
                             </span>

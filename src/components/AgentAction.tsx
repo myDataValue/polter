@@ -64,9 +64,9 @@ export function AgentAction(props: AgentActionProps) {
     if (stepsRef.current.size > 0) {
       // Map preserves insertion order, which matches JSX order via React's
       // tree-order useEffect mounting. This lets you interleave element steps
-      // and lazy (fromParam/fromTarget) steps in any sequence.
+      // and lazy `target` steps in any sequence.
       return Array.from(stepsRef.current.values()).filter(
-        (s) => s.element || s.fromParam || s.fromTarget,
+        (s) => s.element || s.target,
       );
     }
 

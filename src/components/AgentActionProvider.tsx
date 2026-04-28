@@ -142,48 +142,6 @@ export function AgentActionProvider({
   const resolveTarget = useCallback(
     async (
       actionName: string,
-      param: string,
-      value: string,
-      signal?: AbortSignal,
-      timeout = 5000,
-    ): Promise<HTMLElement | null> => {
-      const normalizedValue = value.toLowerCase();
-      const pollInterval = 50;
-      const start = Date.now();
-      let seenDisabled = false;
-
-      // Poll until the target appears and is enabled.
-      // If a disabled match is found, the element is loading — poll indefinitely.
-      // If no match at all, give up after timeout.
-      while (seenDisabled || Date.now() - start < timeout) {
-        if (signal?.aborted) return null;
-
-        for (const entry of targetsRef.current.values()) {
-          if (
-            (!entry.action || entry.action === actionName) &&
-            entry.param === param &&
-            entry.value?.toLowerCase() === normalizedValue &&
-            entry.element.isConnected
-          ) {
-            if ((entry.element as HTMLButtonElement).disabled) {
-              seenDisabled = true;
-            } else {
-              return entry.element;
-            }
-          }
-        }
-
-        await new Promise((r) => setTimeout(r, pollInterval));
-      }
-
-      return null;
-    },
-    [],
-  );
-
-  const resolveNamedTarget = useCallback(
-    async (
-      actionName: string,
       name: string,
       signal?: AbortSignal,
       params?: Record<string, unknown>,
@@ -300,7 +258,6 @@ export function AgentActionProvider({
           signal: controller.signal,
           mountTimeout: 5000,
           resolveTarget,
-          resolveNamedTarget,
         };
 
         // Validate params against the Zod schema before executing.
@@ -395,7 +352,7 @@ export function AgentActionProvider({
         }
       }
     },
-    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, resolveNamedTarget, waitForActionMount, navigateToRoute],
+    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, waitForActionMount, navigateToRoute],
   );
 
   const availableActions = useMemo<AvailableAction[]>(
