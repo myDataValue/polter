@@ -305,7 +305,7 @@ const SUGGESTIONS: Suggestion[] = [
 ];
 
 function AgentPanel() {
-  const { execute, isExecuting } = useAgentActions();
+  const { execute, isExecuting, abortExecution } = useAgentActions();
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'system', text: 'AI assistant ready. Try a prompt below 👇' },
   ]);
@@ -355,17 +355,28 @@ function AgentPanel() {
       </div>
 
       <div className="suggestions">
-        <div className="suggestions-label">Try these</div>
-        {SUGGESTIONS.map((s) => (
+        {isExecuting ? (
           <button
-            key={s.action + JSON.stringify(s.params)}
-            className="suggestion"
-            disabled={isExecuting || isThinking}
-            onClick={() => runSuggestion(s)}
+            className="suggestion stop-btn"
+            onClick={() => abortExecution()}
           >
-            {s.user}
+            Stop execution
           </button>
-        ))}
+        ) : (
+          <>
+            <div className="suggestions-label">Try these</div>
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s.action + JSON.stringify(s.params)}
+                className="suggestion"
+                disabled={isThinking}
+                onClick={() => runSuggestion(s)}
+              >
+                {s.user}
+              </button>
+            ))}
+          </>
+        )}
       </div>
     </aside>
   );

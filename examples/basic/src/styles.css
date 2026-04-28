@@ -424,6 +424,17 @@ body {
   cursor: not-allowed;
 }
 
+.stop-btn {
+  border-color: #f87171;
+  color: #f87171;
+  text-align: center;
+}
+
+.stop-btn:hover:not(:disabled) {
+  border-color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+}
+
 /* Toast notifications */
 .toaster {
   position: fixed;
