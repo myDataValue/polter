@@ -4,8 +4,8 @@ A minimal example showing polter driving a fake CRM dashboard. Click a suggestio
 
 ## Try it instantly
 
-- **StackBlitz**: https://stackblitz.com/github/myDataValue/polter/tree/master/examples/basic
-- **CodeSandbox**: https://codesandbox.io/p/github/myDataValue/polter/master?import=true&workspace=examples/basic
+- **StackBlitz**: https://stackblitz.com/github/myDataValue/polter/tree/main/examples/basic
+- **CodeSandbox**: https://codesandbox.io/p/github/myDataValue/polter/main?import=true&workspace=examples/basic
 
 ## Run locally
 

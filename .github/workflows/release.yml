@@ -53,13 +53,19 @@ jobs:
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
+          node -e "
+            const pkg = require('./examples/basic/package.json');
+            pkg.dependencies['@mydatavalue/polter'] = '^$NEW_VERSION';
+            require('fs').writeFileSync('./examples/basic/package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
           echo "Bumped version to $NEW_VERSION"
 
       - name: Commit version bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
+          git add package.json examples/basic/package.json
           git commit -m "Release v$VERSION"
           git tag "v$VERSION"
           git push

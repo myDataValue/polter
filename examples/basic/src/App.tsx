@@ -3,6 +3,8 @@ import { z } from 'zod';
 import {
   AgentActionProvider,
   AgentTarget,
+  AgentDevTools,
+  defineAction,
   useAgentAction,
   useAgentActions,
 } from '@mydatavalue/polter';
@@ -78,6 +80,24 @@ const ALL_CUSTOMERS: Customer[] = [
 ];
 
 // ============================================================================
+// Action definitions
+// ============================================================================
+
+const findAndEmail = defineAction({
+  name: 'find_and_email',
+  description: 'Find a customer by name, open their record, and draft an email',
+  parameters: z.object({ name: z.string().describe('Full customer name') }),
+});
+
+const filterAndExport = defineAction({
+  name: 'filter_and_export',
+  description: 'Filter customers by status and export the result to CSV',
+  parameters: z.object({
+    status: z.enum(['all', 'active', 'trial', 'churned']).describe('Status to filter by'),
+  }),
+});
+
+// ============================================================================
 // Dashboard
 // ============================================================================
 
@@ -95,9 +115,7 @@ function Dashboard() {
 
   useAgentAction([
     {
-      name: 'find_and_email',
-      description: 'Find a customer by name, open their record, and draft an email',
-      parameters: z.object({ name: z.string().describe('Full customer name') }),
+      action: findAndEmail,
       steps: [
         { label: 'Type the name', setParam: 'name', fromTarget: 'search', skipIf: ({ name }) => selected?.name === name || search === name },
         { label: 'Open status filter', fromTarget: 'status-toggle', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' || dropdownOpen },
@@ -107,11 +125,7 @@ function Dashboard() {
       ],
     },
     {
-      name: 'filter_and_export',
-      description: 'Filter customers by status and export the result to CSV',
-      parameters: z.object({
-        status: z.enum(['all', 'active', 'trial', 'churned']).describe('Status to filter by'),
-      }),
+      action: filterAndExport,
       steps: [
         { label: 'Clear search', setParam: 'search', defaultValue: '', fromTarget: 'search', skipIf: () => search === '' },
         { label: 'Open status filter', fromTarget: 'status-toggle', skipIf: ({status}) => statusFilter === status || dropdownOpen },
@@ -130,6 +144,9 @@ function Dashboard() {
             {filtered.length} of {ALL_CUSTOMERS.length} customers
           </p>
         </div>
+        <a href="https://mydatavalue.github.io/polter/" className="back-link">
+          polter docs
+        </a>
       </div>
 
       <div className="toolbar">
@@ -384,6 +401,7 @@ export default function App() {
       </div>
       <ExecutionBadge />
       <Toaster />
+      <AgentDevTools />
     </AgentActionProvider>
   );
 }
