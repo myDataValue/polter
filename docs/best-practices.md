@@ -43,8 +43,8 @@ Then provide runtime behavior (steps) via `useAgentAction` or `<AgentAction>`:
 useAgentAction({
   action: exportCsv,
   steps: [
-    { label: 'Open menu', fromTarget: 'overflow-menu-btn' },
-    { label: 'Click Export', fromTarget: 'export-btn' },
+    { label: 'Open menu', target: 'overflow-menu-btn' },
+    { label: 'Click Export', target: 'export-btn' },
   ],
 });
 
@@ -64,10 +64,10 @@ The agent drives the UI by clicking through steps — the same way a human user 
 useAgentAction({
   action: editMarkup,
   steps: [
-    { label: 'Click edit', fromParam: 'property_id' },
-    { label: 'Set value', fromTarget: 'markup-input', setParam: 'markup' },
-    { label: 'Save', fromTarget: 'save-btn' },
-    { label: 'Confirm', fromTarget: 'confirm-btn' },
+    { label: 'Click edit', target: (p) => `edit:${p.property_id}` },
+    { label: 'Set value', target: 'markup-input', setParam: 'markup' },
+    { label: 'Save', target: 'save-btn' },
+    { label: 'Confirm', target: 'confirm-btn' },
   ],
 });
 ```
@@ -89,7 +89,7 @@ const pushRef = useRef<Promise<void>>();
 useAgentAction({
   action: pushChanges,
   steps: [
-    { label: 'Click Push', fromTarget: 'push-btn' },
+    { label: 'Click Push', target: 'push-btn' },
   ],
   waitFor: pushRef,
 });
@@ -106,8 +106,8 @@ export const grantAccess = defineAction({
   name: 'grant_access',
   description: 'Grant bot access',
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab' },
-    { label: 'Click Grant Access', fromTarget: 'grant-link' },
+    { label: 'Click Settings', target: 'settings-tab' },
+    { label: 'Click Grant Access', target: 'grant-link' },
   ],
 });
 ```
@@ -122,24 +122,27 @@ Splitting steps between `defineAction` (navigation) and component `<AgentStep>` 
 // Bad — navigation in defineAction, interaction in component (race condition)
 export const grantAccess = defineAction({
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab' },
-    { label: 'Click Grant', fromTarget: 'grant-link' },
+    { label: 'Click Settings', target: 'settings-tab' },
+    { label: 'Click Grant', target: 'grant-link' },
   ],
 });
 
 // Component on target page — steps may never execute
-<AgentAction action={grantAccess}>
-  <AgentStep label="Select all" fromTarget="select-all" />
-  <AgentStep label="Confirm"><ConfirmButton /></AgentStep>
-</AgentAction>
+useAgentAction({
+  action: grantAccess,
+  steps: [
+    { label: 'Select all', target: 'select-all' },
+    { label: 'Confirm', target: 'confirm-btn' },
+  ],
+});
 
 // Good — all steps in defineAction, component just has targets
 export const grantAccess = defineAction({
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab' },
-    { label: 'Click Grant', fromTarget: 'grant-link' },
-    { label: 'Select all', fromTarget: 'select-all' },
-    { label: 'Confirm', fromTarget: 'confirm-btn' },
+    { label: 'Click Settings', target: 'settings-tab' },
+    { label: 'Click Grant', target: 'grant-link' },
+    { label: 'Select all', target: 'select-all' },
+    { label: 'Confirm', target: 'confirm-btn' },
   ],
 });
 
@@ -174,13 +177,13 @@ checks whether its interaction is still needed to reach that state:
 useAgentAction({
   action: filterAndExport,
   steps: [
-    { label: 'Clear search', setParam: 'query', defaultValue: '', fromTarget: 'search',
+    { label: 'Clear search', setParam: 'query', defaultValue: '', target: 'search',
       skipIf: () => query === '' },
-    { label: 'Open filter', fromTarget: 'status-toggle',
+    { label: 'Open filter', target: 'status-toggle',
       skipIf: ({ status }) => statusFilter === status || dropdownOpen },
-    { label: 'Pick status', fromParam: 'status',
+    { label: 'Pick status', target: (p) => `status:${p.status}`,
       skipIf: ({ status }) => statusFilter === status },
-    { label: 'Click export', fromTarget: 'export-btn' },
+    { label: 'Click export', target: 'export-btn' },
   ],
 });
 ```
@@ -199,11 +202,11 @@ components mark the DOM elements the agent interacts with:
 // Action definition — lives in the component that owns the state
 useAgentAction({
   action: deleteItem,
-  steps: [{ label: 'Click Delete', fromParam: 'item_id' }],
+  steps: [{ label: 'Click Delete', target: (p) => `delete:${p.item_id}` }],
 });
 
 // DOM ownership — AgentTargets live where the elements are rendered
-<AgentTarget action="delete_item" param="item_id" value={String(id)}>
+<AgentTarget action="delete_item" name={`delete:${id}`}>
   <DeleteButton />
 </AgentTarget>
 ```
@@ -227,10 +230,10 @@ always see the latest component state:
 ```tsx
 steps: [
   // Skip if the correct filter is already applied or the dropdown is already open
-  { label: 'Open filter', fromTarget: 'filter-toggle',
+  { label: 'Open filter', target: 'filter-toggle',
     skipIf: ({ status }) => statusFilter === status || dropdownOpen },
   // Skip if already on the right status
-  { label: 'Pick status', fromParam: 'status',
+  { label: 'Pick status', target: (p) => `status:${p.status}`,
     skipIf: ({ status }) => statusFilter === status },
 ]
 ```
@@ -241,23 +244,23 @@ Common patterns:
 - **Already selected**: `skipIf: ({ id }) => selectedId === id`
 - **Combined**: `skipIf: ({ id }) => selectedId === id || query === name`
 
-## Use `defaultValue` for fixed targets
+## Use a static `target` for fixed names
 
-When a step needs to target a specific value that isn't an action parameter, use
-`defaultValue`:
+When a step always points at the same element regardless of params, pass a
+plain string:
 
 ```tsx
 // "Reset to all" always targets the 'all' option — no param needed from the agent
-{ label: 'Reset to all', fromParam: 'status', defaultValue: 'all',
+{ label: 'Reset to all', target: 'status:all',
   skipIf: () => statusFilter === 'all' }
 ```
 
-`defaultValue` also works as a fallback for `setParam` — useful for clearing
-inputs:
+`defaultValue` is a fallback for `setParam` when the param is absent — useful
+for clearing inputs:
 
 ```tsx
 // Clear search — types '' into the search input
-{ label: 'Clear search', setParam: 'query', defaultValue: '', fromTarget: 'search',
+{ label: 'Clear search', setParam: 'query', defaultValue: '', target: 'search',
   skipIf: () => query === '' }
 ```
 
@@ -267,27 +270,17 @@ For the simplest case — one visible element, no parameters, no conditional ste
 — wrapping with `<AgentAction>` is the shortest path:
 
 ```tsx
-<AgentAction name="export_data" description="Export the current view to CSV">
+<AgentAction action={exportData}>
   <ExportButton />
 </AgentAction>
 ```
 
-`<AgentStep>` is available as JSX shorthand when each step wraps its own visible
-DOM element:
-
-```tsx
-<AgentAction name="submit_form" description="Submit the form">
-  <AgentStep label="Open the form">
-    <FormTrigger />
-  </AgentStep>
-  <AgentStep label="Click submit">
-    <SubmitButton />
-  </AgentStep>
-</AgentAction>
-```
-
-For anything involving parameters, `skipIf`, or targets resolved at runtime
-(`fromParam`/`fromTarget`), use `useAgentAction` instead.
+For anything involving multiple steps, parameters, `skipIf`, or targets
+resolved at runtime, use `useAgentAction` with `steps[]` — the inline
+`<AgentStep>` JSX form exists but should be avoided. `steps[]` keeps the
+action's full shape in one place, side-steps mount-order races between
+`<AgentStep>` siblings, and matches how cross-page steps in `defineAction`
+already work.
 
 ## Wrap conditionally rendered elements with `<AgentAction>` on the outside
 
@@ -317,11 +310,12 @@ When N rows each have their own button (sync, edit, navigate), you can't wrap ea
 // Hook registers the action once
 useAgentAction({
   action: syncProperty,
-  steps: [{ label: 'Click Sync', fromParam: 'property_id' }],
+  steps: [{ label: 'Click Sync', target: (p) => `sync:${p.property_id}` }],
 });
 
-// AgentTarget on each row's button (in a column renderer)
-<AgentTarget action="sync_property" param="property_id" value={String(propertyId)}>
+// AgentTarget on each row's button (in a column renderer) — encode the
+// row identity into the name so the step's target function can find it.
+<AgentTarget action="sync_property" name={`sync:${propertyId}`}>
   <SyncButton />
 </AgentTarget>
 ```
@@ -411,19 +405,20 @@ useAgentAction({
   action: editMarkup, // parameters: { property_ids: number[], markup: number }
   steps: [
     // 1. Type IDs into the search box — String([1,2,3]) produces "1,2,3"
-    { label: 'Filter to target properties', fromTarget: 'search-input',
+    { label: 'Filter to target properties', target: 'search-input',
       setParam: 'property_ids',
       skipIf: (p) => (p.property_ids as number[]).length <= 1 },
 
     // 2. Select all filtered rows
-    { label: 'Select all filtered', fromTarget: 'select-all-checkbox',
+    { label: 'Select all filtered', target: 'select-all-checkbox',
       skipIf: (p) => (p.property_ids as number[]).length <= 1 },
 
-    // 3. Click edit on the first property
-    { label: 'Click edit', fromTarget: (p) => `edit-${(p.property_ids as number[])[0]}` },
+    // 3. Click edit on the first property — `target` as a function builds the
+    //    AgentTarget name from params.
+    { label: 'Click edit', target: (p) => `edit:${(p.property_ids as number[])[0]}` },
 
     // 4. Type the value — save callback sees the selection and applies to all
-    { label: 'Set value', fromTarget: 'markup-input', setParam: 'markup' },
+    { label: 'Set value', target: 'markup-input', setParam: 'markup' },
   ],
 });
 ```
@@ -431,6 +426,9 @@ useAgentAction({
 Key ingredients:
 - **Shared targets** — `search-input` and `select-all-checkbox` have no `action`
   prop, so any action can resolve them
+- **`target` as a function** — for per-row targets, the step builds the name
+  from params (e.g. `(p) => `edit:${p.property_ids[0]}``); the matching
+  `<AgentTarget name={`edit:${id}`}>` registers each row
 - **`skipIf`** — single-ID calls skip the search/select steps and edit directly
 - **`setParam` on arrays** — `String([id1, id2])` produces `"id1,id2"`, which the
   search box accepts as a comma-separated filter
@@ -463,12 +461,12 @@ omit the `action` prop to make a shared target:
 // Both actions find the same trigger
 useAgentAction([
   { action: exportCsv, steps: [
-    { label: 'Open menu', fromTarget: 'overflow-menu-btn' },
-    { label: 'Click Export', fromTarget: 'export-btn' },
+    { label: 'Open menu', target: 'overflow-menu-btn' },
+    { label: 'Click Export', target: 'export-btn' },
   ]},
   { action: archiveSelected, steps: [
-    { label: 'Open menu', fromTarget: 'overflow-menu-btn' },
-    { label: 'Click Archive', fromTarget: 'archive-btn' },
+    { label: 'Open menu', target: 'overflow-menu-btn' },
+    { label: 'Click Archive', target: 'archive-btn' },
   ]},
 ]);
 ```
@@ -477,16 +475,26 @@ useAgentAction([
 
 When an action involves a modal or dialog, each interaction is a step. Use `setParam` on the step to visually type values into inputs. If the dialog has modes (e.g. preset vs custom), the agent clicks the mode selector as a step — don't set state programmatically.
 
+Use `useAgentAction` with `steps[]` for these flows — keeping the steps as
+data (rather than scattered `<AgentStep>` JSX elements) makes the action's
+shape obvious in one place and avoids mount-order races between siblings.
+
 ```tsx
 // 4-step flow: open modal → select mode → type value → confirm
-<AgentAction action={runDiscount}>
-  <AgentStep label="Open settings">
-    <OpenButton />
-  </AgentStep>
-  <AgentStep label="Select custom mode" fromTarget="custom-mode-radio" />
-  <AgentStep label="Set discount" fromTarget="discount-input" setParam="pct" />
-  <AgentStep label="Confirm" fromTarget="done-btn" />
-</AgentAction>
+useAgentAction({
+  action: runDiscount,
+  steps: [
+    { label: 'Open settings', target: 'open-settings-btn' },
+    { label: 'Select custom mode', target: 'custom-mode-radio' },
+    { label: 'Set discount', target: 'discount-input', setParam: 'pct' },
+    { label: 'Confirm', target: 'done-btn' },
+  ],
+});
+
+// Trigger button — just a target, no <AgentStep> needed
+<AgentTarget name="open-settings-btn">
+  <OpenButton />
+</AgentTarget>
 
 // Child component (dialog) — targets wrap interactive elements
 function SettingsDialog({ onSave }) {
@@ -519,15 +527,15 @@ Polter clicks every step in sequence. If your action has only one step wrapping 
 // Bad — single step, dropdown opens but nothing is selected
 useAgentAction({
   action: filterAction,
-  steps: [{ label: 'Open filter', fromTarget: 'filter-trigger' }],
+  steps: [{ label: 'Open filter', target: 'filter-trigger' }],
 });
 
 // Good — two steps: click to open, then select option
 useAgentAction({
   action: filterAction,
   steps: [
-    { label: 'Open filter', fromTarget: 'filter-trigger' },
-    { label: 'Select option', fromParam: 'status' },
+    { label: 'Open filter', target: 'filter-trigger' },
+    { label: 'Select option', target: (p) => `status:${p.status}` },
   ],
 });
 ```
@@ -581,7 +589,7 @@ satisfied.
 
 ```tsx
 steps: [
-  { label: 'Open dropdown', fromTarget: 'toggle',
+  { label: 'Open dropdown', target: 'toggle',
     skipIf: ({ status }) => statusFilter === status || dropdownOpen },
 ]
 ```

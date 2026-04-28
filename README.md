@@ -109,11 +109,11 @@ const filterAndExport = defineAction({
 useAgentAction({
   action: filterAndExport,
   steps: [
-    { label: 'Open filter', fromTarget: 'status-toggle',
+    { label: 'Open filter', target: 'status-toggle',
       skipIf: ({ status }) => statusFilter === status || dropdownOpen },
-    { label: 'Pick status', fromParam: 'status',
+    { label: 'Pick status', target: (p) => `status:${p.status}`,
       skipIf: ({ status }) => statusFilter === status },
-    { label: 'Click export', fromTarget: 'export-btn' },
+    { label: 'Click export', target: 'export-btn' },
   ],
 });
 ```
@@ -237,8 +237,8 @@ export const grantAccess = defineAction({
   name: 'grant_access',
   description: 'Grant bot access to properties',
   steps: [
-    { label: 'Click Settings', fromTarget: 'settings-tab' },
-    { label: 'Click Grant Access', fromTarget: 'grant-link' },
+    { label: 'Click Settings', target: 'settings-tab' },
+    { label: 'Click Grant Access', target: 'grant-link' },
   ],
 });
 ```
