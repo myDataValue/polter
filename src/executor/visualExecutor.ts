@@ -483,17 +483,16 @@ export async function executeAction(
 
       // Interact based on step type
       let interactionType: StepTrace['interactionType'] = 'click';
-      if (step.setParam) {
+      const resolvedValue = step.value !== undefined
+        ? (typeof step.value === 'function' ? step.value(params) : step.value)
+        : undefined;
+
+      if (resolvedValue !== undefined) {
         interactionType = 'type';
         const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
           ? element
           : element.querySelector('input, textarea') ?? element;
-        const value = String(params[step.setParam] ?? step.defaultValue ?? '');
-        await fx.type(inputEl as HTMLElement, value);
-      } else if (step.setValue && step.onSetValue) {
-        interactionType = 'setValue';
-        const value = params[step.setValue] ?? step.defaultValue;
-        step.onSetValue(value);
+        await fx.type(inputEl as HTMLElement, resolvedValue);
       } else {
         fx.click(element);
       }

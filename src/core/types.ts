@@ -11,14 +11,16 @@ export interface StepDefinition {
    * targets (e.g. `target: (p) => `edit:${p.property_id}``).
    */
   target?: string | ((params: Record<string, unknown>) => string);
-  /** Simulate typing the value of this param into the element. */
-  setParam?: string;
-  /** Set a value programmatically via onSetValue callback. */
-  setValue?: string;
-  /** Callback for setValue — receives the param value and sets it on the component. */
-  onSetValue?: (value: unknown) => void;
-  /** Fallback for params[setParam/setValue] when the param is absent. */
-  defaultValue?: string;
+  /**
+   * Value to type into the target element. When present, the executor types
+   * into the resolved element instead of clicking it.
+   *
+   * - `string` — literal value (e.g. `value: ''` to clear a search box).
+   * - `(params) => string | undefined` — resolved at execution time from
+   *   action params. Return `undefined` to skip typing and fall through to
+   *   a click.
+   */
+  value?: string | ((params: Record<string, unknown>) => string | undefined);
   /**
    * Scroll a virtualized list or viewport so the target element renders in DOM.
    * This is the ONLY legitimate use — if you're tempted to set state, call a
@@ -89,7 +91,7 @@ export interface StepTrace {
   targetType?: 'dynamic' | 'static' | 'element';
   targetName?: string;
   targetFound: boolean;
-  interactionType: 'click' | 'type' | 'setValue' | 'none';
+  interactionType: 'click' | 'type' | 'none';
   error?: string;
   durationMs: number;
 }

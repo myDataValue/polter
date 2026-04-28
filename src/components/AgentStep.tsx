@@ -10,11 +10,8 @@ export function AgentStep({
   label,
   children,
   target,
-  setParam,
-  setValue,
-  onSetValue,
+  value,
   scrollTo,
-  defaultValue,
   skipIf,
 }: AgentStepProps) {
   const id = useId();
@@ -25,8 +22,6 @@ export function AgentStep({
     throw new Error('AgentStep must be used within an AgentAction');
   }
 
-  const onSetValueRef = useRef(onSetValue);
-  onSetValueRef.current = onSetValue;
   const scrollToRef = useRef(scrollTo);
   scrollToRef.current = scrollTo;
   const skipIfRef = useRef(skipIf);
@@ -48,15 +43,12 @@ export function AgentStep({
       label,
       element,
       target,
-      setParam,
-      setValue,
-      onSetValue: onSetValueRef.current,
-      defaultValue,
+      value,
       scrollTo: scrollToRef.current,
       skipIf: stableSkipIfRef.current!,
     });
     return () => stepContext.unregisterStep(id);
-  }, [id, label, target, setParam, setValue, defaultValue, stepContext]);
+  }, [id, label, target, value, stepContext]);
 
   if (!children) return null;
 

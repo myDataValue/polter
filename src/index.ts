@@ -14,6 +14,9 @@ export { useAgentCommandRouter } from './hooks/useAgentCommandRouter';
 // Action definitions
 export { defineAction } from './core/defineAction';
 
+// Step helpers
+export { fromParam } from './core/stepHelpers';
+
 // Schema utilities
 export { zodToJsonSchema, generateToolSchemas } from './core/schemaGenerator';
 
