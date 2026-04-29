@@ -16,7 +16,6 @@ export const AgentActionContext = createContext<AgentActionContextValue | null>(
 function definitionToRegisteredAction({ waitFor: _, ...def }: ActionDefinition<any>): RegisteredAction {
   return {
     ...def,
-    disabled: false,
     resolveSteps: () => def.steps ?? [],
   };
 }
@@ -98,7 +97,6 @@ export function AgentActionProvider({
     if (
       !existing ||
       existing.description !== action.description ||
-      existing.disabled !== action.disabled ||
       existing.disabledReason !== action.disabledReason
     ) {
       setVersion((v) => v + 1);
@@ -221,11 +219,11 @@ export function AgentActionProvider({
       if (!action) {
         return { success: false, actionName, error: `Action "${actionName}" not found`, trace: [], durationMs: performance.now() - start };
       }
-      if (action.disabled) {
+      if (action.disabledReason) {
         return {
           success: false,
           actionName,
-          error: action.disabledReason || 'Action is disabled',
+          error: action.disabledReason,
           trace: [],
           durationMs: performance.now() - start,
         };
@@ -276,11 +274,11 @@ export function AgentActionProvider({
 
         // Re-check disabled after navigation — the mounted version may have
         // dynamic disabled state that the schema-only registry version didn't.
-        if (action.disabled) {
+        if (action.disabledReason) {
           const result: ExecutionResult = {
             success: false,
             actionName,
-            error: action.disabledReason || 'Action is disabled',
+            error: action.disabledReason,
             trace: [],
             durationMs: performance.now() - start,
           };
@@ -297,11 +295,11 @@ export function AgentActionProvider({
           const upgraded = await waitForActionMount(actionName, controller.signal, 5000);
           if (upgraded && upgraded !== registryRef.current.get(actionName)) {
             // Re-check disabled — the mounted version may have dynamic state.
-            if (upgraded.disabled) {
+            if (upgraded.disabledReason) {
               result = {
                 success: false,
                 actionName,
-                error: upgraded.disabledReason || 'Action is disabled',
+                error: upgraded.disabledReason,
                 trace: result.trace,
                 durationMs: performance.now() - start,
               };
@@ -348,7 +346,6 @@ export function AgentActionProvider({
       Array.from(actionsRef.current.values()).map((a) => ({
         name: a.name,
         description: a.description,
-        disabled: a.disabled,
         disabledReason: a.disabledReason,
         hasParameters: !!a.parameters,
       })),

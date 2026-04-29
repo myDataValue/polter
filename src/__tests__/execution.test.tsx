@@ -284,7 +284,7 @@ describe('error handling', () => {
         let ctx: ReturnType<typeof useAgentActions> | null = null;
         render(
           <AgentActionProvider mode="instant">
-            <AgentAction action={action} disabled disabledReason={reason}>
+            <AgentAction action={action} disabledReason={reason}>
               <button>Go</button>
             </AgentAction>
             <TestConsumer onContext={(c) => (ctx = c)} />

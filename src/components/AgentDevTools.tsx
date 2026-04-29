@@ -338,11 +338,11 @@ function ActionRow({
       style={{
         padding: '10px 20px',
         borderBottom: '1px solid #1e293b',
-        opacity: action.disabled ? 0.5 : 1,
+        opacity: action.disabledReason ? 0.5 : 1,
         cursor: 'pointer',
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && expanded && !action.disabled && !isExecuting) {
+        if (e.key === 'Enter' && expanded && !action.disabledReason && !isExecuting) {
           e.preventDefault();
           onRun();
         }
@@ -367,7 +367,7 @@ function ActionRow({
                 {badge}
               </span>
             )}
-            {action.disabled && (
+            {action.disabledReason && (
               <span
                 style={{
                   fontSize: 9,
@@ -383,7 +383,7 @@ function ActionRow({
             )}
           </div>
           <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 2 }}>
-            {action.disabled && action.disabledReason ? action.disabledReason : action.description}
+            {action.disabledReason ?? action.description}
           </div>
         </div>
         <button
@@ -391,15 +391,15 @@ function ActionRow({
             e.stopPropagation();
             onRun();
           }}
-          disabled={action.disabled || isExecuting}
+          disabled={!!action.disabledReason || isExecuting}
           style={{
             padding: '5px 14px',
             borderRadius: 6,
             border: 'none',
             fontSize: 12,
             fontWeight: 600,
-            cursor: action.disabled ? 'not-allowed' : 'pointer',
-            background: action.disabled ? '#334155' : '#3b82f6',
+            cursor: action.disabledReason ? 'not-allowed' : 'pointer',
+            background: action.disabledReason ? '#334155' : '#3b82f6',
             color: 'white',
             flexShrink: 0,
           }}

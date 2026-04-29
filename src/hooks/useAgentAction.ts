@@ -27,7 +27,6 @@ export function useAgentAction(...configs: ActionDefinition<any>[]): void {
     for (const config of configs) {
       registerAction({
         ...config,
-        disabled: config.disabled ?? false,
         waitFor: config.waitFor ? () => resolveWaitFor(config.name) : undefined,
         resolveSteps: () => getSteps(config.name),
       });

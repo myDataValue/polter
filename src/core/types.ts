@@ -11,7 +11,7 @@ export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<s
   readonly route?: (params: z.infer<TSchema>) => string;
   /** Steps the agent walks through to drive the UI. */
   readonly steps?: StepDefinition<z.infer<TSchema>>[];
-  readonly disabled?: boolean;
+  /** When set, the action is disabled and this string is the reason. */
   readonly disabledReason?: string;
   /**
    * Waited on after all steps complete. Holds the action open until async work
@@ -71,7 +71,6 @@ export interface AgentTargetEntry extends TargetDefinition {
 }
 
 export interface RegisteredAction<TSchema extends z.ZodType = any> extends ActionDefinition<TSchema> {
-  readonly disabled: boolean;
   /** Returns the current steps with fresh closures (via useEffectEvent). */
   resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
   /** Resolved waitFor — always a function. */
@@ -108,7 +107,6 @@ export interface ExecutionResult {
 export interface AvailableAction {
   name: string;
   description: string;
-  disabled: boolean;
   disabledReason?: string;
   hasParameters: boolean;
 }

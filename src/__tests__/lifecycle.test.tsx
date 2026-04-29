@@ -131,14 +131,13 @@ describe('AgentAction registration', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider>
-        <AgentAction action={action} disabled disabledReason="Not ready">
+        <AgentAction action={action} disabledReason="Not ready">
           <button>Go</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
     expect(ctx!.availableActions).toHaveLength(1);
-    expect(ctx!.availableActions[0].disabled).toBe(true);
     expect(ctx!.availableActions[0].disabledReason).toBe('Not ready');
     expect(ctx!.schemas).toHaveLength(0);
   });

@@ -128,12 +128,12 @@ describe('zodToJsonSchema', () => {
 const actionArb = fc.record({
   name: fc.string({ minLength: 1 }),
   description: fc.string(),
-  disabled: fc.boolean(),
+  disabledReason: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
 }).map(
-  ({ name, description, disabled }): RegisteredAction => ({
+  ({ name, description, disabledReason }): RegisteredAction => ({
     name,
     description,
-    disabled,
+    disabledReason,
     resolveSteps: () => [],
   }),
 );
@@ -143,7 +143,7 @@ describe('generateToolSchemas', () => {
     'should include exactly the enabled actions',
     (actions) => {
       const schemas = generateToolSchemas(actions);
-      const enabledNames = actions.filter((a) => !a.disabled).map((a) => a.name);
+      const enabledNames = actions.filter((a) => !a.disabledReason).map((a) => a.name);
       const schemaNames = schemas.map((s) => s.name);
       expect(schemaNames.sort()).toEqual(enabledNames.sort());
     },
@@ -153,14 +153,14 @@ describe('generateToolSchemas', () => {
     'should never include disabled action names',
     (actions) => {
       const schemas = generateToolSchemas(actions);
-      const disabledNames = new Set(actions.filter((a) => a.disabled).map((a) => a.name));
+      const disabledNames = new Set(actions.filter((a) => a.disabledReason).map((a) => a.name));
       for (const schema of schemas) {
         expect(disabledNames.has(schema.name)).toBe(false);
       }
     },
   );
 
-  it.prop([actionArb.filter((a) => !a.disabled)])(
+  it.prop([actionArb.filter((a) => !a.disabledReason)])(
     'should produce a parameters object for actions without Zod schema',
     (action) => {
       const [schema] = generateToolSchemas([action]);

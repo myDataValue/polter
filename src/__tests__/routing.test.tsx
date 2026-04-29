@@ -69,7 +69,7 @@ describe('useAgentCommandRouter', () => {
 
     render(
       <AgentActionProvider mode="instant">
-        <AgentAction action={lockedAction} disabled disabledReason="Not ready">
+        <AgentAction action={lockedAction} disabledReason="Not ready">
           <button>Locked</button>
         </AgentAction>
         <RouterConsumer fallback={fallback} onRouter={(r) => (router = r)} />
