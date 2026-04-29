@@ -70,10 +70,11 @@ export interface AgentTargetEntry extends TargetDefinition {
   element: HTMLElement;
 }
 
-export interface RegisteredAction<TSchema extends z.ZodType = any> extends ActionDefinition<TSchema> {
+export interface RegisteredAction<TSchema extends z.ZodType = any>
+  extends Pick<ActionDefinition<TSchema>, 'name' | 'description' | 'parameters' | 'route' | 'disabledReason'> {
   /** Returns the current steps with fresh closures (via useEffectEvent). */
-  resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
-  /** Resolved waitFor — always a function. */
+  readonly resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
+  /** Resolved waitFor — always a function (ref form is resolved at registration). */
   readonly waitFor?: () => void | Promise<void>;
 }
 
