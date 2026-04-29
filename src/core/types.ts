@@ -58,7 +58,7 @@ export interface TargetDefinition {
    * Identifier the agent step's `target` resolves to. Encode action scope
    * and/or row identity into the name (e.g. `name={`edit_markup:${id}`}`).
    */
-  name?: string;
+  name: string;
   /**
    * Scroll a virtualized list or viewport so this target's element renders in DOM.
    * Only for making targets reachable — not for state changes or business logic.
