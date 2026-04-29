@@ -62,8 +62,6 @@ export interface RegisteredAction<TSchema extends z.ZodType = any> extends Actio
    * triggered by a step click finishes.
    */
   waitFor?: () => void | Promise<void>;
-  /** True when registered by a component (vs schema-only from registry). */
-  componentBacked?: boolean;
 }
 
 export interface ToolSchema {

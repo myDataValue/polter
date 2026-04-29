@@ -85,10 +85,9 @@ export function AgentActionProvider({
       ? { ...incoming, route: registryAction.route }
       : incoming;
 
-    // Dev-mode warning: action registered by component but not in registry
-    if (devWarnings && !registryAction && action.componentBacked) {
+    if (devWarnings && !registryAction) {
       console.warn(
-        `[polter] Action "${action.name}" is registered by a component but missing from the registry. ` +
+        `[polter] Action "${action.name}" is registered but missing from the registry. ` +
         `Add a defineAction() export to an actions.ts file so it appears in the tool schema before mount.`,
       );
     }
@@ -195,7 +194,7 @@ export function AgentActionProvider({
       while (Date.now() - start < maxWait) {
         if (signal?.aborted) return null;
         const current = actionsRef.current.get(name);
-        if (current && (current.componentBacked || current.resolveSteps().length > 0)) {
+        if (current && current !== registryRef.current.get(name)) {
           return current;
         }
         await new Promise((r) => setTimeout(r, pollInterval));
@@ -295,11 +294,12 @@ export function AgentActionProvider({
 
         let result = await executeAction(action, params ?? {}, executorConfig);
 
-        // After defineAction steps complete (e.g. navigation), the component may
+        // After registry steps complete (e.g. navigation), the component may
         // have mounted and provided its own steps. If so, continue with those.
-        if (result.success && !action.componentBacked) {
+        const isRegistryOnly = action === registryRef.current.get(actionName);
+        if (result.success && isRegistryOnly) {
           const upgraded = await waitForActionMount(actionName, controller.signal, 5000);
-          if (upgraded && upgraded.componentBacked) {
+          if (upgraded && upgraded !== registryRef.current.get(actionName)) {
             // Re-check disabled — the mounted version may have dynamic state.
             if (upgraded.disabled) {
               result = {

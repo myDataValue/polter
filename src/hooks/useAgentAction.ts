@@ -45,7 +45,6 @@ export function useAgentAction(...configs: AgentActionConfig<any>[]): void {
         ...config.action,
         disabled: config.disabled ?? false,
         disabledReason: config.disabledReason,
-        componentBacked: true,
         waitFor: config.waitFor ? () => resolveWaitFor(config.action.name) : undefined,
         resolveSteps: () => getSteps(config.action.name),
       });
