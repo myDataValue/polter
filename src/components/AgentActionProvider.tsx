@@ -85,7 +85,7 @@ export function AgentActionProvider({
       ? { ...incoming, route: registryAction.route }
       : incoming;
 
-    if (devWarnings && !registryAction) {
+    if (devWarnings && registryRef.current.size > 0 && !registryAction) {
       console.warn(
         `[polter] Action "${action.name}" is registered but missing from the registry. ` +
         `Add a defineAction() export to an actions.ts file so it appears in the tool schema before mount.`,
