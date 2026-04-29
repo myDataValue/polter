@@ -416,9 +416,7 @@ export async function executeAction(
       activeStep = { index: i, step, start: stepStart };
 
       const resolvedTarget = typeof step.target === 'function' ? step.target(params) : step.target;
-      const targetType: StepTrace['targetType'] = step.target
-        ? (typeof step.target === 'function' ? 'dynamic' : 'static')
-        : 'element';
+      const targetType: StepTrace['targetType'] = typeof step.target === 'function' ? 'dynamic' : 'static';
       const targetName = resolvedTarget;
 
       const element = await resolveStepElement(step, action.name, params, config);
@@ -511,7 +509,7 @@ export async function executeAction(
         index,
         label: s.label,
         status: 'failed',
-        targetType: s.target ? (typeof s.target === 'function' ? 'dynamic' : 'static') : 'element',
+        targetType: typeof s.target === 'function' ? 'dynamic' : 'static',
         targetName: resolved,
         targetFound: false,
         interactionType: 'none',

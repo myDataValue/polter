@@ -74,8 +74,8 @@ export interface StepTrace {
   index: number;
   label: string;
   status: 'completed' | 'skipped' | 'failed';
-  /** 'dynamic' = function target resolved per-execution; 'static' = constant string; 'element' = DOM-bound JSX child. */
-  targetType?: 'dynamic' | 'static' | 'element';
+  /** 'dynamic' = function target resolved per-execution; 'static' = constant string. */
+  targetType?: 'dynamic' | 'static';
   targetName?: string;
   targetFound: boolean;
   interactionType: 'click' | 'type' | 'none';
