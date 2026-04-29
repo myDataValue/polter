@@ -267,7 +267,7 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
                       </span>
                     </div>
                     {entry.params && <pre style={logParamsStyle}>{JSON.stringify(entry.params, null, 2)}</pre>}
-                    {entry.result && !entry.result.success && (
+                    {entry.result?.error && (
                       <div style={{ marginTop: 4, fontSize: 12, color: '#f87171' }}>{entry.result.error}</div>
                     )}
                     {entry.result?.trace && entry.result.trace.length > 0 && (
@@ -475,7 +475,7 @@ function ActionRow({
 
 
 function StatusDot({ result }: { result?: ExecutionResult }) {
-  const color = !result ? '#fbbf24' : result.success ? '#4ade80' : '#f87171';
+  const color = !result ? '#fbbf24' : result.error ? '#f87171' : '#4ade80';
   return (
     <span
       style={{

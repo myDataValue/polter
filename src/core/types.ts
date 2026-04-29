@@ -111,8 +111,8 @@ export type StepTrace =
     });
 
 export interface ExecutionResult {
-  readonly success: boolean;
   readonly actionName: string;
+  /** Present when execution failed — absence means success. */
   readonly error?: string;
   readonly trace: readonly StepTrace[];
   readonly durationMs: number;

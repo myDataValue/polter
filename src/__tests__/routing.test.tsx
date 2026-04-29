@@ -80,7 +80,7 @@ describe('useAgentCommandRouter', () => {
     await act(async () => {
       result = await router!({ action: 'locked' });
     });
-    expect(result).toMatchObject({ success: false, actionName: 'locked', error: 'Not ready' });
+    expect(result).toMatchObject({ actionName: 'locked', error: 'Not ready' });
     expect(fallback).not.toHaveBeenCalled();
   });
 

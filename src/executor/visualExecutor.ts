@@ -384,7 +384,7 @@ export async function executeAction(
     if (action.waitFor) {
       await action.waitFor();
     }
-    return { success: true, actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
+    return { actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
   }
 
   const fx = config.mode === 'instant'
@@ -435,7 +435,7 @@ export async function executeAction(
             error: reason,
             durationMs: performance.now() - stepStart,
           });
-          return { success: false, actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
+          return { actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
         }
         stepTraces.push({
           index: i,
@@ -493,7 +493,7 @@ export async function executeAction(
       await action.waitFor();
     }
 
-    return { success: true, actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
+    return { actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
   } catch (err) {
     fx.cleanup();
 
@@ -518,6 +518,6 @@ export async function executeAction(
       });
     }
 
-    return { success: false, actionName: action.name, error: errorMsg, trace: stepTraces, durationMs: performance.now() - executionStart };
+    return { actionName: action.name, error: errorMsg, trace: stepTraces, durationMs: performance.now() - executionStart };
   }
 }

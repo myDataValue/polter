@@ -217,11 +217,10 @@ export function AgentActionProvider({
 
       let action = actionsRef.current.get(actionName);
       if (!action) {
-        return { success: false, actionName, error: `Action "${actionName}" not found`, trace: [], durationMs: performance.now() - start };
+        return { actionName, error: `Action "${actionName}" not found`, trace: [], durationMs: performance.now() - start };
       }
       if (action.disabledReason) {
         return {
-          success: false,
           actionName,
           error: action.disabledReason,
           trace: [],
@@ -256,7 +255,7 @@ export function AgentActionProvider({
             const error = missing.length > 0
               ? `Required parameters missing: ${missing.join(', ')}`
               : validation.error.issues.map((i: any) => i.message).join('; ');
-            return { success: false, actionName, error, trace: [], durationMs: performance.now() - start };
+            return { actionName, error, trace: [], durationMs: performance.now() - start };
           }
         }
 
@@ -276,8 +275,7 @@ export function AgentActionProvider({
         // dynamic disabled state that the schema-only registry version didn't.
         if (action.disabledReason) {
           const result: ExecutionResult = {
-            success: false,
-            actionName,
+              actionName,
             error: action.disabledReason,
             trace: [],
             durationMs: performance.now() - start,
@@ -291,14 +289,13 @@ export function AgentActionProvider({
         // After registry steps complete (e.g. navigation), the component may
         // have mounted and provided its own steps. If so, continue with those.
         const isRegistryOnly = action === registryRef.current.get(actionName);
-        if (result.success && isRegistryOnly) {
+        if (!result.error && isRegistryOnly) {
           const upgraded = await waitForActionMount(actionName, controller.signal, 5000);
           if (upgraded && upgraded !== registryRef.current.get(actionName)) {
             // Re-check disabled — the mounted version may have dynamic state.
             if (upgraded.disabledReason) {
               result = {
-                success: false,
-                actionName,
+                      actionName,
                 error: upgraded.disabledReason,
                 trace: result.trace,
                 durationMs: performance.now() - start,
@@ -320,7 +317,6 @@ export function AgentActionProvider({
         return result;
       } catch (err) {
         const result: ExecutionResult = {
-          success: false,
           actionName,
           error:
             err instanceof DOMException && err.name === 'AbortError'

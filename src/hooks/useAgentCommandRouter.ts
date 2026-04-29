@@ -35,7 +35,7 @@ export function useAgentCommandRouter<T>(
       const match = availableActions.find((a) => a.name === actionName);
 
       if (match?.disabledReason) {
-        return { success: false, actionName, error: match.disabledReason, trace: [], durationMs: 0 };
+        return { actionName, error: match.disabledReason, trace: [], durationMs: 0 };
       }
 
       if (match) {

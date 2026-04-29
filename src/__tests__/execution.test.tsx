@@ -33,7 +33,7 @@ describe('click execution', () => {
       </AgentActionProvider>,
     );
     const result = await act(() => ctx!.execute('click_test'));
-    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
     expect(onClick).toHaveBeenCalled();
   });
 });
@@ -269,7 +269,7 @@ describe('error handling', () => {
           </AgentActionProvider>,
         );
         const result = await act(() => ctx!.execute(name));
-        expect(result.success).toBe(false);
+        expect(result.error).toBeDefined();
         expect(result.error).toContain('not found');
         cleanup();
       }),
@@ -291,7 +291,7 @@ describe('error handling', () => {
           </AgentActionProvider>,
         );
         const result = await act(() => ctx!.execute('disabled_test'));
-        expect(result.success).toBe(false);
+        expect(result.error).toBeDefined();
         expect(result.error).toBe(reason);
         cleanup();
       }),
@@ -319,7 +319,7 @@ describe('param validation', () => {
       </AgentActionProvider>,
     );
     const result = await act(() => ctx!.execute('validated', {}));
-    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
     expect(result.error).toContain('ids');
   });
 
@@ -338,7 +338,7 @@ describe('param validation', () => {
       </AgentActionProvider>,
     );
     const result = await act(() => ctx!.execute('validated', { ids: [1, 2] }));
-    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
     expect(onClick).toHaveBeenCalled();
   });
 });
@@ -361,7 +361,7 @@ describe('waitFor', () => {
       </AgentActionProvider>,
     );
     const result = await act(() => ctx!.execute('wait_fn'));
-    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
     expect(waitFor).toHaveBeenCalled();
   });
 
@@ -383,7 +383,7 @@ describe('waitFor', () => {
     expect(done).toBe(false);
     resolve!();
     const result = await exec;
-    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
     expect(done).toBe(true);
   });
 });
@@ -406,6 +406,6 @@ describe('execution callbacks', () => {
     );
     await act(() => ctx!.execute('tracked'));
     expect(onStart).toHaveBeenCalledWith('tracked');
-    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ success: true, actionName: 'tracked' }));
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ actionName: 'tracked' }));
   });
 });
