@@ -84,18 +84,31 @@ export interface ToolSchema {
   readonly parameters: Record<string, unknown>;
 }
 
-export interface StepTrace {
+interface StepTraceBase {
   readonly index: number;
   readonly label: string;
-  readonly status: 'completed' | 'skipped' | 'failed';
-  /** 'dynamic' = function target resolved per-execution; 'static' = constant string. */
   readonly targetType?: 'dynamic' | 'static';
   readonly targetName?: string;
-  readonly targetFound: boolean;
-  readonly interactionType: 'click' | 'type' | 'none';
-  readonly error?: string;
   readonly durationMs: number;
 }
+
+export type StepTrace =
+  | (StepTraceBase & {
+      readonly status: 'completed';
+      readonly targetFound: true;
+      readonly interactionType: 'click' | 'type';
+    })
+  | (StepTraceBase & {
+      readonly status: 'skipped';
+      readonly targetFound: false;
+      readonly interactionType: 'none';
+    })
+  | (StepTraceBase & {
+      readonly status: 'failed';
+      readonly targetFound: boolean;
+      readonly interactionType: 'none';
+      readonly error: string;
+    });
 
 export interface ExecutionResult {
   readonly success: boolean;
