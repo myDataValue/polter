@@ -10,8 +10,8 @@ import { AgentAction } from '../components/AgentAction';
 import { AgentTarget } from '../components/AgentTarget';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { useAgentAction } from '../hooks/useAgentAction';
-import { defineAction } from '../core/defineAction';
-import { fromParam } from '../core/stepHelpers';
+import { defineAction } from '../core/helpers';
+import { fromParam } from '../core/helpers';
 import { z } from 'zod';
 import { TestConsumer } from './testUtils';
 
@@ -51,7 +51,7 @@ describe('value typing', () => {
         let ctx: ReturnType<typeof useAgentActions> | null = null;
         function Harness() {
           useAgentAction({
-            action: valueAction,
+            ...valueAction,
             steps: [{ label: 'type', value: literal, target: 'input' }],
           });
           return <AgentTarget name="input"><input data-testid="input" /></AgentTarget>;
@@ -79,7 +79,7 @@ describe('value typing', () => {
           let ctx: ReturnType<typeof useAgentActions> | null = null;
           function Harness() {
             useAgentAction({
-              action: valueAction,
+              ...valueAction,
               steps: [{ label: 'type', value: fromParam(paramName), target: 'input' }],
             });
             return <AgentTarget name="input"><input data-testid="input" /></AgentTarget>;
@@ -103,7 +103,7 @@ describe('value typing', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     function Harness() {
       useAgentAction({
-        action: valueAction,
+        ...valueAction,
         steps: [{ label: 'maybe type', value: fromParam('missing'), target: 'btn' }],
       });
       return <AgentTarget name="btn"><button onClick={onClick}>Go</button></AgentTarget>;
@@ -133,7 +133,7 @@ describe('skipIf', () => {
         let ctx: ReturnType<typeof useAgentActions> | null = null;
         function Harness() {
           useAgentAction({
-            action: skipAction,
+            ...skipAction,
             steps: [{ label: 'step', target: 'btn', skipIf: () => shouldSkip }],
           });
           return <AgentTarget name="btn"><button onClick={onClick}>Go</button></AgentTarget>;
@@ -157,7 +157,7 @@ describe('skipIf', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     function Harness() {
       useAgentAction({
-        action: skipAction,
+        ...skipAction,
         steps: [{ label: 'step', target: 'btn', skipIf: predicate }],
       });
       return <AgentTarget name="btn"><button>Go</button></AgentTarget>;
@@ -191,7 +191,7 @@ describe('closure freshness', () => {
             const [skip, setter] = React.useState(false);
             setSkip = setter;
             useAgentAction({
-              action: skipAction,
+              ...skipAction,
               steps: [{ label: 'step', target: 'btn', skipIf: () => skip }],
             });
             return <AgentTarget name="btn"><button onClick={onClick}>Go</button></AgentTarget>;
@@ -229,7 +229,7 @@ describe('closure freshness', () => {
             const [suffix, setter] = React.useState(suffixes[0]);
             setSuffix = setter;
             useAgentAction({
-              action: valueAction,
+              ...valueAction,
               steps: [{ label: 'type', value: (p) => `${p.tag}-${suffix}`, target: 'input' }],
             });
             return <AgentTarget name="input"><input data-testid="input" /></AgentTarget>;

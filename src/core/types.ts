@@ -1,7 +1,27 @@
 import type { z } from 'zod';
-import type { ActionDefinition } from './defineAction';
 
 export type ExecutionMode = 'guided' | 'instant';
+
+export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>> {
+  readonly name: string;
+  readonly description: string;
+  /** Zod schema for action parameters. */
+  readonly parameters?: TSchema;
+  /** Client-side route to navigate to before executing. */
+  readonly route?: (params: z.infer<TSchema>) => string;
+  /** Steps the agent walks through to drive the UI. */
+  readonly steps?: StepDefinition<z.infer<TSchema>>[];
+  readonly disabled?: boolean;
+  readonly disabledReason?: string;
+  /**
+   * Waited on after all steps complete. Holds the action open until async work
+   * triggered by a step click finishes.
+   *
+   * Pass a React ref whose `.current` is set to a Promise by the click handler,
+   * or a function returning a Promise.
+   */
+  readonly waitFor?: React.RefObject<Promise<unknown> | undefined> | (() => void | Promise<void>);
+}
 
 /** Describes a single step in an agent action. */
 export interface StepDefinition<TParams = Record<string, unknown>> {
@@ -34,11 +54,9 @@ export interface StepDefinition<TParams = Record<string, unknown>> {
 
 /** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */
 export interface TargetDefinition {
-  /** The action name this target belongs to. Omit to make a shared target that any action can resolve. */
-  action?: string;
   /**
-   * Identifier the agent step's `target` resolves to. For per-row targets,
-   * encode the row identity into the name (e.g. `name={`edit:${id}`}`).
+   * Identifier the agent step's `target` resolves to. Encode action scope
+   * and/or row identity into the name (e.g. `name={`edit_markup:${id}`}`).
    */
   name?: string;
   /**
@@ -53,15 +71,11 @@ export interface AgentTargetEntry extends TargetDefinition {
 }
 
 export interface RegisteredAction<TSchema extends z.ZodType = any> extends ActionDefinition<TSchema> {
-  disabled: boolean;
-  disabledReason?: string;
+  readonly disabled: boolean;
   /** Returns the current steps with fresh closures (via useEffectEvent). */
   resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
-  /**
-   * Waited on after all steps complete. Holds the action open until async work
-   * triggered by a step click finishes.
-   */
-  waitFor?: () => void | Promise<void>;
+  /** Resolved waitFor — always a function. */
+  readonly waitFor?: () => void | Promise<void>;
 }
 
 export interface ToolSchema {
@@ -128,7 +142,7 @@ export interface AgentActionProviderProps {
   onExecutionStart?: (actionName: string) => void;
   onExecutionComplete?: (result: ExecutionResult) => void;
   /** Pre-defined actions whose schemas are available before their components mount. */
-  registry?: import('./defineAction').ActionDefinition<any>[];
+  registry?: ActionDefinition<any>[];
   /** Router integration — called when executing a registry action that needs navigation. */
   navigate?: (path: string) => void | Promise<void>;
   /** Enable dev-mode console warnings for actions missing from the registry. */

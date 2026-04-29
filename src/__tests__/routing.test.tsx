@@ -4,7 +4,7 @@ import { render, act } from '@testing-library/react';
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { AgentAction } from '../components/AgentAction';
 import { useAgentCommandRouter } from '../hooks/useAgentCommandRouter';
-import { defineAction } from '../core/defineAction';
+import { defineAction } from '../core/helpers';
 import type { ExecutionResult } from '../core/types';
 
 interface Command {

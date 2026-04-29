@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  ActionDefinition,
   AgentActionContextValue,
   AgentActionProviderProps,
   AgentTargetEntry,
@@ -7,13 +8,12 @@ import type {
   ExecutionResult,
   RegisteredAction,
 } from '../core/types';
-import type { ActionDefinition } from '../core/defineAction';
 import { generateToolSchemas } from '../core/schemaGenerator';
 import { executeAction } from '../executor/visualExecutor';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
 
-function definitionToRegisteredAction(def: ActionDefinition<any>): RegisteredAction {
+function definitionToRegisteredAction({ waitFor: _, ...def }: ActionDefinition<any>): RegisteredAction {
   return {
     ...def,
     disabled: false,
@@ -149,11 +149,7 @@ export function AgentActionProvider({
         if (signal?.aborted) return null;
 
         for (const entry of targetsRef.current.values()) {
-          if (
-            (!entry.action || entry.action === actionName) &&
-            entry.name === name &&
-            entry.element.isConnected
-          ) {
+          if (entry.name === name && entry.element.isConnected) {
             if ((entry.element as HTMLButtonElement).disabled) {
               seenDisabled = true;
             } else {

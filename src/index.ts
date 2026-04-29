@@ -6,21 +6,18 @@ export { AgentDevTools } from './components/AgentDevTools';
 
 // Hooks
 export { useAgentAction } from './hooks/useAgentAction';
-export type { AgentActionConfig } from './hooks/useAgentAction';
 export { useAgentActions } from './hooks/useAgentActions';
 export { useAgentCommandRouter } from './hooks/useAgentCommandRouter';
 
-// Action definitions
-export { defineAction } from './core/defineAction';
-
-// Step helpers
-export { action, fromParam } from './core/stepHelpers';
+// Helpers
+export { defineAction, fromParam } from './core/helpers';
 
 // Schema utilities
 export { zodToJsonSchema, generateToolSchemas } from './core/schemaGenerator';
 
 // Types
 export type {
+  ActionDefinition,
   ExecutionMode,
   StepDefinition,
   TargetDefinition,
@@ -34,4 +31,3 @@ export type {
   AgentActionProviderProps,
   AgentActionContextValue,
 } from './core/types';
-export type { ActionDefinition } from './core/defineAction';
