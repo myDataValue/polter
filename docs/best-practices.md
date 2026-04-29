@@ -206,7 +206,7 @@ useAgentAction({
 });
 
 // DOM ownership — AgentTargets live where the elements are rendered
-<AgentTarget action="delete_item" name={`delete:${id}`}>
+<AgentTarget name={`delete_item/delete:${id}`}>
   <DeleteButton />
 </AgentTarget>
 ```
@@ -318,7 +318,7 @@ useAgentAction({
 
 // AgentTarget on each row's button (in a column renderer) — encode the
 // row identity into the name so the step's target function can find it.
-<AgentTarget action="sync_property" name={`sync:${propertyId}`}>
+<AgentTarget name={`sync_property/sync:${propertyId}`}>
   <SyncButton />
 </AgentTarget>
 ```

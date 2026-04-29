@@ -7,8 +7,7 @@ import { AgentAction } from '../components/AgentAction';
 import { AgentTarget } from '../components/AgentTarget';
 import { useAgentActions } from '../hooks/useAgentActions';
 import { useAgentAction } from '../hooks/useAgentAction';
-import { defineAction } from '../core/defineAction';
-import { action } from '../core/stepHelpers';
+import { defineAction } from '../core/helpers';
 import { z } from 'zod';
 import { TestConsumer } from './testUtils';
 
@@ -28,7 +27,7 @@ describe('context boundaries', () => {
     {
       name: 'useAgentAction',
       render: () => {
-        function Bad() { useAgentAction({ action: defineAction({ name: 'x', description: 'x' }), steps: [] }); return null; }
+        function Bad() { useAgentAction(defineAction({ name: 'x', description: 'x' })); return null; }
         return <Bad />;
       },
     },
@@ -163,7 +162,7 @@ describe('useAgentAction registration', () => {
   it('should register a single action', () => {
     const solo = defineAction({ name: 'solo', description: 'Solo' });
     let ctx: ReturnType<typeof useAgentActions> | null = null;
-    function Harness() { useAgentAction(action(solo)); return null; }
+    function Harness() { useAgentAction(solo); return null; }
     render(
       <AgentActionProvider>
         <Harness />
@@ -177,7 +176,7 @@ describe('useAgentAction registration', () => {
     const alpha = defineAction({ name: 'alpha', description: 'Alpha' });
     const beta = defineAction({ name: 'beta', description: 'Beta' });
     let ctx: ReturnType<typeof useAgentActions> | null = null;
-    function Harness() { useAgentAction(action(alpha), action(beta)); return null; }
+    function Harness() { useAgentAction(alpha, beta); return null; }
     render(
       <AgentActionProvider>
         <Harness />
@@ -188,9 +187,9 @@ describe('useAgentAction registration', () => {
   });
 
   it('should unregister on unmount', () => {
-    const action = defineAction({ name: 'temp', description: 'Temp' });
+    const tempDef = defineAction({ name: 'temp', description: 'Temp' });
     let ctx: ReturnType<typeof useAgentActions> | null = null;
-    function Harness() { useAgentAction({ action, steps: [] }); return null; }
+    function Harness() { useAgentAction(tempDef); return null; }
     const { rerender } = render(
       <AgentActionProvider>
         <Harness />

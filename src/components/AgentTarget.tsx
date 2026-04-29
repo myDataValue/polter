@@ -25,12 +25,12 @@ interface AgentTargetProps extends TargetDefinition {
  * </AgentTarget>
  *
  * // Static: a fixed name (inside a popover that mounts lazily):
- * <AgentTarget action="toggle_frozen_columns" name="freeze-btn">
+ * <AgentTarget name="freeze-btn">
  *   <button>Freeze columns</button>
  * </AgentTarget>
  * ```
  */
-export function AgentTarget({ action, name, scrollTo, children }: AgentTargetProps) {
+export function AgentTarget({ name, scrollTo, children }: AgentTargetProps) {
   const id = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const context = useContext(AgentActionContext);
@@ -59,7 +59,7 @@ export function AgentTarget({ action, name, scrollTo, children }: AgentTargetPro
         element = element.firstElementChild as HTMLElement;
       }
       if (element) {
-        registerTarget(id, { action, name, element, scrollTo: scrollToRef.current });
+        registerTarget(id, { name, element, scrollTo: scrollToRef.current });
       } else {
         unregisterTarget(id);
       }
@@ -75,7 +75,7 @@ export function AgentTarget({ action, name, scrollTo, children }: AgentTargetPro
       observer.disconnect();
       unregisterTarget(id);
     };
-  }, [id, action, name, registerTarget, unregisterTarget]);
+  }, [id, name, registerTarget, unregisterTarget]);
 
   return (
     <div ref={wrapperRef} style={{ display: 'contents' }}>
