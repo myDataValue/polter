@@ -25,13 +25,13 @@ export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<s
 
 /** Describes a single step in an agent action. */
 export interface StepDefinition<TParams = Record<string, unknown>> {
-  label: string;
+  readonly label: string;
   /**
    * Resolve element from the AgentTarget registry by matching `name`. Pass a
    * string for static targets, or a function receiving params for per-row
    * targets (e.g. `target: (p) => `edit:${p.property_id}``).
    */
-  target?: string | ((params: TParams) => string);
+  readonly target?: string | ((params: TParams) => string);
   /**
    * Value to type into the target element. When present, the executor types
    * into the resolved element instead of clicking it.
@@ -41,15 +41,15 @@ export interface StepDefinition<TParams = Record<string, unknown>> {
    *   action params. Return `undefined` to skip typing and fall through to
    *   a click.
    */
-  value?: string | ((params: TParams) => string | undefined);
+  readonly value?: string | ((params: TParams) => string | undefined);
   /**
    * Scroll a virtualized list or viewport so the target element renders in DOM.
    * This is the ONLY legitimate use — if you're tempted to set state, call a
    * mutation, or switch a mode, that should be a step the agent clicks instead.
    */
-  scrollTo?: (params: TParams) => void | Promise<void>;
+  readonly scrollTo?: (params: TParams) => void | Promise<void>;
   /** Skip this step at execution time when the predicate returns true. */
-  skipIf?: (params: TParams) => boolean;
+  readonly skipIf?: (params: TParams) => boolean;
 }
 
 /** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */
@@ -58,16 +58,16 @@ export interface TargetDefinition {
    * Identifier the agent step's `target` resolves to. Encode action scope
    * and/or row identity into the name (e.g. `name={`edit_markup:${id}`}`).
    */
-  name: string;
+  readonly name: string;
   /**
    * Scroll a virtualized list or viewport so this target's element renders in DOM.
    * Only for making targets reachable — not for state changes or business logic.
    */
-  scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
+  readonly scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
 }
 
 export interface AgentTargetEntry extends TargetDefinition {
-  element: HTMLElement;
+  readonly element: HTMLElement;
 }
 
 export interface RegisteredAction<TSchema extends z.ZodType = any>
@@ -79,37 +79,37 @@ export interface RegisteredAction<TSchema extends z.ZodType = any>
 }
 
 export interface ToolSchema {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Record<string, unknown>;
 }
 
 export interface StepTrace {
-  index: number;
-  label: string;
-  status: 'completed' | 'skipped' | 'failed';
+  readonly index: number;
+  readonly label: string;
+  readonly status: 'completed' | 'skipped' | 'failed';
   /** 'dynamic' = function target resolved per-execution; 'static' = constant string. */
-  targetType?: 'dynamic' | 'static';
-  targetName?: string;
-  targetFound: boolean;
-  interactionType: 'click' | 'type' | 'none';
-  error?: string;
-  durationMs: number;
+  readonly targetType?: 'dynamic' | 'static';
+  readonly targetName?: string;
+  readonly targetFound: boolean;
+  readonly interactionType: 'click' | 'type' | 'none';
+  readonly error?: string;
+  readonly durationMs: number;
 }
 
 export interface ExecutionResult {
-  success: boolean;
-  actionName: string;
-  error?: string;
-  trace: StepTrace[];
-  durationMs: number;
+  readonly success: boolean;
+  readonly actionName: string;
+  readonly error?: string;
+  readonly trace: readonly StepTrace[];
+  readonly durationMs: number;
 }
 
 export interface AvailableAction {
-  name: string;
-  description: string;
-  disabledReason?: string;
-  hasParameters: boolean;
+  readonly name: string;
+  readonly description: string;
+  readonly disabledReason?: string;
+  readonly hasParameters: boolean;
 }
 
 export interface ExecutorConfig {
