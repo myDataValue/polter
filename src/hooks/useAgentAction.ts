@@ -1,4 +1,4 @@
-import { useContext, useEffect, useEffectEvent } from 'react';
+import { useCallback, useContext, useEffect, useRef } from 'react';
 import type { ActionDefinition, StepDefinition } from '../core/types';
 import { AgentActionContext } from '../components/AgentActionProvider';
 
@@ -10,18 +10,21 @@ export function useAgentAction(...configs: ActionDefinition<any>[]): void {
 
   const { registerAction, unregisterAction } = context;
 
-  const getSteps = useEffectEvent((actionName: string): StepDefinition[] => {
-    const item = configs.find((c) => c.name === actionName);
-    return (item?.steps as StepDefinition[] | undefined) ?? [];
-  });
+  const configsRef = useRef(configs);
+  configsRef.current = configs;
 
-  const resolveWaitFor = useEffectEvent(async (actionName: string) => {
-    const item = configs.find((c) => c.name === actionName);
+  const getSteps = useCallback((actionName: string): StepDefinition[] => {
+    const item = configsRef.current.find((c) => c.name === actionName);
+    return (item?.steps as StepDefinition[] | undefined) ?? [];
+  }, []);
+
+  const resolveWaitFor = useCallback(async (actionName: string) => {
+    const item = configsRef.current.find((c) => c.name === actionName);
     const wf = item?.waitFor;
     if (!wf) return;
     if (typeof wf === 'function') { await wf(); return; }
     await wf.current;
-  });
+  }, []);
 
   useEffect(() => {
     for (const config of configs) {
