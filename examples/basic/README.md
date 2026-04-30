@@ -18,7 +18,7 @@ npm run dev
 
 - **Hook-based registration** — All actions defined via `useAgentAction` with step arrays
 - **Conditional step skipping** — `skipIf` predicates skip steps that are already satisfied
-- **Default values** — `defaultValue` targets a fixed value without requiring a param
+- **Literal values** — `value: ''` clears a search box without requiring a param
 - **Multi-step action** — Status filter (open dropdown, click option)
 - **Typing simulation** — Search box (agent types character-by-character)
 - **Parameterized action** — Filter by enum value

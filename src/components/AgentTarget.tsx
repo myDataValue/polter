@@ -10,25 +10,27 @@ interface AgentTargetProps extends TargetDefinition {
  * Register a DOM element as a selectable target for an agent action step.
  *
  * Use this to wrap lazily-rendered elements (dropdown options, search results, etc.)
- * so that `AgentStep fromParam` or `AgentStep fromTarget` can find and interact
- * with them after they mount.
+ * so that a step's `target` field can find and interact with them after they
+ * mount. Works through React portals — context flows regardless of DOM position.
  *
- * Works through React portals — context flows regardless of DOM position.
+ * For per-row targets, encode the row identity into `name`:
+ * `<AgentTarget name={`edit:${id}`}>...</AgentTarget>` paired with
+ * `{ target: (p) => `edit:${p.id}` }` on the step.
  *
  * @example
  * ```tsx
- * // Dynamic: match by param value (inside a dropdown's renderOption):
- * <AgentTarget action="filter_by_tag" param="tag_name" value={option.label}>
+ * // Per-row: encode the identifier into the name (inside a row renderer):
+ * <AgentTarget name={`row:${option.id}`}>
  *   <DropdownOption>{option.label}</DropdownOption>
  * </AgentTarget>
  *
- * // Static: match by name (inside a popover that mounts lazily):
- * <AgentTarget action="toggle_frozen_columns" name="freeze-btn">
+ * // Static: a fixed name (inside a popover that mounts lazily):
+ * <AgentTarget name="freeze-btn">
  *   <button>Freeze columns</button>
  * </AgentTarget>
  * ```
  */
-export function AgentTarget({ action, param, value, name, scrollTo, children }: AgentTargetProps) {
+export function AgentTarget({ name, scrollTo, children }: AgentTargetProps) {
   const id = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const context = useContext(AgentActionContext);
@@ -57,7 +59,7 @@ export function AgentTarget({ action, param, value, name, scrollTo, children }: 
         element = element.firstElementChild as HTMLElement;
       }
       if (element) {
-        registerTarget(id, { action, param, value, name, element, scrollTo: scrollToRef.current });
+        registerTarget(id, { name, element, scrollTo: scrollToRef.current });
       } else {
         unregisterTarget(id);
       }
@@ -73,7 +75,7 @@ export function AgentTarget({ action, param, value, name, scrollTo, children }: 
       observer.disconnect();
       unregisterTarget(id);
     };
-  }, [id, action, param, value, name, registerTarget, unregisterTarget]);
+  }, [id, name, registerTarget, unregisterTarget]);
 
   return (
     <div ref={wrapperRef} style={{ display: 'contents' }}>

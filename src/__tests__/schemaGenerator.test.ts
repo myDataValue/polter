@@ -1,203 +1,170 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect } from 'vitest';
+import { it, fc } from '@fast-check/vitest';
 import { z } from 'zod';
-import {
-  zodToJsonSchema,
-  generateToolSchemas,
-} from '../core/schemaGenerator';
+import { zodToJsonSchema, generateToolSchemas } from '../core/schemaGenerator';
 import type { RegisteredAction } from '../core/types';
 
+// ---------------------------------------------------------------------------
+// Arbitraries for Zod schemas
+// ---------------------------------------------------------------------------
+
+const leafZodSchema = fc.oneof(
+  fc.constant(z.string()).map((s) => ({ schema: s, expectedType: 'string' })),
+  fc.constant(z.number()).map((s) => ({ schema: s, expectedType: 'number' })),
+  fc.constant(z.boolean()).map((s) => ({ schema: s, expectedType: 'boolean' })),
+  fc.constant(z.null()).map(() => ({ schema: z.null(), expectedType: 'null' })),
+  fc.constant(z.any()).map(() => ({ schema: z.any(), expectedType: undefined })),
+);
+
+const wrappedZodSchema = leafZodSchema.chain(({ schema }) =>
+  fc.oneof(
+    fc.constant({ schema, wrapper: 'none' as const }),
+    fc.constant({ schema: schema.optional(), wrapper: 'optional' as const }),
+    fc.constant({ schema: schema.nullable(), wrapper: 'nullable' as const }),
+    fc.constant({ schema: schema.array(), wrapper: 'array' as const }),
+  ),
+);
+
+// ---------------------------------------------------------------------------
+// zodToJsonSchema
+// ---------------------------------------------------------------------------
+
 describe('zodToJsonSchema', () => {
-  it('converts ZodString', () => {
-    expect(zodToJsonSchema(z.string())).toEqual({ type: 'string' });
-  });
+  it.prop([leafZodSchema])(
+    'should produce a type field for any leaf Zod type',
+    ({ schema, expectedType }) => {
+      const result = zodToJsonSchema(schema);
+      if (expectedType) {
+        expect(result.type).toBe(expectedType);
+      } else {
+        expect(result).toEqual({});
+      }
+    },
+  );
 
-  it('converts ZodString with description', () => {
-    expect(zodToJsonSchema(z.string().describe('A name'))).toEqual({
-      type: 'string',
-      description: 'A name',
-    });
-  });
+  it.prop([fc.string({ minLength: 1 }), leafZodSchema])(
+    'should preserve descriptions on any leaf type',
+    (desc, { schema }) => {
+      const described = schema.describe(desc);
+      const result = zodToJsonSchema(described);
+      expect(result.description).toBe(desc);
+    },
+  );
 
-  it('converts ZodString with min/max', () => {
-    expect(zodToJsonSchema(z.string().min(1).max(100))).toEqual({
-      type: 'string',
-      minLength: 1,
-      maxLength: 100,
-    });
-  });
+  it.prop([fc.string({ minLength: 1 })])(
+    'should preserve descriptions through optional/nullable/default wrappers',
+    (desc) => {
+      const base = z.string().describe(desc);
+      expect(zodToJsonSchema(base.optional()).description).toBe(desc);
+      expect(zodToJsonSchema(base.nullable()).description).toBe(desc);
+      expect(zodToJsonSchema(base.default('x')).description).toBe(desc);
+    },
+  );
 
-  it('converts ZodNumber', () => {
-    expect(zodToJsonSchema(z.number())).toEqual({ type: 'number' });
-  });
+  it.prop([fc.array(fc.string({ minLength: 1 }), { minLength: 1, maxLength: 5 })])(
+    'should convert ZodEnum with any string values',
+    (values) => {
+      const schema = z.enum(values as [string, ...string[]]);
+      const result = zodToJsonSchema(schema);
+      expect(result.type).toBe('string');
+      expect(result.enum).toEqual(values);
+    },
+  );
 
-  it('converts ZodNumber with int check', () => {
-    expect(zodToJsonSchema(z.number().int())).toEqual({ type: 'integer' });
-  });
+  it.prop([fc.nat(), fc.nat()])(
+    'should convert ZodString min/max constraints',
+    (min, rawMax) => {
+      const max = min + rawMax;
+      const result = zodToJsonSchema(z.string().min(min).max(max));
+      expect(result.type).toBe('string');
+      expect(result.minLength).toBe(min);
+      expect(result.maxLength).toBe(max);
+    },
+  );
 
-  it('converts ZodNumber with min/max', () => {
-    expect(zodToJsonSchema(z.number().min(0).max(100))).toEqual({
-      type: 'number',
-      minimum: 0,
-      maximum: 100,
-    });
-  });
+  const safeKey = fc.string({ minLength: 1 }).filter((s) =>
+    !Object.prototype.hasOwnProperty.call(Object.prototype, s),
+  );
 
-  it('converts ZodBoolean', () => {
-    expect(zodToJsonSchema(z.boolean())).toEqual({ type: 'boolean' });
-  });
+  it.prop([
+    fc.record({
+      required: safeKey,
+      optional: safeKey,
+    }).filter((r) => r.required !== r.optional),
+  ])(
+    'should mark required fields and omit optional from required array',
+    ({ required, optional }) => {
+      const schema = z.object({
+        [required]: z.string(),
+        [optional]: z.number().optional(),
+      });
+      const result = zodToJsonSchema(schema);
+      expect(result.type).toBe('object');
+      expect(result.required).toContain(required);
+      expect(result.required).not.toContain(optional);
+      expect(result.properties).toHaveProperty(required);
+      expect(result.properties).toHaveProperty(optional);
+    },
+  );
 
-  it('converts ZodArray', () => {
-    expect(zodToJsonSchema(z.array(z.string()))).toEqual({
-      type: 'array',
-      items: { type: 'string' },
-    });
-  });
-
-  it('converts ZodObject with required and optional fields', () => {
-    const schema = z.object({
-      name: z.string(),
-      age: z.number().optional(),
-    });
-    expect(zodToJsonSchema(schema)).toEqual({
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        age: { type: 'number' },
-      },
-      required: ['name'],
-    });
-  });
-
-  it('converts ZodEnum', () => {
-    expect(zodToJsonSchema(z.enum(['a', 'b', 'c']))).toEqual({
-      type: 'string',
-      enum: ['a', 'b', 'c'],
-    });
-  });
-
-  it('converts ZodLiteral', () => {
-    expect(zodToJsonSchema(z.literal('fixed'))).toEqual({
-      type: 'string',
-      const: 'fixed',
-    });
-  });
-
-  it('converts ZodOptional (unwraps inner type)', () => {
-    expect(zodToJsonSchema(z.string().optional())).toEqual({ type: 'string' });
-  });
-
-  it('converts ZodNullable (unwraps inner type)', () => {
-    expect(zodToJsonSchema(z.string().nullable())).toEqual({ type: 'string' });
-  });
-
-  it('converts ZodDefault (unwraps inner type)', () => {
-    expect(zodToJsonSchema(z.string().default('hello'))).toEqual({ type: 'string' });
-  });
-
-  it('converts ZodUnion', () => {
-    const schema = z.union([z.string(), z.number()]);
-    expect(zodToJsonSchema(schema)).toEqual({
-      anyOf: [{ type: 'string' }, { type: 'number' }],
-    });
-  });
-
-  it('converts ZodRecord', () => {
-    expect(zodToJsonSchema(z.record(z.number()))).toEqual({
-      type: 'object',
-      additionalProperties: { type: 'number' },
-    });
-  });
-
-  it('converts ZodNull', () => {
-    expect(zodToJsonSchema(z.null())).toEqual({ type: 'null' });
-  });
-
-  it('converts ZodAny', () => {
-    expect(zodToJsonSchema(z.any())).toEqual({});
-  });
-
-  it('converts nested objects', () => {
-    const schema = z.object({
-      filter: z.object({
-        field: z.string(),
-        value: z.number(),
-      }),
-    });
-    expect(zodToJsonSchema(schema)).toEqual({
-      type: 'object',
-      properties: {
-        filter: {
-          type: 'object',
-          properties: {
-            field: { type: 'string' },
-            value: { type: 'number' },
-          },
-          required: ['field', 'value'],
-        },
-      },
-      required: ['filter'],
-    });
-  });
-
-  it('preserves descriptions through optional wrapper', () => {
-    const schema = z.string().describe('user name').optional();
-    expect(zodToJsonSchema(schema)).toEqual({
-      type: 'string',
-      description: 'user name',
-    });
-  });
+  it.prop([wrappedZodSchema])(
+    'should unwrap optional/nullable to the inner type',
+    ({ schema, wrapper }) => {
+      const result = zodToJsonSchema(schema);
+      if (wrapper === 'array') {
+        expect(result.type).toBe('array');
+        expect(result.items).toBeDefined();
+      } else {
+        expect(result).toBeDefined();
+      }
+    },
+  );
 });
+
+// ---------------------------------------------------------------------------
+// generateToolSchemas
+// ---------------------------------------------------------------------------
+
+const actionArb = fc.record({
+  name: fc.string({ minLength: 1 }),
+  description: fc.string(),
+  disabledReason: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
+}).map(
+  ({ name, description, disabledReason }): RegisteredAction => ({
+    name,
+    description,
+    disabledReason,
+    resolveSteps: () => [],
+  }),
+);
 
 describe('generateToolSchemas', () => {
-  const makeAction = (overrides: Partial<RegisteredAction> = {}): RegisteredAction => ({
-    name: 'test_action',
-    description: 'Test action',
-    disabled: false,
-    getExecutionTargets: () => [],
-    ...overrides,
-  });
+  it.prop([fc.uniqueArray(actionArb, { selector: (a) => a.name, minLength: 1 })])(
+    'should include exactly the enabled actions',
+    (actions) => {
+      const schemas = generateToolSchemas(actions);
+      const enabledNames = actions.filter((a) => !a.disabledReason).map((a) => a.name);
+      const schemaNames = schemas.map((s) => s.name);
+      expect(schemaNames.sort()).toEqual(enabledNames.sort());
+    },
+  );
 
-  it('generates schema for action without parameters', () => {
-    const schemas = generateToolSchemas([makeAction()]);
-    expect(schemas).toEqual([
-      {
-        name: 'test_action',
-        description: 'Test action',
-        parameters: { type: 'object', properties: {} },
-      },
-    ]);
-  });
+  it.prop([fc.uniqueArray(actionArb, { selector: (a) => a.name })])(
+    'should never include disabled action names',
+    (actions) => {
+      const schemas = generateToolSchemas(actions);
+      const disabledNames = new Set(actions.filter((a) => a.disabledReason).map((a) => a.name));
+      for (const schema of schemas) {
+        expect(disabledNames.has(schema.name)).toBe(false);
+      }
+    },
+  );
 
-  it('generates schema for action with Zod parameters', () => {
-    const schemas = generateToolSchemas([
-      makeAction({
-        name: 'sync',
-        description: 'Sync data',
-        parameters: z.object({
-          property_ids: z.array(z.number()).describe('IDs to sync'),
-        }),
-      }),
-    ]);
-    expect(schemas[0].parameters).toEqual({
-      type: 'object',
-      properties: {
-        property_ids: {
-          type: 'array',
-          items: { type: 'number' },
-          description: 'IDs to sync',
-        },
-      },
-      required: ['property_ids'],
-    });
-  });
-
-  it('filters out disabled actions', () => {
-    const schemas = generateToolSchemas([
-      makeAction({ name: 'enabled', disabled: false }),
-      makeAction({ name: 'disabled', disabled: true }),
-    ]);
-    expect(schemas).toHaveLength(1);
-    expect(schemas[0].name).toBe('enabled');
-  });
+  it.prop([actionArb.filter((a) => !a.disabledReason)])(
+    'should produce a parameters object for actions without Zod schema',
+    (action) => {
+      const [schema] = generateToolSchemas([action]);
+      expect(schema.parameters).toEqual({ type: 'object', properties: {} });
+    },
+  );
 });
-

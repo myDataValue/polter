@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  ActionDefinition,
   AgentActionContextValue,
   AgentActionProviderProps,
   AgentTargetEntry,
@@ -7,24 +8,15 @@ import type {
   ExecutionResult,
   RegisteredAction,
 } from '../core/types';
-import type { ActionDefinition } from '../core/defineAction';
 import { generateToolSchemas } from '../core/schemaGenerator';
 import { executeAction } from '../executor/visualExecutor';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
 
-/** Convert an ActionDefinition to a schema-only RegisteredAction (no DOM targets). */
-function definitionToRegisteredAction(def: ActionDefinition<any>): RegisteredAction {
+function definitionToRegisteredAction({ waitFor: _, ...def }: ActionDefinition<any>): RegisteredAction {
   return {
-    name: def.name,
-    description: def.description,
-    parameters: def.parameters,
-    disabled: false,
-    disabledReason: undefined,
-    // Use defineAction steps as fallback when no component provides runtime steps.
-    getExecutionTargets: () =>
-      def.steps?.length ? def.steps.map((s) => ({ ...s, element: null })) : [],
-    route: def.route as RegisteredAction['route'],
+    ...def,
+    resolveSteps: () => def.steps ?? [],
   };
 }
 
@@ -64,7 +56,7 @@ export function AgentActionProvider({
       // Only set in actionsRef if no component has already registered a richer version
       // (a component-backed action has DOM targets).
       const existing = actionsRef.current.get(def.name);
-      if (!existing || existing.getExecutionTargets().length === 0) {
+      if (!existing || existing.resolveSteps().length === 0) {
         actionsRef.current.set(def.name, registryAction);
       }
     }
@@ -75,7 +67,7 @@ export function AgentActionProvider({
         registryRef.current.delete(name);
         // Only remove from actionsRef if it's still the registry version (no component override).
         const current = actionsRef.current.get(name);
-        if (current && current.getExecutionTargets().length === 0) {
+        if (current && current.resolveSteps().length === 0) {
           actionsRef.current.delete(name);
         }
       }
@@ -84,19 +76,17 @@ export function AgentActionProvider({
     setVersion((v) => v + 1);
   }, [registry]);
 
-  const registerAction = useCallback((action: RegisteredAction) => {
-    const existing = actionsRef.current.get(action.name);
+  const registerAction = useCallback((incoming: RegisteredAction) => {
+    const existing = actionsRef.current.get(incoming.name);
 
-    // Preserve route from registry definition when a component upgrades the action.
-    const registryAction = registryRef.current.get(action.name);
-    if (registryAction) {
-      if (!action.route) action.route = registryAction.route;
-    }
+    const registryAction = registryRef.current.get(incoming.name);
+    const action = registryAction && !incoming.route
+      ? { ...incoming, route: registryAction.route }
+      : incoming;
 
-    // Dev-mode warning: action registered by component but not in registry
-    if (devWarnings && !registryAction && action.componentBacked) {
+    if (devWarnings && registryRef.current.size > 0 && !registryAction) {
       console.warn(
-        `[polter] Action "${action.name}" is registered by a component but missing from the registry. ` +
+        `[polter] Action "${action.name}" is registered but missing from the registry. ` +
         `Add a defineAction() export to an actions.ts file so it appears in the tool schema before mount.`,
       );
     }
@@ -107,7 +97,6 @@ export function AgentActionProvider({
     if (
       !existing ||
       existing.description !== action.description ||
-      existing.disabled !== action.disabled ||
       existing.disabledReason !== action.disabledReason
     ) {
       setVersion((v) => v + 1);
@@ -142,48 +131,6 @@ export function AgentActionProvider({
   const resolveTarget = useCallback(
     async (
       actionName: string,
-      param: string,
-      value: string,
-      signal?: AbortSignal,
-      timeout = 5000,
-    ): Promise<HTMLElement | null> => {
-      const normalizedValue = value.toLowerCase();
-      const pollInterval = 50;
-      const start = Date.now();
-      let seenDisabled = false;
-
-      // Poll until the target appears and is enabled.
-      // If a disabled match is found, the element is loading — poll indefinitely.
-      // If no match at all, give up after timeout.
-      while (seenDisabled || Date.now() - start < timeout) {
-        if (signal?.aborted) return null;
-
-        for (const entry of targetsRef.current.values()) {
-          if (
-            (!entry.action || entry.action === actionName) &&
-            entry.param === param &&
-            entry.value?.toLowerCase() === normalizedValue &&
-            entry.element.isConnected
-          ) {
-            if ((entry.element as HTMLButtonElement).disabled) {
-              seenDisabled = true;
-            } else {
-              return entry.element;
-            }
-          }
-        }
-
-        await new Promise((r) => setTimeout(r, pollInterval));
-      }
-
-      return null;
-    },
-    [],
-  );
-
-  const resolveNamedTarget = useCallback(
-    async (
-      actionName: string,
       name: string,
       signal?: AbortSignal,
       params?: Record<string, unknown>,
@@ -200,11 +147,7 @@ export function AgentActionProvider({
         if (signal?.aborted) return null;
 
         for (const entry of targetsRef.current.values()) {
-          if (
-            (!entry.action || entry.action === actionName) &&
-            entry.name === name &&
-            entry.element.isConnected
-          ) {
+          if (entry.name === name && entry.element.isConnected) {
             if ((entry.element as HTMLButtonElement).disabled) {
               seenDisabled = true;
             } else {
@@ -245,7 +188,7 @@ export function AgentActionProvider({
       while (Date.now() - start < maxWait) {
         if (signal?.aborted) return null;
         const current = actionsRef.current.get(name);
-        if (current && (current.componentBacked || current.getExecutionTargets().length > 0)) {
+        if (current && current !== registryRef.current.get(name)) {
           return current;
         }
         await new Promise((r) => setTimeout(r, pollInterval));
@@ -274,13 +217,12 @@ export function AgentActionProvider({
 
       let action = actionsRef.current.get(actionName);
       if (!action) {
-        return { success: false, actionName, error: `Action "${actionName}" not found`, trace: [], durationMs: performance.now() - start };
+        return { actionName, error: `Action "${actionName}" not found`, trace: [], durationMs: performance.now() - start };
       }
-      if (action.disabled) {
+      if (action.disabledReason) {
         return {
-          success: false,
           actionName,
-          error: action.disabledReason || 'Action is disabled',
+          error: action.disabledReason,
           trace: [],
           durationMs: performance.now() - start,
         };
@@ -300,7 +242,6 @@ export function AgentActionProvider({
           signal: controller.signal,
           mountTimeout: 5000,
           resolveTarget,
-          resolveNamedTarget,
         };
 
         // Validate params against the Zod schema before executing.
@@ -314,12 +255,12 @@ export function AgentActionProvider({
             const error = missing.length > 0
               ? `Required parameters missing: ${missing.join(', ')}`
               : validation.error.issues.map((i: any) => i.message).join('; ');
-            return { success: false, actionName, error, trace: [], durationMs: performance.now() - start };
+            return { actionName, error, trace: [], durationMs: performance.now() - start };
           }
         }
 
         // If this is a registry action with no DOM targets, navigate first.
-        const targets = action.getExecutionTargets();
+        const targets = action.resolveSteps();
         if (targets.length === 0 && action.route && navigateRef.current) {
           await navigateToRoute(action, params);
 
@@ -332,11 +273,10 @@ export function AgentActionProvider({
 
         // Re-check disabled after navigation — the mounted version may have
         // dynamic disabled state that the schema-only registry version didn't.
-        if (action.disabled) {
+        if (action.disabledReason) {
           const result: ExecutionResult = {
-            success: false,
-            actionName,
-            error: action.disabledReason || 'Action is disabled',
+              actionName,
+            error: action.disabledReason,
             trace: [],
             durationMs: performance.now() - start,
           };
@@ -346,17 +286,17 @@ export function AgentActionProvider({
 
         let result = await executeAction(action, params ?? {}, executorConfig);
 
-        // After defineAction steps complete (e.g. navigation), the component may
+        // After registry steps complete (e.g. navigation), the component may
         // have mounted and provided its own steps. If so, continue with those.
-        if (result.success && !action.componentBacked) {
+        const isRegistryOnly = action === registryRef.current.get(actionName);
+        if (!result.error && isRegistryOnly) {
           const upgraded = await waitForActionMount(actionName, controller.signal, 5000);
-          if (upgraded && upgraded.componentBacked) {
+          if (upgraded && upgraded !== registryRef.current.get(actionName)) {
             // Re-check disabled — the mounted version may have dynamic state.
-            if (upgraded.disabled) {
+            if (upgraded.disabledReason) {
               result = {
-                success: false,
-                actionName,
-                error: upgraded.disabledReason || 'Action is disabled',
+                      actionName,
+                error: upgraded.disabledReason,
                 trace: result.trace,
                 durationMs: performance.now() - start,
               };
@@ -377,7 +317,6 @@ export function AgentActionProvider({
         return result;
       } catch (err) {
         const result: ExecutionResult = {
-          success: false,
           actionName,
           error:
             err instanceof DOMException && err.name === 'AbortError'
@@ -395,7 +334,7 @@ export function AgentActionProvider({
         }
       }
     },
-    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, resolveNamedTarget, waitForActionMount, navigateToRoute],
+    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, waitForActionMount, navigateToRoute],
   );
 
   const availableActions = useMemo<AvailableAction[]>(
@@ -403,7 +342,6 @@ export function AgentActionProvider({
       Array.from(actionsRef.current.values()).map((a) => ({
         name: a.name,
         description: a.description,
-        disabled: a.disabled,
         disabledReason: a.disabledReason,
         hasParameters: !!a.parameters,
       })),

@@ -5,6 +5,7 @@ import {
   AgentTarget,
   AgentDevTools,
   defineAction,
+  fromParam,
   useAgentAction,
   useAgentActions,
 } from '@mydatavalue/polter';
@@ -80,24 +81,6 @@ const ALL_CUSTOMERS: Customer[] = [
 ];
 
 // ============================================================================
-// Action definitions
-// ============================================================================
-
-const findAndEmail = defineAction({
-  name: 'find_and_email',
-  description: 'Find a customer by name, open their record, and draft an email',
-  parameters: z.object({ name: z.string().describe('Full customer name') }),
-});
-
-const filterAndExport = defineAction({
-  name: 'filter_and_export',
-  description: 'Filter customers by status and export the result to CSV',
-  parameters: z.object({
-    status: z.enum(['all', 'active', 'trial', 'churned']).describe('Status to filter by'),
-  }),
-});
-
-// ============================================================================
 // Dashboard
 // ============================================================================
 
@@ -113,27 +96,33 @@ function Dashboard() {
     return true;
   });
 
-  useAgentAction([
-    {
-      action: findAndEmail,
+  useAgentAction(
+    defineAction({
+      name: 'find_and_email',
+      description: 'Find a customer by name, open their record, and draft an email',
+      parameters: z.object({ name: z.string().describe('Full customer name') }),
       steps: [
-        { label: 'Type the name', setParam: 'name', fromTarget: 'search', skipIf: ({ name }) => selected?.name === name || search === name },
-        { label: 'Open status filter', fromTarget: 'status-toggle', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' || dropdownOpen },
-        { label: 'Reset to all', fromParam: 'status', defaultValue: 'all', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' },
-        { label: 'Click the customer', fromParam: 'name', skipIf: ({ name }) => selected?.name === name },
-        { label: "Click 'Send email'", fromTarget: 'send-email-btn' },
+        { label: 'Type the name', value: fromParam('name'), target: 'search', skipIf: ({ name }) => selected?.name === name || search === name },
+        { label: 'Open status filter', target: 'status-toggle', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' || dropdownOpen },
+        { label: 'Reset to all', target: 'status:all', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' },
+        { label: 'Click the customer', target: (p) => `find_and_email/customer:${p.name}`, skipIf: ({ name }) => selected?.name === name },
+        { label: "Click 'Send email'", target: 'find_and_email/send-email-btn' },
       ],
-    },
-    {
-      action: filterAndExport,
+    }),
+    defineAction({
+      name: 'filter_and_export',
+      description: 'Filter customers by status and export the result to CSV',
+      parameters: z.object({
+        status: z.enum(['all', 'active', 'trial', 'churned']).describe('Status to filter by'),
+      }),
       steps: [
-        { label: 'Clear search', setParam: 'search', defaultValue: '', fromTarget: 'search', skipIf: () => search === '' },
-        { label: 'Open status filter', fromTarget: 'status-toggle', skipIf: ({status}) => statusFilter === status || dropdownOpen },
-        { label: 'Pick a status', fromParam: 'status', skipIf: ({status}) => statusFilter === status },
-        { label: 'Click export', fromTarget: 'export-btn' },
+        { label: 'Clear search', value: '', target: 'search', skipIf: () => search === '' },
+        { label: 'Open status filter', target: 'status-toggle', skipIf: ({ status }) => statusFilter === status || dropdownOpen },
+        { label: 'Pick a status', target: (p) => `status:${p.status}`, skipIf: ({ status }) => statusFilter === status },
+        { label: 'Click export', target: 'export-btn' },
       ],
-    },
-  ]);
+    }),
+  );
 
   return (
     <main className="dashboard">
@@ -174,7 +163,7 @@ function Dashboard() {
           {dropdownOpen && (
             <div className="dropdown-menu">
               {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
-                <AgentTarget key={s} param="status" value={s}>
+                <AgentTarget key={s} name={`status:${s}`}>
                   <button
                     className="dropdown-item"
                     onClick={() => {
@@ -208,7 +197,7 @@ function Dashboard() {
           <div>Plan</div>
         </div>
         {filtered.map((c) => (
-          <AgentTarget key={c.id} action="find_and_email" param="name" value={c.name}>
+          <AgentTarget key={c.id} name={`find_and_email/customer:${c.name}`}>
             <div
               className="table-row table-row-clickable"
               onClick={() => setSelected(c)}
@@ -257,7 +246,7 @@ function Dashboard() {
               </div>
             </div>
             <div className="modal-footer">
-              <AgentTarget action="find_and_email" name="send-email-btn">
+              <AgentTarget name="find_and_email/send-email-btn">
                 <button
                   className="btn btn-primary"
                   onClick={() => showToast(`✨ AI: Drafting email to ${selected.email}`)}
@@ -305,7 +294,7 @@ const SUGGESTIONS: Suggestion[] = [
 ];
 
 function AgentPanel() {
-  const { execute, isExecuting } = useAgentActions();
+  const { execute, isExecuting, abortExecution } = useAgentActions();
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'system', text: 'AI assistant ready. Try a prompt below 👇' },
   ]);
@@ -355,17 +344,28 @@ function AgentPanel() {
       </div>
 
       <div className="suggestions">
-        <div className="suggestions-label">Try these</div>
-        {SUGGESTIONS.map((s) => (
+        {isExecuting ? (
           <button
-            key={s.action + JSON.stringify(s.params)}
-            className="suggestion"
-            disabled={isExecuting || isThinking}
-            onClick={() => runSuggestion(s)}
+            className="suggestion stop-btn"
+            onClick={() => abortExecution()}
           >
-            {s.user}
+            Stop execution
           </button>
-        ))}
+        ) : (
+          <>
+            <div className="suggestions-label">Try these</div>
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s.action + JSON.stringify(s.params)}
+                className="suggestion"
+                disabled={isThinking}
+                onClick={() => runSuggestion(s)}
+              >
+                {s.user}
+              </button>
+            ))}
+          </>
+        )}
       </div>
     </aside>
   );
@@ -401,7 +401,7 @@ export default function App() {
       </div>
       <ExecutionBadge />
       <Toaster />
-      <AgentDevTools />
+      <AgentDevTools bottomOffset={80} />
     </AgentActionProvider>
   );
 }

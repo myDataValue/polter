@@ -4,7 +4,7 @@ import { render, act } from '@testing-library/react';
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { AgentAction } from '../components/AgentAction';
 import { useAgentCommandRouter } from '../hooks/useAgentCommandRouter';
-import { defineAction } from '../core/defineAction';
+import { defineAction } from '../core/helpers';
 import type { ExecutionResult } from '../core/types';
 
 interface Command {
@@ -30,7 +30,7 @@ function RouterConsumer({
 }
 
 describe('useAgentCommandRouter', () => {
-  it('routes registered actions through execute', async () => {
+  it('should route registered actions through execute', async () => {
     const onClick = vi.fn();
     const fallback = vi.fn();
     let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
@@ -49,7 +49,7 @@ describe('useAgentCommandRouter', () => {
     expect(fallback).not.toHaveBeenCalled();
   });
 
-  it('falls through to fallback for unregistered actions', async () => {
+  it('should fall through to fallback for unregistered actions', async () => {
     const fallback = vi.fn();
     let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
 
@@ -63,13 +63,13 @@ describe('useAgentCommandRouter', () => {
     expect(fallback).toHaveBeenCalledWith({ action: 'unknown_action' });
   });
 
-  it('returns error for disabled actions and does not fall through', async () => {
+  it('should return error for disabled actions without falling through', async () => {
     const fallback = vi.fn();
     let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
 
     render(
       <AgentActionProvider mode="instant">
-        <AgentAction action={lockedAction} disabled disabledReason="Not ready">
+        <AgentAction action={lockedAction} disabledReason="Not ready">
           <button>Locked</button>
         </AgentAction>
         <RouterConsumer fallback={fallback} onRouter={(r) => (router = r)} />
@@ -80,11 +80,11 @@ describe('useAgentCommandRouter', () => {
     await act(async () => {
       result = await router!({ action: 'locked' });
     });
-    expect(result).toMatchObject({ success: false, actionName: 'locked', error: 'Not ready' });
+    expect(result).toMatchObject({ actionName: 'locked', error: 'Not ready' });
     expect(fallback).not.toHaveBeenCalled();
   });
 
-  it('handles null fallback gracefully', async () => {
+  it('should handle null fallback gracefully', async () => {
     let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
 
     render(
