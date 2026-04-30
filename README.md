@@ -96,26 +96,23 @@ predicates that check current state, so only the interactions still needed
 actually fire:
 
 ```tsx
-// actions.ts
-const filterAndExport = defineAction({
-  name: 'filter_and_export',
-  description: 'Filter items by status and export',
-  parameters: z.object({
-    status: z.enum(['all', 'active', 'archived']),
-  }),
-});
-
 // Component
-useAgentAction({
-  action: filterAndExport,
-  steps: [
-    { label: 'Open filter', target: 'status-toggle',
-      skipIf: ({ status }) => statusFilter === status || dropdownOpen },
-    { label: 'Pick status', target: (p) => `status:${p.status}`,
-      skipIf: ({ status }) => statusFilter === status },
-    { label: 'Click export', target: 'export-btn' },
-  ],
-});
+useAgentAction(
+  defineAction({
+    name: 'filter_and_export',
+    description: 'Filter items by status and export',
+    parameters: z.object({
+      status: z.enum(['all', 'active', 'archived']),
+    }),
+    steps: [
+      { label: 'Open filter', target: 'status-toggle',
+        skipIf: ({ status }) => statusFilter === status || dropdownOpen },
+      { label: 'Pick status', target: (p) => `status:${p.status}`,
+        skipIf: ({ status }) => statusFilter === status },
+      { label: 'Click export', target: 'export-btn' },
+    ],
+  }),
+);
 ```
 
 See [best practices](docs/best-practices.md) for patterns around `skipIf`,

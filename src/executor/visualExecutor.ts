@@ -1,4 +1,4 @@
-import type { RegisteredAction, ExecutionResult, ExecutionTarget, ExecutorConfig, StepTrace } from '../core/types';
+import type { RegisteredAction, ExecutionResult, StepDefinition, ExecutorConfig, StepTrace } from '../core/types';
 
 let stylesInjected = false;
 
@@ -261,44 +261,25 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
 }
 
 /**
- * Resolve the element for a step. For element-bound steps (AgentStep wrapping a
- * child), returns the element directly. For `target` steps, polls the
- * AgentTarget registry until a match is found.
+ * Resolve the element for a step by polling the AgentTarget registry.
  */
 async function resolveStepElement(
-  step: ExecutionTarget,
+  step: StepDefinition,
   actionName: string,
   params: Record<string, unknown>,
   config: ExecutorConfig,
 ): Promise<HTMLElement | null> {
-  const timeout = 5000;
-
-  // scrollTo runs first (e.g. scroll virtualized list into view)
   if (step.scrollTo) {
     await step.scrollTo(params);
     await delay(200, config.signal);
   }
 
-  // target: resolve lazily from AgentTarget registry by name
   if (step.target && config.resolveTarget) {
     const name = typeof step.target === 'function' ? step.target(params) : step.target;
-    return config.resolveTarget(actionName, name, config.signal, params, timeout);
+    return config.resolveTarget(actionName, name, config.signal, params, 5000);
   }
 
-  // Element bound at JSX time (AgentStep wrapping a child).
-  return step.element;
-}
-
-/**
- * Check whether an element is present, visible, and measurable.
- * Returns false for null, detached nodes, and display:contents wrappers
- * (whose getBoundingClientRect() returns all zeros).
- */
-function isElementVisible(el: HTMLElement | null): el is HTMLElement {
-  if (!el) return false;
-  if (!el.isConnected) return false;
-  const rect = el.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -396,16 +377,14 @@ export async function executeAction(
   config: ExecutorConfig,
 ): Promise<ExecutionResult> {
   const executionStart = performance.now();
-  const targets = action.getExecutionTargets();
+  const targets = action.resolveSteps();
   const stepTraces: StepTrace[] = [];
 
-  // No targets and no awaitResult — nothing to do.
-  // Visibility check only in guided mode — instant mode doesn't need measurable elements.
-  if (targets.length === 0 || (config.mode === 'guided' && targets.every((t) => t.element && !isElementVisible(t.element)))) {
+  if (targets.length === 0) {
     if (action.waitFor) {
       await action.waitFor();
     }
-    return { success: true, actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
+    return { actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
   }
 
   const fx = config.mode === 'instant'
@@ -413,7 +392,7 @@ export async function executeAction(
     : createGuidedEffects(config);
 
   // Track in-progress step for the catch block
-  let activeStep: { index: number; step: ExecutionTarget; start: number } | null = null;
+  let activeStep: { index: number; step: StepDefinition; start: number } | null = null;
 
   try {
     for (let i = 0; i < targets.length; i++) {
@@ -437,22 +416,14 @@ export async function executeAction(
       activeStep = { index: i, step, start: stepStart };
 
       const resolvedTarget = typeof step.target === 'function' ? step.target(params) : step.target;
-      const targetType: StepTrace['targetType'] = step.target
-        ? (typeof step.target === 'function' ? 'dynamic' : 'static')
-        : 'element';
+      const targetType: StepTrace['targetType'] = typeof step.target === 'function' ? 'dynamic' : 'static';
       const targetName = resolvedTarget;
 
-      // Resolve element (may be lazy for `target` steps).
-      // Multi-step actions abort on miss; single-step actions continue silently.
-      // Instant mode only needs the element to exist; guided mode needs it measurable (for spotlight).
-      const resolved = await resolveStepElement(step, action.name, params, config);
-      const element = config.mode === 'instant'
-        ? (resolved?.isConnected ? resolved : null)
-        : (isElementVisible(resolved) ? resolved : null);
+      const element = await resolveStepElement(step, action.name, params, config);
       if (!element) {
         if (targets.length > 1) {
           fx.cleanup();
-          const reason = !element ? `target not found for step "${step.label}"` : `element not visible: "${step.label}"`;
+          const reason = `target not found for step "${step.label}"`;
           stepTraces.push({
             index: i,
             label: step.label,
@@ -464,7 +435,7 @@ export async function executeAction(
             error: reason,
             durationMs: performance.now() - stepStart,
           });
-          return { success: false, actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
+          return { actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
         }
         stepTraces.push({
           index: i,
@@ -522,7 +493,7 @@ export async function executeAction(
       await action.waitFor();
     }
 
-    return { success: true, actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
+    return { actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
   } catch (err) {
     fx.cleanup();
 
@@ -538,7 +509,7 @@ export async function executeAction(
         index,
         label: s.label,
         status: 'failed',
-        targetType: s.target ? (typeof s.target === 'function' ? 'dynamic' : 'static') : 'element',
+        targetType: typeof s.target === 'function' ? 'dynamic' : 'static',
         targetName: resolved,
         targetFound: false,
         interactionType: 'none',
@@ -547,6 +518,6 @@ export async function executeAction(
       });
     }
 
-    return { success: false, actionName: action.name, error: errorMsg, trace: stepTraces, durationMs: performance.now() - executionStart };
+    return { actionName: action.name, error: errorMsg, trace: stepTraces, durationMs: performance.now() - executionStart };
   }
 }
