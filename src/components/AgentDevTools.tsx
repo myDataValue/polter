@@ -267,7 +267,7 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
                       </span>
                     </div>
                     {entry.params && <pre style={logParamsStyle}>{JSON.stringify(entry.params, null, 2)}</pre>}
-                    {entry.result && !entry.result.success && (
+                    {entry.result?.error && (
                       <div style={{ marginTop: 4, fontSize: 12, color: '#f87171' }}>{entry.result.error}</div>
                     )}
                     {entry.result?.trace && entry.result.trace.length > 0 && (
@@ -338,11 +338,11 @@ function ActionRow({
       style={{
         padding: '10px 20px',
         borderBottom: '1px solid #1e293b',
-        opacity: action.disabled ? 0.5 : 1,
+        opacity: action.disabledReason ? 0.5 : 1,
         cursor: 'pointer',
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && expanded && !action.disabled && !isExecuting) {
+        if (e.key === 'Enter' && expanded && !action.disabledReason && !isExecuting) {
           e.preventDefault();
           onRun();
         }
@@ -367,7 +367,7 @@ function ActionRow({
                 {badge}
               </span>
             )}
-            {action.disabled && (
+            {action.disabledReason && (
               <span
                 style={{
                   fontSize: 9,
@@ -383,7 +383,7 @@ function ActionRow({
             )}
           </div>
           <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 2 }}>
-            {action.disabled && action.disabledReason ? action.disabledReason : action.description}
+            {action.disabledReason ?? action.description}
           </div>
         </div>
         <button
@@ -391,15 +391,15 @@ function ActionRow({
             e.stopPropagation();
             onRun();
           }}
-          disabled={action.disabled || isExecuting}
+          disabled={!!action.disabledReason || isExecuting}
           style={{
             padding: '5px 14px',
             borderRadius: 6,
             border: 'none',
             fontSize: 12,
             fontWeight: 600,
-            cursor: action.disabled ? 'not-allowed' : 'pointer',
-            background: action.disabled ? '#334155' : '#3b82f6',
+            cursor: action.disabledReason ? 'not-allowed' : 'pointer',
+            background: action.disabledReason ? '#334155' : '#3b82f6',
             color: 'white',
             flexShrink: 0,
           }}
@@ -475,7 +475,7 @@ function ActionRow({
 
 
 function StatusDot({ result }: { result?: ExecutionResult }) {
-  const color = !result ? '#fbbf24' : result.success ? '#4ade80' : '#f87171';
+  const color = !result ? '#fbbf24' : result.error ? '#f87171' : '#4ade80';
   return (
     <span
       style={{

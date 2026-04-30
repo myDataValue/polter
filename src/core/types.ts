@@ -1,113 +1,128 @@
+import type { z } from 'zod';
+
 export type ExecutionMode = 'guided' | 'instant';
 
-export type SkipPredicate = (params: Record<string, unknown>) => boolean;
+export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>> {
+  readonly name: string;
+  readonly description: string;
+  /** Zod schema for action parameters. */
+  readonly parameters?: TSchema;
+  /** Client-side route to navigate to before executing. */
+  readonly route?: (params: z.infer<TSchema>) => string;
+  /** Steps the agent walks through to drive the UI. */
+  readonly steps?: StepDefinition<z.infer<TSchema>>[];
+  /** When set, the action is disabled and this string is the reason. */
+  readonly disabledReason?: string;
+  /**
+   * Waited on after all steps complete. Holds the action open until async work
+   * triggered by a step click finishes.
+   *
+   * Pass a React ref whose `.current` is set to a Promise by the click handler,
+   * or a function returning a Promise.
+   */
+  readonly waitFor?: React.RefObject<Promise<unknown> | undefined> | (() => void | Promise<void>);
+}
 
-/** Shared fields describing an agent step's behavior — consumed by AgentStep props, useAgentAction config, and ExecutionTarget. */
-export interface StepDefinition {
-  label: string;
+/** Describes a single step in an agent action. */
+export interface StepDefinition<TParams = Record<string, unknown>> {
+  readonly label: string;
   /**
    * Resolve element from the AgentTarget registry by matching `name`. Pass a
    * string for static targets, or a function receiving params for per-row
    * targets (e.g. `target: (p) => `edit:${p.property_id}``).
    */
-  target?: string | ((params: Record<string, unknown>) => string);
-  /** Simulate typing the value of this param into the element. */
-  setParam?: string;
-  /** Set a value programmatically via onSetValue callback. */
-  setValue?: string;
-  /** Callback for setValue — receives the param value and sets it on the component. */
-  onSetValue?: (value: unknown) => void;
-  /** Fallback for params[setParam/setValue] when the param is absent. */
-  defaultValue?: string;
+  readonly target?: string | ((params: TParams) => string);
+  /**
+   * Value to type into the target element. When present, the executor types
+   * into the resolved element instead of clicking it.
+   *
+   * - `string` — literal value (e.g. `value: ''` to clear a search box).
+   * - `(params) => string | undefined` — resolved at execution time from
+   *   action params. Return `undefined` to skip typing and fall through to
+   *   a click.
+   */
+  readonly value?: string | ((params: TParams) => string | undefined);
   /**
    * Scroll a virtualized list or viewport so the target element renders in DOM.
    * This is the ONLY legitimate use — if you're tempted to set state, call a
    * mutation, or switch a mode, that should be a step the agent clicks instead.
    */
-  scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
+  readonly scrollTo?: (params: TParams) => void | Promise<void>;
   /** Skip this step at execution time when the predicate returns true. */
-  skipIf?: SkipPredicate;
-}
-
-export interface ExecutionTarget extends StepDefinition {
-  element: HTMLElement | null;
+  readonly skipIf?: (params: TParams) => boolean;
 }
 
 /** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */
 export interface TargetDefinition {
-  /** The action name this target belongs to. Omit to make a shared target that any action can resolve. */
-  action?: string;
   /**
-   * Identifier the agent step's `target` resolves to. For per-row targets,
-   * encode the row identity into the name (e.g. `name={`edit:${id}`}`).
+   * Identifier the agent step's `target` resolves to. Encode action scope
+   * and/or row identity into the name (e.g. `name={`edit_markup:${id}`}`).
    */
-  name?: string;
+  readonly name: string;
   /**
    * Scroll a virtualized list or viewport so this target's element renders in DOM.
    * Only for making targets reachable — not for state changes or business logic.
    */
-  scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
+  readonly scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
 }
 
 export interface AgentTargetEntry extends TargetDefinition {
-  element: HTMLElement;
+  readonly element: HTMLElement;
 }
 
-export interface RegisteredAction {
-  name: string;
-  description: string;
-  parameters?: unknown;
-  disabled: boolean;
-  disabledReason?: string;
-  getExecutionTargets: () => ExecutionTarget[];
-  /**
-   * Waited on after all steps complete. Holds the action open until async work
-   * triggered by a step click (e.g. a mutation or streaming response) finishes.
-   *
-   * Resolved form — always a function. The ref-vs-function distinction exists
-   * only at the AgentAction/useAgentAction API surface; registration converts
-   * refs to functions so the executor doesn't need to know about them.
-   */
-  waitFor?: () => void | Promise<void>;
-  /** Client-side route for navigation before execution (from defineAction). */
-  route?: (params: Record<string, unknown>) => string;
-  /** True when registered by an `<AgentAction>` component (vs schema-only from registry). */
-  componentBacked?: boolean;
+export interface RegisteredAction<TSchema extends z.ZodType = any>
+  extends Pick<ActionDefinition<TSchema>, 'name' | 'description' | 'parameters' | 'route' | 'disabledReason'> {
+  /** Returns the current steps with fresh closures (via useEffectEvent). */
+  readonly resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
+  /** Resolved waitFor — always a function (ref form is resolved at registration). */
+  readonly waitFor?: () => void | Promise<void>;
 }
 
 export interface ToolSchema {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Record<string, unknown>;
 }
 
-export interface StepTrace {
-  index: number;
-  label: string;
-  status: 'completed' | 'skipped' | 'failed';
-  /** 'dynamic' = function target resolved per-execution; 'static' = constant string; 'element' = DOM-bound JSX child. */
-  targetType?: 'dynamic' | 'static' | 'element';
-  targetName?: string;
-  targetFound: boolean;
-  interactionType: 'click' | 'type' | 'setValue' | 'none';
-  error?: string;
-  durationMs: number;
+interface StepTraceBase {
+  readonly index: number;
+  readonly label: string;
+  readonly targetType?: 'dynamic' | 'static';
+  readonly targetName?: string;
+  readonly durationMs: number;
 }
+
+export type StepTrace =
+  | (StepTraceBase & {
+      readonly status: 'completed';
+      readonly targetFound: true;
+      readonly interactionType: 'click' | 'type';
+    })
+  | (StepTraceBase & {
+      readonly status: 'skipped';
+      readonly targetFound: false;
+      readonly interactionType: 'none';
+    })
+  | (StepTraceBase & {
+      readonly status: 'failed';
+      readonly targetFound: boolean;
+      readonly interactionType: 'none';
+      readonly error: string;
+    });
 
 export interface ExecutionResult {
-  success: boolean;
-  actionName: string;
-  error?: string;
-  trace: StepTrace[];
-  durationMs: number;
+  readonly actionName: string;
+  /** Present when execution failed — absence means success. */
+  readonly error?: string;
+  readonly trace: readonly StepTrace[];
+  readonly durationMs: number;
 }
 
 export interface AvailableAction {
-  name: string;
-  description: string;
-  disabled: boolean;
-  disabledReason?: string;
-  hasParameters: boolean;
+  readonly name: string;
+  readonly description: string;
+  readonly disabledReason?: string;
+  readonly hasParameters: boolean;
 }
 
 export interface ExecutorConfig {
@@ -139,7 +154,7 @@ export interface AgentActionProviderProps {
   onExecutionStart?: (actionName: string) => void;
   onExecutionComplete?: (result: ExecutionResult) => void;
   /** Pre-defined actions whose schemas are available before their components mount. */
-  registry?: import('./defineAction').ActionDefinition<any>[];
+  registry?: ActionDefinition<any>[];
   /** Router integration — called when executing a registry action that needs navigation. */
   navigate?: (path: string) => void | Promise<void>;
   /** Enable dev-mode console warnings for actions missing from the registry. */
