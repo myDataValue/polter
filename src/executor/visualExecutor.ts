@@ -1,4 +1,4 @@
-import type { RegisteredAction, ExecutionResult, ExecutionTarget, ExecutorConfig, StepTrace } from '../core/types';
+import type { RegisteredAction, ExecutionResult, StepDefinition, ExecutorConfig, StepTrace } from '../core/types';
 
 let stylesInjected = false;
 
@@ -261,53 +261,25 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
 }
 
 /**
- * Resolve the element for a step. For static steps, returns the element directly.
- * For fromParam steps, polls the AgentTarget registry until a match is found.
+ * Resolve the element for a step by polling the AgentTarget registry.
  */
 async function resolveStepElement(
-  target: ExecutionTarget,
+  step: StepDefinition,
   actionName: string,
   params: Record<string, unknown>,
   config: ExecutorConfig,
 ): Promise<HTMLElement | null> {
-  const timeout = 5000;
-
-  // scrollTo runs first (e.g. scroll virtualized list into view)
-  if (target.scrollTo) {
-    await target.scrollTo(params);
+  if (step.scrollTo) {
+    await step.scrollTo(params);
     await delay(200, config.signal);
   }
 
-  // fromParam: resolve lazily from AgentTarget registry by param value.
-  // For array params, resolve against the first element (spotlight one representative target).
-  if (target.fromParam && config.resolveTarget) {
-    const paramKey = typeof target.fromParam === 'function' ? target.fromParam(params) : target.fromParam;
-    const raw = params[paramKey];
-    const first = Array.isArray(raw) ? raw[0] : raw;
-    const paramValue = String(first ?? target.defaultValue ?? '');
-    return config.resolveTarget(actionName, paramKey, paramValue, config.signal, timeout);
+  if (step.target && config.resolveTarget) {
+    const name = typeof step.target === 'function' ? step.target(params) : step.target;
+    return config.resolveTarget(actionName, name, config.signal, params, 5000);
   }
 
-  // fromTarget: resolve lazily from AgentTarget registry by name
-  if (target.fromTarget && config.resolveNamedTarget) {
-    const targetName = typeof target.fromTarget === 'function' ? target.fromTarget(params) : target.fromTarget;
-    return config.resolveNamedTarget(actionName, targetName, config.signal, params, timeout);
-  }
-
-  // Static element
-  return target.element;
-}
-
-/**
- * Check whether an element is present, visible, and measurable.
- * Returns false for null, detached nodes, and display:contents wrappers
- * (whose getBoundingClientRect() returns all zeros).
- */
-function isElementVisible(el: HTMLElement | null): el is HTMLElement {
-  if (!el) return false;
-  if (!el.isConnected) return false;
-  const rect = el.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -405,16 +377,14 @@ export async function executeAction(
   config: ExecutorConfig,
 ): Promise<ExecutionResult> {
   const executionStart = performance.now();
-  const targets = action.getExecutionTargets();
+  const targets = action.resolveSteps();
   const stepTraces: StepTrace[] = [];
 
-  // No targets and no awaitResult — nothing to do.
-  // Visibility check only in guided mode — instant mode doesn't need measurable elements.
-  if (targets.length === 0 || (config.mode === 'guided' && targets.every((t) => t.element && !isElementVisible(t.element)))) {
+  if (targets.length === 0) {
     if (action.waitFor) {
       await action.waitFor();
     }
-    return { success: true, actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
+    return { actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
   }
 
   const fx = config.mode === 'instant'
@@ -422,19 +392,19 @@ export async function executeAction(
     : createGuidedEffects(config);
 
   // Track in-progress step for the catch block
-  let activeStep: { index: number; target: ExecutionTarget; start: number } | null = null;
+  let activeStep: { index: number; step: StepDefinition; start: number } | null = null;
 
   try {
     for (let i = 0; i < targets.length; i++) {
-      const target = targets[i];
+      const step = targets[i];
       const isLast = i === targets.length - 1;
       const stepStart = performance.now();
 
       // Skip when the step declares a precondition is already satisfied.
-      if (target.skipIf?.(params)) {
+      if (step.skipIf?.(params)) {
         stepTraces.push({
           index: i,
-          label: target.label,
+          label: step.label,
           status: 'skipped',
           targetFound: false,
           interactionType: 'none',
@@ -443,48 +413,36 @@ export async function executeAction(
         continue;
       }
 
-      activeStep = { index: i, target, start: stepStart };
+      activeStep = { index: i, step, start: stepStart };
 
-      const resolvedFromParam = typeof target.fromParam === 'function' ? target.fromParam(params) : target.fromParam;
-      const resolvedFromTarget = typeof target.fromTarget === 'function' ? target.fromTarget(params) : target.fromTarget;
-      const targetType = resolvedFromParam ? 'fromParam' as const : resolvedFromTarget ? 'fromTarget' as const : 'static' as const;
-      const targetName = resolvedFromParam || resolvedFromTarget;
-      const targetValue = resolvedFromParam
-        ? String(params[resolvedFromParam] ?? target.defaultValue ?? '')
-        : resolvedFromTarget || undefined;
+      const resolvedTarget = typeof step.target === 'function' ? step.target(params) : step.target;
+      const targetType: StepTrace['targetType'] = typeof step.target === 'function' ? 'dynamic' : 'static';
+      const targetName = resolvedTarget;
 
-      // Resolve element (may be lazy for fromParam steps).
-      // Multi-step actions abort on miss; single-step actions continue silently.
-      // Instant mode only needs the element to exist; guided mode needs it measurable (for spotlight).
-      const resolved = await resolveStepElement(target, action.name, params, config);
-      const element = config.mode === 'instant'
-        ? (resolved?.isConnected ? resolved : null)
-        : (isElementVisible(resolved) ? resolved : null);
+      const element = await resolveStepElement(step, action.name, params, config);
       if (!element) {
         if (targets.length > 1) {
           fx.cleanup();
-          const reason = !element ? `target not found for step "${target.label}"` : `element not visible: "${target.label}"`;
+          const reason = `target not found for step "${step.label}"`;
           stepTraces.push({
             index: i,
-            label: target.label,
+            label: step.label,
             status: 'failed',
             targetType,
             targetName,
-            targetValue,
             targetFound: !!element,
             interactionType: 'none',
             error: reason,
             durationMs: performance.now() - stepStart,
           });
-          return { success: false, actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
+          return { actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
         }
         stepTraces.push({
           index: i,
-          label: target.label,
+          label: step.label,
           status: 'skipped',
           targetType,
           targetName,
-          targetValue,
           targetFound: false,
           interactionType: 'none',
           durationMs: performance.now() - stepStart,
@@ -492,21 +450,20 @@ export async function executeAction(
         continue;
       }
 
-      await fx.before(element, target.label);
+      await fx.before(element, step.label);
 
       // Interact based on step type
       let interactionType: StepTrace['interactionType'] = 'click';
-      if (target.setParam) {
+      const resolvedValue = step.value !== undefined
+        ? (typeof step.value === 'function' ? step.value(params) : step.value)
+        : undefined;
+
+      if (resolvedValue !== undefined) {
         interactionType = 'type';
         const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
           ? element
           : element.querySelector('input, textarea') ?? element;
-        const value = String(params[target.setParam] ?? target.defaultValue ?? '');
-        await fx.type(inputEl as HTMLElement, value);
-      } else if (target.setValue && target.onSetValue) {
-        interactionType = 'setValue';
-        const value = params[target.setValue] ?? target.defaultValue;
-        target.onSetValue(value);
+        await fx.type(inputEl as HTMLElement, resolvedValue);
       } else {
         fx.click(element);
       }
@@ -515,11 +472,10 @@ export async function executeAction(
 
       stepTraces.push({
         index: i,
-        label: target.label,
+        label: step.label,
         status: 'completed',
         targetType,
         targetName,
-        targetValue,
         targetFound: true,
         interactionType,
         durationMs: performance.now() - stepStart,
@@ -537,7 +493,7 @@ export async function executeAction(
       await action.waitFor();
     }
 
-    return { success: true, actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
+    return { actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
   } catch (err) {
     fx.cleanup();
 
@@ -547,15 +503,14 @@ export async function executeAction(
 
     // Trace the step that was in progress when the error occurred
     if (activeStep) {
-      const { index, target: t, start } = activeStep;
-      const fp = typeof t.fromParam === 'function' ? t.fromParam(params) : t.fromParam;
-      const ft = typeof t.fromTarget === 'function' ? t.fromTarget(params) : t.fromTarget;
+      const { index, step: s, start } = activeStep;
+      const resolved = typeof s.target === 'function' ? s.target(params) : s.target;
       stepTraces.push({
         index,
-        label: t.label,
+        label: s.label,
         status: 'failed',
-        targetType: fp ? 'fromParam' : ft ? 'fromTarget' : 'static',
-        targetName: fp || ft,
+        targetType: typeof s.target === 'function' ? 'dynamic' : 'static',
+        targetName: resolved,
         targetFound: false,
         interactionType: 'none',
         error: errorMsg,
@@ -563,6 +518,6 @@ export async function executeAction(
       });
     }
 
-    return { success: false, actionName: action.name, error: errorMsg, trace: stepTraces, durationMs: performance.now() - executionStart };
+    return { actionName: action.name, error: errorMsg, trace: stepTraces, durationMs: performance.now() - executionStart };
   }
 }

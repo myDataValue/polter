@@ -149,7 +149,7 @@ export function zodToJsonSchema(schema: unknown): JsonSchema {
 
 export function generateToolSchemas(actions: RegisteredAction[]): ToolSchema[] {
   return actions
-    .filter((a) => !a.disabled)
+    .filter((a) => !a.disabledReason)
     .map((action) => ({
       name: action.name,
       description: action.description,

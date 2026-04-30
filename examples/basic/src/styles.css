@@ -354,6 +354,9 @@ body {
 .msg {
   font-size: 13px;
   line-height: 1.5;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .msg.user {
@@ -419,6 +422,17 @@ body {
 .suggestion:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.stop-btn {
+  border-color: #f87171;
+  color: #f87171;
+  text-align: center;
+}
+
+.stop-btn:hover:not(:disabled) {
+  border-color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
 }
 
 /* Toast notifications */
