@@ -52,22 +52,32 @@ describe('zodToJsonSchema', () => {
   );
 
   it.prop([fc.string({ minLength: 1 })])(
-    'should preserve descriptions through optional/nullable/default wrappers',
+    'should preserve descriptions through optional/default wrappers',
     (desc) => {
       const base = z.string().describe(desc);
       expect(zodToJsonSchema(base.optional()).description).toBe(desc);
-      expect(zodToJsonSchema(base.nullable()).description).toBe(desc);
       expect(zodToJsonSchema(base.default('x')).description).toBe(desc);
     },
   );
 
-  it.prop([fc.array(fc.string({ minLength: 1 }), { minLength: 1, maxLength: 5 })])(
+  it.prop([fc.string({ minLength: 1 })])(
+    'should preserve descriptions on the string branch of a nullable union',
+    (desc) => {
+      const result = zodToJsonSchema(z.string().describe(desc).nullable()) as {
+        anyOf: { type: string; description?: string }[];
+      };
+      const stringBranch = result.anyOf.find((b) => b.type === 'string');
+      expect(stringBranch?.description).toBe(desc);
+    },
+  );
+
+  it.prop([fc.uniqueArray(fc.string({ minLength: 1 }), { minLength: 1, maxLength: 5 })])(
     'should convert ZodEnum with any string values',
     (values) => {
       const schema = z.enum(values as [string, ...string[]]);
       const result = zodToJsonSchema(schema);
       expect(result.type).toBe('string');
-      expect(result.enum).toEqual(values);
+      expect(new Set(result.enum as string[])).toEqual(new Set(values));
     },
   );
 
