@@ -1,6 +1,13 @@
-import type { RegisteredAction, ToolSchema } from './types';
+import type { ToolSchema } from './types';
 
 type JsonSchema = Record<string, unknown>;
+
+interface SchemaInput {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters?: unknown;
+  readonly disabledReason?: string;
+}
 
 export function zodToJsonSchema(schema: unknown): JsonSchema {
   // Zod v4+: use built-in toJSONSchema() if available
@@ -147,7 +154,7 @@ export function zodToJsonSchema(schema: unknown): JsonSchema {
   }
 }
 
-export function generateToolSchemas(actions: RegisteredAction[]): ToolSchema[] {
+export function generateToolSchemas(actions: SchemaInput[]): ToolSchema[] {
   return actions
     .filter((a) => !a.disabledReason)
     .map((action) => ({
