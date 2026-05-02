@@ -1,6 +1,6 @@
 {
   "name": "@mydatavalue/polter",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Declarative React library for agent-driven UI control with visual guided execution",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
