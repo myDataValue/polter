@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import type { ToolSchema } from './types';
 
 type JsonSchema = Record<string, unknown>;
