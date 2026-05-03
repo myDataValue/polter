@@ -135,6 +135,7 @@ export function AgentActionProvider({
       signal?: AbortSignal,
       params?: Record<string, unknown>,
       timeout = 5000,
+      skipCheck?: () => boolean,
     ): Promise<HTMLElement | null> => {
       const pollInterval = 50;
       const start = Date.now();
@@ -145,6 +146,10 @@ export function AgentActionProvider({
       // If no match at all, give up after timeout.
       while (seenDisabled || Date.now() - start < timeout) {
         if (signal?.aborted) return null;
+        // Re-evaluate the step's skipIf during polling — a prior step's click
+        // may have triggered a React state update that makes this step
+        // unnecessary. Bail early instead of waiting for the full timeout.
+        if (skipCheck?.()) return null;
 
         for (const entry of targetsRef.current.values()) {
           if (entry.name === name && entry.element.isConnected) {
