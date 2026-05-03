@@ -140,6 +140,7 @@ export interface ExecutorConfig {
     signal?: AbortSignal,
     params?: Record<string, unknown>,
     timeout?: number,
+    skipCheck?: () => boolean,
   ) => Promise<HTMLElement | null>;
 }
 

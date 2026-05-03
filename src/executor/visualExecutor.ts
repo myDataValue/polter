@@ -268,6 +268,7 @@ async function resolveStepElement(
   actionName: string,
   params: Record<string, unknown>,
   config: ExecutorConfig,
+  skipCheck?: () => boolean,
 ): Promise<HTMLElement | null> {
   if (step.scrollTo) {
     await step.scrollTo(params);
@@ -276,7 +277,7 @@ async function resolveStepElement(
 
   if (step.target && config.resolveTarget) {
     const name = typeof step.target === 'function' ? step.target(params) : step.target;
-    return config.resolveTarget(actionName, name, config.signal, params, 5000);
+    return config.resolveTarget(actionName, name, config.signal, params, 5000, skipCheck);
   }
 
   return null;
@@ -419,8 +420,41 @@ export async function executeAction(
       const targetType: StepTrace['targetType'] = typeof step.target === 'function' ? 'dynamic' : 'static';
       const targetName = resolvedTarget;
 
-      const element = await resolveStepElement(step, action.name, params, config);
+      const skipCheck = step.skipIf ? () => step.skipIf!(params) : undefined;
+      let element: HTMLElement | null;
+      try {
+        element = await resolveStepElement(step, action.name, params, config, skipCheck);
+      } catch (err) {
+        // A prior step may have triggered a state change that makes this step
+        // unnecessary (e.g. clicking "Opt In" updates pendingOptimizations,
+        // so the second preferredTransitionStep should skip). Re-evaluate
+        // skipIf — if it now passes, skip gracefully instead of failing.
+        if (step.skipIf?.(params)) {
+          stepTraces.push({
+            index: i,
+            label: step.label,
+            status: 'skipped',
+            targetFound: false,
+            interactionType: 'none',
+            durationMs: performance.now() - stepStart,
+          });
+          continue;
+        }
+        throw err;
+      }
       if (!element) {
+        // Re-check skipIf — state may have caught up during polling.
+        if (step.skipIf?.(params)) {
+          stepTraces.push({
+            index: i,
+            label: step.label,
+            status: 'skipped',
+            targetFound: false,
+            interactionType: 'none',
+            durationMs: performance.now() - stepStart,
+          });
+          continue;
+        }
         if (targets.length > 1) {
           fx.cleanup();
           const reason = `target not found for step "${step.label}"`;
