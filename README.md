@@ -9,7 +9,7 @@
 <p align="center"><em>The AI assistant on the right sends a single sentence — Polter drives every click on the left.</em></p>
 
 <p align="center">
-  <img src="https://github.com/myDataValue/polter/raw/main/docs/polter.gif" alt="Polter demo" width="800" />
+  <img src="https://www.canva.com/design/DAHIUTIfols/BU7CU7PxJja5llvbFm8ATg/edit" alt="Polter demo" width="800" />
 </p>
 
 <p align="center">
