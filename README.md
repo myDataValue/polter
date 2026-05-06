@@ -9,9 +9,11 @@
 <p align="center"><em>The AI assistant on the right sends a single sentence — Polter drives every click on the left.</em></p>
 
 <p align="center">
-  <a href="https://stackblitz.com/github/myDataValue/polter/tree/master/examples/basic"><strong>▶ Try it on StackBlitz</strong></a>
+  <img src="https://github.com/user-attachments/assets/8b570fc8-a709-4dca-a778-fdefa917d397" 
+       alt="Polter demo" width="800" />
   ·
-  <a href="https://codesandbox.io/p/github/myDataValue/polter/master?import=true&workspace=examples/basic">CodeSandbox</a>
+<p align="center">
+  <a href="https://stackblitz.com/github/myDataValue/polter/tree/main/examples/basic"><strong>▶ Try it on StackBlitz</strong></a>
   ·
   <a href="https://mydatavalue.github.io/polter/">Website</a>
 </p>
