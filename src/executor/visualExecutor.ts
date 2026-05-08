@@ -483,8 +483,17 @@ export async function executeAction(
         });
         continue;
       }
+      const ensureConnected = async (): Promise<HTMLElement> => {
+        if (element!.isConnected) return element!;
+        if (!config.resolveTarget || !targetName) throw new Error(`Target "${targetName}" is no longer in the DOM.`);
+        const fresh = await config.resolveTarget(action.name, targetName, config.signal, params, 3000) as HTMLElement;
+        if (!fresh?.isConnected) throw new Error(`Target "${targetName}" was recycled by a virtualizer and could not be re-resolved.`);
+        return fresh;
+      };
 
+      element = await ensureConnected();
       await fx.before(element, step.label);
+      element = await ensureConnected();
 
       // Interact based on step type
       let interactionType: StepTrace['interactionType'] = 'click';
