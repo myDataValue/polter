@@ -410,16 +410,14 @@ export async function executeAction(
       const step = targets[i];
       const isLast = i === targets.length - 1;
       const stepStart = performance.now();
+      const baseTrace = () => ({
+        index: i,
+        label: step.label,
+        durationMs: performance.now() - stepStart,
+      });
 
       if (step.skipIf?.(params)) {
-        stepTraces.push({
-          index: i,
-          label: step.label,
-          status: 'skipped',
-          targetFound: false,
-          interactionType: 'none',
-          durationMs: performance.now() - stepStart,
-        });
+        stepTraces.push({ ...baseTrace(), status: 'skipped', targetFound: false, interactionType: 'none' });
         continue;
       }
 
@@ -437,14 +435,7 @@ export async function executeAction(
         // so the second preferredTransitionStep should skip). Re-evaluate
         // skipIf — if it now passes, skip gracefully instead of failing.
         if (step.skipIf?.(params)) {
-          stepTraces.push({
-            index: i,
-            label: step.label,
-            status: 'skipped',
-            targetFound: false,
-            interactionType: 'none',
-            durationMs: performance.now() - stepStart,
-          });
+          stepTraces.push({ ...baseTrace(), status: 'skipped', targetFound: false, interactionType: 'none' });
           continue;
         }
         throw err;
@@ -452,42 +443,16 @@ export async function executeAction(
       if (!element) {
         // Re-check skipIf — state may have caught up during polling.
         if (step.skipIf?.(params)) {
-          stepTraces.push({
-            index: i,
-            label: step.label,
-            status: 'skipped',
-            targetFound: false,
-            interactionType: 'none',
-            durationMs: performance.now() - stepStart,
-          });
+          stepTraces.push({ ...baseTrace(), status: 'skipped', targetFound: false, interactionType: 'none' });
           continue;
         }
         if (targets.length > 1) {
           fx.cleanup();
           const reason = `target not found for step "${step.label}"`;
-          stepTraces.push({
-            index: i,
-            label: step.label,
-            status: 'failed',
-            targetType,
-            targetName,
-            targetFound: !!element,
-            interactionType: 'none',
-            error: reason,
-            durationMs: performance.now() - stepStart,
-          });
+          stepTraces.push({ ...baseTrace(), status: 'failed', targetType, targetName, targetFound: false, interactionType: 'none', error: reason });
           return { actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
         }
-        stepTraces.push({
-          index: i,
-          label: step.label,
-          status: 'skipped',
-          targetType,
-          targetName,
-          targetFound: false,
-          interactionType: 'none',
-          durationMs: performance.now() - stepStart,
-        });
+        stepTraces.push({ ...baseTrace(), status: 'skipped', targetType, targetName, targetFound: false, interactionType: 'none' });
         continue;
       }
       const ensureConnected = async (): Promise<HTMLElement> => {
@@ -502,14 +467,12 @@ export async function executeAction(
       await fx.before(element, step.label);
       element = await ensureConnected();
 
-      // Interact based on step type
-      let interactionType: StepTrace['interactionType'] = 'click';
       const resolvedValue = step.value !== undefined
         ? (typeof step.value === 'function' ? step.value(params) : step.value)
         : undefined;
+      const interactionType: StepTrace['interactionType'] = resolvedValue !== undefined ? 'type' : 'click';
 
       if (resolvedValue !== undefined) {
-        interactionType = 'type';
         const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
           ? element
           : element.querySelector('input, textarea') ?? element;
@@ -520,16 +483,7 @@ export async function executeAction(
 
       await fx.after(isLast);
 
-      stepTraces.push({
-        index: i,
-        label: step.label,
-        status: 'completed',
-        targetType,
-        targetName,
-        targetFound: true,
-        interactionType,
-        durationMs: performance.now() - stepStart,
-      });
+      stepTraces.push({ ...baseTrace(), status: 'completed', targetType, targetName, targetFound: true, interactionType });
 
       activeStep = null;
     }
