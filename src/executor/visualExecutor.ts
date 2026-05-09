@@ -415,11 +415,13 @@ export async function executeAction(
         label: step.label,
         durationMs: performance.now() - stepStart,
       });
-
-      if (step.skipIf?.(params)) {
+      const trySkip = (): boolean => {
+        if (!step.skipIf?.(params)) return false;
         stepTraces.push({ ...baseTrace(), status: 'skipped', targetFound: false, interactionType: 'none' });
-        continue;
-      }
+        return true;
+      };
+
+      if (trySkip()) continue;
 
       const target = describeTarget(step, params);
       activeStep = { index: i, step, start: stepStart, target };
@@ -434,18 +436,12 @@ export async function executeAction(
         // unnecessary (e.g. clicking "Opt In" updates pendingOptimizations,
         // so the second preferredTransitionStep should skip). Re-evaluate
         // skipIf — if it now passes, skip gracefully instead of failing.
-        if (step.skipIf?.(params)) {
-          stepTraces.push({ ...baseTrace(), status: 'skipped', targetFound: false, interactionType: 'none' });
-          continue;
-        }
+        if (trySkip()) continue;
         throw err;
       }
       if (!element) {
         // Re-check skipIf — state may have caught up during polling.
-        if (step.skipIf?.(params)) {
-          stepTraces.push({ ...baseTrace(), status: 'skipped', targetFound: false, interactionType: 'none' });
-          continue;
-        }
+        if (trySkip()) continue;
         if (targets.length > 1) {
           fx.cleanup();
           const reason = `target not found for step "${step.label}"`;
@@ -467,9 +463,7 @@ export async function executeAction(
       await fx.before(element, step.label);
       element = await ensureConnected();
 
-      const resolvedValue = step.value !== undefined
-        ? (typeof step.value === 'function' ? step.value(params) : step.value)
-        : undefined;
+      const resolvedValue = typeof step.value === 'function' ? step.value(params) : step.value;
       const interactionType: StepTrace['interactionType'] = resolvedValue !== undefined ? 'type' : 'click';
 
       if (resolvedValue !== undefined) {
