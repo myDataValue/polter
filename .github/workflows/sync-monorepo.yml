@@ -1,0 +1,81 @@
+name: Sync to MyData Monorepo
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/**"
+  workflow_dispatch:
+
+concurrency:
+  group: polter-sync-monorepo
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout public Polter repo
+        uses: actions/checkout@v4
+        with:
+          path: polter-public
+
+      - name: Checkout private monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: myDataValue/mydata
+          token: ${{ secrets.MYDATA_MONOREPO_TOKEN }}
+          ref: main
+          path: mydata
+
+      - name: Copy public Polter into monorepo
+        run: |
+          cd mydata
+          git rm -r --ignore-unmatch packages/polter
+          mkdir -p packages/polter
+          cd ..
+          rsync -a \
+            --exclude=".git" \
+            --exclude=".github" \
+            polter-public/ \
+            mydata/packages/polter/
+
+      - name: Open monorepo sync PR
+        working-directory: mydata
+        env:
+          GH_TOKEN: ${{ secrets.MYDATA_MONOREPO_TOKEN }}
+          POLTER_SHA: ${{ github.sha }}
+        run: |
+          BRANCH="sync/from-public-polter"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git switch -C "$BRANCH"
+          git add -A packages/polter
+
+          if git diff --quiet --cached; then
+            echo "Monorepo Polter package is already in sync."
+            exit 0
+          fi
+
+          git commit -m "sync: import public Polter changes"
+          git fetch origin "$BRANCH:refs/remotes/origin/$BRANCH" || true
+          git push --force-with-lease origin "$BRANCH"
+
+          BODY=$(cat <<EOF
+          Syncs public \`myDataValue/polter\` commit \`${POLTER_SHA}\` into
+          \`packages/polter\`.
+
+          This PR was created after changes landed in the public open-source
+          Polter repository.
+          EOF
+          )
+
+          gh pr view "$BRANCH" --repo myDataValue/mydata >/dev/null 2>&1 \
+            && gh pr edit "$BRANCH" --repo myDataValue/mydata \
+              --title "Sync public Polter into monorepo" \
+              --body "$BODY" \
+            || gh pr create --repo myDataValue/mydata \
+              --base main \
+              --head "$BRANCH" \
+              --title "Sync public Polter into monorepo" \
+              --body "$BODY"
