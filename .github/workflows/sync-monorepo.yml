@@ -31,14 +31,14 @@ jobs:
       - name: Copy public Polter into monorepo
         run: |
           cd mydata
-          git rm -r --ignore-unmatch packages/polter
-          mkdir -p packages/polter
+          git rm -r --ignore-unmatch libs/polter
+          mkdir -p libs/polter
           cd ..
           rsync -a \
             --exclude=".git" \
             --exclude=".github" \
             polter-public/ \
-            mydata/packages/polter/
+            mydata/libs/polter/
 
       - name: Open monorepo sync PR
         working-directory: mydata
@@ -50,7 +50,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git switch -C "$BRANCH"
-          git add -A packages/polter
+          git add -A libs/polter
 
           if git diff --quiet --cached; then
             echo "Monorepo Polter package is already in sync."
@@ -63,7 +63,7 @@ jobs:
 
           BODY=$(cat <<EOF
           Syncs public \`myDataValue/polter\` commit \`${POLTER_SHA}\` into
-          \`packages/polter\`.
+          \`libs/polter\`.
 
           This PR was created after changes landed in the public open-source
           Polter repository.
