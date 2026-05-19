@@ -1,0 +1,204 @@
+name: Sync to MyData Monorepo
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - ".github/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: polter-sync-monorepo
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      MONOREPO: myDataValue/monorepo
+      SYNC_BRANCH: sync/from-public-polter
+      SYNC_LABEL: sync:public-import
+    steps:
+      - name: Checkout public Polter repo
+        uses: actions/checkout@v4
+        with:
+          path: polter-public
+
+      - name: Skip monorepo export commits
+        id: export-check
+        working-directory: polter-public
+        run: |
+          if git log -1 --format=%B | grep -q "Source: myDataValue/monorepo@"; then
+            echo "This commit was exported from the monorepo; skipping import."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout private monorepo
+        if: steps.export-check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MONOREPO }}
+          token: ${{ secrets.MYDATA_MONOREPO_TOKEN }}
+          ref: main
+          path: mydata
+
+      - name: Setup Node
+        if: steps.export-check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mydata/package-lock.json
+
+      - name: Copy public Polter into monorepo
+        if: steps.export-check.outputs.skip != 'true'
+        run: |
+          cd mydata
+          git rm -r --ignore-unmatch libs/polter
+          mkdir -p libs/polter
+          cd ..
+          rsync -a \
+            --exclude=".git" \
+            --exclude=".github" \
+            --exclude="/package-lock.json" \
+            polter-public/ \
+            mydata/libs/polter/
+
+      - name: Regenerate monorepo npm lockfile
+        if: steps.export-check.outputs.skip != 'true'
+        working-directory: mydata
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit and push monorepo sync branch
+        if: steps.export-check.outputs.skip != 'true'
+        id: monorepo-sync-commit
+        working-directory: mydata
+        env:
+          POLTER_SHA: ${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git switch -C "$SYNC_BRANCH"
+          git add -A libs/polter package-lock.json
+
+          if git diff --quiet --cached; then
+            echo "Monorepo Polter package is already in sync."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          SHORT_SHA="${POLTER_SHA::12}"
+          TITLE="sync: import public Polter ${SHORT_SHA}"
+
+          git commit \
+            -m "$TITLE" \
+            -m "Source: myDataValue/polter@${POLTER_SHA}"
+          git fetch origin "$SYNC_BRANCH:refs/remotes/origin/$SYNC_BRANCH" || true
+          git push --force-with-lease origin "$SYNC_BRANCH"
+
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+
+      - name: Open monorepo sync PR
+        if: steps.monorepo-sync-commit.outputs.has_changes == 'true'
+        uses: actions/github-script@v9
+        env:
+          MONOREPO: ${{ env.MONOREPO }}
+          SYNC_BRANCH: ${{ env.SYNC_BRANCH }}
+          SYNC_LABEL: ${{ env.SYNC_LABEL }}
+          POLTER_SHA: ${{ github.sha }}
+          PR_TITLE: ${{ steps.monorepo-sync-commit.outputs.title }}
+          HEAD_SHA: ${{ steps.monorepo-sync-commit.outputs.head_sha }}
+        with:
+          github-token: ${{ secrets.MYDATA_MONOREPO_TOKEN }}
+          retries: 3
+          script: |
+            const [owner, repo] = process.env.MONOREPO.split('/');
+            const syncBranch = process.env.SYNC_BRANCH;
+            const syncLabel = process.env.SYNC_LABEL;
+            const title = process.env.PR_TITLE;
+            const headSha = process.env.HEAD_SHA;
+            const polterSha = process.env.POLTER_SHA;
+            const body = [
+              `Syncs public \`myDataValue/polter\` commit \`${polterSha}\` into \`libs/polter\`.`,
+              '',
+              'This PR was created after changes landed in the public open-source',
+              'Polter repository. Public-only files such as `.github/**` and the',
+              'public root `package-lock.json` are not copied into the monorepo.',
+            ].join('\n');
+
+            try {
+              await github.rest.issues.getLabel({
+                owner,
+                repo,
+                name: syncLabel,
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: syncLabel,
+                color: '0969da',
+                description: 'Generated from public Polter import',
+              });
+            }
+
+            const { data: existingPulls } = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              base: 'main',
+              head: `${owner}:${syncBranch}`,
+              per_page: 1,
+            });
+
+            let pull = existingPulls[0];
+            if (pull) {
+              core.info(`Updating monorepo sync PR #${pull.number}`);
+              const response = await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: pull.number,
+                title,
+                body,
+              });
+              pull = response.data;
+            } else {
+              core.info('Creating monorepo sync PR');
+              const response = await github.rest.pulls.create({
+                owner,
+                repo,
+                base: 'main',
+                head: syncBranch,
+                title,
+                body,
+                maintainer_can_modify: true,
+              });
+              pull = response.data;
+            }
+
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: pull.number,
+              labels: [syncLabel],
+            });
+
+            const { data: currentPull } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pull.number,
+            });
+
+            if (currentPull.head.sha !== headSha) {
+              throw new Error(
+                `Monorepo sync PR head ${currentPull.head.sha} does not match pushed commit ${headSha}`,
+              );
+            }
