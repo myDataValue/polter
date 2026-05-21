@@ -4,6 +4,7 @@ import fc from 'fast-check';
 const DOM_PROPERTY_OPTS = { numRuns: 20 };
 const DOM_TIMEOUT = 30_000;
 import React from 'react';
+import { flushSync } from 'react-dom';
 import { render, act, cleanup } from '@testing-library/react';
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { AgentAction } from '../components/AgentAction';
@@ -408,4 +409,83 @@ describe('execution callbacks', () => {
     expect(onStart).toHaveBeenCalledWith('tracked');
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ actionName: 'tracked' }));
   });
+});
+
+// ---------------------------------------------------------------------------
+// Target DOM-node replacement during execution — regression guard for the
+// "step resolves an element, then the row gets recycled (e.g. by a
+// virtualizer's scrollIntoView), then the click silently fires on the
+// detached node" class of bugs.
+// ---------------------------------------------------------------------------
+
+describe('target stability across re-renders', () => {
+  it(
+    'clicks the currently-mounted target for any number of mid-step replacements',
+    { timeout: DOM_TIMEOUT },
+    async () => {
+      await fc.assert(
+        fc.asyncProperty(fc.integer({ min: 0, max: 5 }), async (recycleCount) => {
+          const clicks: number[] = [];
+          let recycleRow: () => void = () => {};
+
+          const action = defineAction({ name: 'click_target', description: 'Click' });
+
+          function Harness() {
+            const [version, setVersion] = React.useState(0);
+            recycleRow = () => flushSync(() => setVersion((v) => v + 1));
+
+            useAgentAction({
+              ...action,
+              steps: [{ label: 'click', target: 'btn' }],
+            });
+
+            // key={version} forces React to fully remount the subtree, so the
+            // <button> is a different DOM node each time — the way a virtualizer
+            // recycles a row.
+            return (
+              <AgentTarget key={version} name="btn">
+                <button onClick={() => clicks.push(version)}>Go</button>
+              </AgentTarget>
+            );
+          }
+
+          let ctx: ReturnType<typeof useAgentActions> | null = null;
+          const { container } = render(
+            <AgentActionProvider
+              mode="guided"
+              stepDelay={0}
+              cursorEnabled={false}
+              tooltipEnabled={false}
+            >
+              <Harness />
+              <TestConsumer onContext={(c) => (ctx = c)} />
+            </AgentActionProvider>,
+          );
+
+          try {
+            // Override scrollIntoView on this specific element only (not the
+            // prototype), so the test stays isolated from other tests and from
+            // other property iterations. When polter scrolls the resolved
+            // element into view, we synchronously remount the row N times —
+            // simulating a virtualizer (or any other re-render) replacing the
+            // resolved node mid-step.
+            const initialButton = container.querySelector('button') as HTMLElement;
+            initialButton.scrollIntoView = () => {
+              for (let i = 0; i < recycleCount; i++) recycleRow();
+            };
+
+            const result = await act(() => ctx!.execute('click_target'));
+
+            expect(result.error).toBeUndefined();
+            // The click should land on the currently-mounted instance, whose
+            // closure captures `version === recycleCount`.
+            expect(clicks).toEqual([recycleCount]);
+          } finally {
+            cleanup();
+          }
+        }),
+        DOM_PROPERTY_OPTS,
+      );
+    },
+  );
 });

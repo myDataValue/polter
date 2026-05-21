@@ -54,7 +54,7 @@ function createBlockingOverlay(): OverlayHandle {
   return { remove: () => overlay.remove() };
 }
 
-function createCursor(): OverlayHandle {
+function createCursor(): { element: HTMLElement; remove: () => void } {
   injectStyles();
 
   const cursor = document.createElement('div');
@@ -71,36 +71,27 @@ function createCursor(): OverlayHandle {
   `;
   document.body.appendChild(cursor);
 
-  return { remove: () => cursor.remove() };
+  return { element: cursor, remove: () => cursor.remove() };
 }
 
-function moveCursorTo(target: HTMLElement, signal?: AbortSignal): Promise<void> {
-  const cursor = document.querySelector('.polter-cursor') as HTMLElement | null;
-  if (!cursor) return Promise.resolve();
-
+function moveCursorTo(cursor: HTMLElement, target: HTMLElement, signal?: AbortSignal): Promise<void> {
   const rect = target.getBoundingClientRect();
   cursor.style.left = `${rect.left + rect.width / 2}px`;
   cursor.style.top = `${rect.top + rect.height / 2}px`;
-
   return delay(450, signal);
 }
 
-function animateCursorClick(): void {
-  const cursor = document.querySelector('.polter-cursor') as HTMLElement | null;
+function animateCursorClick(cursor: HTMLElement | null): void {
   if (!cursor) return;
   cursor.style.animation = 'polter-cursor-click 0.2s ease';
   cursor.addEventListener('animationend', () => { cursor.style.animation = ''; }, { once: true });
-}
-
-interface SpotlightHandle {
-  remove: () => void;
 }
 
 function createSpotlight(
   target: HTMLElement,
   label: string,
   config: ExecutorConfig,
-): SpotlightHandle {
+): OverlayHandle {
   injectStyles();
 
   const rect = target.getBoundingClientRect();
@@ -193,16 +184,28 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
       reject(new DOMException('Aborted', 'AbortError'));
       return;
     }
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        reject(new DOMException('Aborted', 'AbortError'));
-      },
-      { once: true },
-    );
+    let timer: ReturnType<typeof setTimeout>;
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
+}
+
+/**
+ * Commit an input's value: dispatch Enter (triggers onKeyDown save handlers)
+ * then blur. Enter is more reliable than blur alone — browsers defer
+ * blur/focus events when the tab is hidden.
+ */
+async function commitInput(input: HTMLInputElement, signal?: AbortSignal): Promise<void> {
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  input.blur();
+  await delay(100, signal);
 }
 
 /**
@@ -252,12 +255,7 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
     }
   }
 
-  // Commit the value: dispatch Enter keydown (triggers onKeyDown save
-  // handlers), then blur. Enter is more reliable than blur alone because
-  // browsers defer blur/focus events when the tab is hidden.
-  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-  input.blur();
-  await delay(100, signal);
+  await commitInput(input, signal);
 }
 
 /**
@@ -313,7 +311,8 @@ function simulateFullClick(element: HTMLElement): void {
 function createGuidedEffects(config: ExecutorConfig): StepEffects {
   const blocker = createBlockingOverlay();
   const cursor = config.cursorEnabled ? createCursor() : null;
-  let spotlight: SpotlightHandle | null = null;
+  const cursorEl = cursor?.element ?? null;
+  let spotlight: OverlayHandle | null = null;
 
   return {
     async before(element, label) {
@@ -321,7 +320,7 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
       if (document.hidden) return;
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await delay(300, config.signal);
-      if (cursor) await moveCursorTo(element, config.signal);
+      if (cursorEl) await moveCursorTo(cursorEl, element, config.signal);
       spotlight = createSpotlight(element, label, config);
       await delay(config.stepDelay, config.signal);
     },
@@ -334,15 +333,13 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
     async type(input, value) {
       if (document.hidden) {
         setNativeInputValue(input as HTMLInputElement, value);
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-        (input as HTMLInputElement).blur();
-        await delay(100, config.signal);
+        await commitInput(input as HTMLInputElement, config.signal);
         return;
       }
       await simulateTyping(input, value, config.signal);
     },
     click(element) {
-      if (!document.hidden) animateCursorClick();
+      if (!document.hidden) animateCursorClick(cursorEl);
       simulateFullClick(element);
     },
     cleanup() {
@@ -359,9 +356,7 @@ function createInstantEffects(): StepEffects {
     async after() { },
     async type(input, value) {
       setNativeInputValue(input as HTMLInputElement, value);
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      (input as HTMLInputElement).blur();
-      await delay(100);
+      await commitInput(input as HTMLInputElement);
     },
     click(element) {
       simulateFullClick(element);
@@ -371,6 +366,16 @@ function createInstantEffects(): StepEffects {
 }
 
 // ---------------------------------------------------------------------------
+
+function describeTarget(
+  step: StepDefinition,
+  params: Record<string, unknown>,
+): { type: 'static' | 'dynamic'; name: string | undefined } {
+  if (typeof step.target === 'function') {
+    return { type: 'dynamic', name: step.target(params) };
+  }
+  return { type: 'static', name: step.target };
+}
 
 export async function executeAction(
   action: RegisteredAction,
@@ -393,32 +398,34 @@ export async function executeAction(
     : createGuidedEffects(config);
 
   // Track in-progress step for the catch block
-  let activeStep: { index: number; step: StepDefinition; start: number } | null = null;
+  let activeStep: {
+    index: number;
+    step: StepDefinition;
+    start: number;
+    target: { type: 'static' | 'dynamic'; name: string | undefined };
+  } | null = null;
 
   try {
     for (let i = 0; i < targets.length; i++) {
       const step = targets[i];
       const isLast = i === targets.length - 1;
       const stepStart = performance.now();
+      const baseTrace = () => ({
+        index: i,
+        label: step.label,
+        durationMs: performance.now() - stepStart,
+      });
+      const trySkip = (): boolean => {
+        if (!step.skipIf?.(params)) return false;
+        stepTraces.push({ ...baseTrace(), status: 'skipped', targetFound: false, interactionType: 'none' });
+        return true;
+      };
 
-      // Skip when the step declares a precondition is already satisfied.
-      if (step.skipIf?.(params)) {
-        stepTraces.push({
-          index: i,
-          label: step.label,
-          status: 'skipped',
-          targetFound: false,
-          interactionType: 'none',
-          durationMs: performance.now() - stepStart,
-        });
-        continue;
-      }
+      if (trySkip()) continue;
 
-      activeStep = { index: i, step, start: stepStart };
-
-      const resolvedTarget = typeof step.target === 'function' ? step.target(params) : step.target;
-      const targetType: StepTrace['targetType'] = typeof step.target === 'function' ? 'dynamic' : 'static';
-      const targetName = resolvedTarget;
+      const target = describeTarget(step, params);
+      activeStep = { index: i, step, start: stepStart, target };
+      const { type: targetType, name: targetName } = target;
 
       const skipCheck = step.skipIf ? () => step.skipIf!(params) : undefined;
       let element: HTMLElement | null;
@@ -429,58 +436,19 @@ export async function executeAction(
         // unnecessary (e.g. clicking "Opt In" updates pendingOptimizations,
         // so the second preferredTransitionStep should skip). Re-evaluate
         // skipIf — if it now passes, skip gracefully instead of failing.
-        if (step.skipIf?.(params)) {
-          stepTraces.push({
-            index: i,
-            label: step.label,
-            status: 'skipped',
-            targetFound: false,
-            interactionType: 'none',
-            durationMs: performance.now() - stepStart,
-          });
-          continue;
-        }
+        if (trySkip()) continue;
         throw err;
       }
       if (!element) {
         // Re-check skipIf — state may have caught up during polling.
-        if (step.skipIf?.(params)) {
-          stepTraces.push({
-            index: i,
-            label: step.label,
-            status: 'skipped',
-            targetFound: false,
-            interactionType: 'none',
-            durationMs: performance.now() - stepStart,
-          });
-          continue;
-        }
+        if (trySkip()) continue;
         if (targets.length > 1) {
           fx.cleanup();
           const reason = `target not found for step "${step.label}"`;
-          stepTraces.push({
-            index: i,
-            label: step.label,
-            status: 'failed',
-            targetType,
-            targetName,
-            targetFound: !!element,
-            interactionType: 'none',
-            error: reason,
-            durationMs: performance.now() - stepStart,
-          });
+          stepTraces.push({ ...baseTrace(), status: 'failed', targetType, targetName, targetFound: false, interactionType: 'none', error: reason });
           return { actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
         }
-        stepTraces.push({
-          index: i,
-          label: step.label,
-          status: 'skipped',
-          targetType,
-          targetName,
-          targetFound: false,
-          interactionType: 'none',
-          durationMs: performance.now() - stepStart,
-        });
+        stepTraces.push({ ...baseTrace(), status: 'skipped', targetType, targetName, targetFound: false, interactionType: 'none' });
         continue;
       }
       const ensureConnected = async (): Promise<HTMLElement> => {
@@ -495,14 +463,10 @@ export async function executeAction(
       await fx.before(element, step.label);
       element = await ensureConnected();
 
-      // Interact based on step type
-      let interactionType: StepTrace['interactionType'] = 'click';
-      const resolvedValue = step.value !== undefined
-        ? (typeof step.value === 'function' ? step.value(params) : step.value)
-        : undefined;
+      const resolvedValue = typeof step.value === 'function' ? step.value(params) : step.value;
+      const interactionType: StepTrace['interactionType'] = resolvedValue !== undefined ? 'type' : 'click';
 
       if (resolvedValue !== undefined) {
-        interactionType = 'type';
         const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
           ? element
           : element.querySelector('input, textarea') ?? element;
@@ -513,16 +477,7 @@ export async function executeAction(
 
       await fx.after(isLast);
 
-      stepTraces.push({
-        index: i,
-        label: step.label,
-        status: 'completed',
-        targetType,
-        targetName,
-        targetFound: true,
-        interactionType,
-        durationMs: performance.now() - stepStart,
-      });
+      stepTraces.push({ ...baseTrace(), status: 'completed', targetType, targetName, targetFound: true, interactionType });
 
       activeStep = null;
     }
@@ -544,16 +499,14 @@ export async function executeAction(
       ? 'Execution cancelled'
       : String(err);
 
-    // Trace the step that was in progress when the error occurred
     if (activeStep) {
-      const { index, step: s, start } = activeStep;
-      const resolved = typeof s.target === 'function' ? s.target(params) : s.target;
+      const { index, step: s, start, target } = activeStep;
       stepTraces.push({
         index,
         label: s.label,
         status: 'failed',
-        targetType: typeof s.target === 'function' ? 'dynamic' : 'static',
-        targetName: resolved,
+        targetType: target.type,
+        targetName: target.name,
         targetFound: false,
         interactionType: 'none',
         error: errorMsg,
