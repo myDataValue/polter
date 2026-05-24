@@ -20,6 +20,7 @@ export type {
   ActionSchema,
   ActionDefinition,
   ExecutionMode,
+  ScrollDispatch,
   StepDefinition,
   TargetDefinition,
   AgentTargetEntry,

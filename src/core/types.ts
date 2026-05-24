@@ -3,6 +3,21 @@ import type { z } from 'zod';
 export type ExecutionMode = 'guided' | 'instant';
 
 /**
+ * Declarative scroll directive — dispatches a CustomEvent on window so a
+ * listener (typically a virtualized table) can bring the target row into view.
+ *
+ * Arbitrary code execution is intentionally not supported here. If you find
+ * yourself wanting setState or a mutation, that should be a step the agent
+ * clicks — not a side effect masquerading as a scroll.
+ */
+export interface ScrollDispatch<TParams = Record<string, unknown>> {
+  /** Event name dispatched on `window`. The page listens and scrolls accordingly. */
+  readonly dispatchEvent: string;
+  /** Builder for the CustomEvent's `detail` payload. Receives the action's params. */
+  readonly detail?: (params: TParams) => unknown;
+}
+
+/**
  * Action schema — used by `defineAction()` in registry files.
  * Describes WHAT, WHERE, and (for cross-page actions) HOW.
  * Components extend with runtime state via `useAgentAction()`.
@@ -13,11 +28,14 @@ export interface ActionSchema<TSchema extends z.ZodType = z.ZodType<Record<strin
   /** Zod schema for action parameters. */
   readonly parameters?: TSchema;
   /**
-   * Navigation before executing steps.
-   * - `string | string[]` — AgentTarget name(s) to click in sequence.
-   * - `(params) => string` — client-side URL path to navigate to (for dynamic routes).
+   * AgentTarget name(s) to click before executing steps. The agent visibly
+   * clicks each named target in sequence — same as a human would.
+   *
+   * URL-based navigation is intentionally not supported. Pages that aren't
+   * reachable by clicking a visible link aren't reachable by ADUI either —
+   * either add a clickable entry point, or have the user navigate manually.
    */
-  readonly navigateTo?: string | string[] | ((params: z.infer<TSchema>) => string);
+  readonly navigateTo?: string | string[];
   /** Steps the agent walks through to drive the UI. */
   readonly steps?: StepDefinition<z.infer<TSchema>>[];
 }
@@ -30,13 +48,14 @@ export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<s
   /** When set, the action is disabled and this string is the reason. */
   readonly disabledReason?: string;
   /**
-   * Waited on after all steps complete. Holds the action open until async work
+   * Awaited after all steps complete. Holds the action open until async work
    * triggered by a step click finishes.
    *
-   * Pass a React ref whose `.current` is set to a Promise by the click handler,
-   * or a function returning a Promise.
+   * A React ref whose `.current` is set to a Promise by the click handler.
+   * The ref form is the only form — it makes accidental work-in-the-callback
+   * impossible (you can only assign a Promise to the ref, not run code).
    */
-  readonly waitFor?: React.RefObject<Promise<unknown> | undefined> | (() => void | Promise<void>);
+  readonly waitFor?: React.RefObject<Promise<unknown> | undefined>;
 }
 
 /** Describes a single step in an agent action. */
@@ -59,11 +78,11 @@ export interface StepDefinition<TParams = Record<string, unknown>> {
    */
   readonly value?: string | ((params: TParams) => string | undefined);
   /**
-   * Scroll a virtualized list or viewport so the target element renders in DOM.
-   * This is the ONLY legitimate use — if you're tempted to set state, call a
-   * mutation, or switch a mode, that should be a step the agent clicks instead.
+   * Scroll a virtualized list or viewport so the target element renders in
+   * DOM. Declarative only — the engine dispatches a CustomEvent that the
+   * page listens for. No arbitrary code, no setState shortcuts.
    */
-  readonly scrollTo?: (params: TParams) => void | Promise<void>;
+  readonly scrollTo?: ScrollDispatch<TParams>;
   /** Skip this step at execution time when the predicate returns true. */
   readonly skipIf?: (params: TParams) => boolean;
 }
@@ -75,11 +94,6 @@ export interface TargetDefinition {
    * and/or row identity into the name (e.g. `name={`edit_markup:${id}`}`).
    */
   readonly name: string;
-  /**
-   * Scroll a virtualized list or viewport so this target's element renders in DOM.
-   * Only for making targets reachable — not for state changes or business logic.
-   */
-  readonly scrollTo?: (params: Record<string, unknown>) => void | Promise<void>;
 }
 
 export interface AgentTargetEntry extends TargetDefinition {
@@ -172,8 +186,6 @@ export interface AgentActionProviderProps {
   onExecutionComplete?: (result: ExecutionResult) => void;
   /** Pre-defined actions whose schemas are available before their components mount. */
   registry?: ActionSchema<any>[];
-  /** Router integration — called when executing a registry action that needs navigation. */
-  navigate?: (path: string) => void | Promise<void>;
   /** Enable dev-mode console warnings for actions missing from the registry. */
   devWarnings?: boolean;
 }

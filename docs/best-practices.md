@@ -42,7 +42,7 @@ For bulk operations, the agent selects properties first (via filter/selection ac
 
 When the last step click triggers async work (a mutation, a streaming response), use `waitFor` to hold the action open until it completes.
 
-**Prefer the ref form** — a React ref whose `.current` is set to a Promise by the click handler. It's impossible to accidentally "do work" in a ref:
+`waitFor` takes a **ref only** — a React ref whose `.current` is set to a Promise by the click handler. The function form was removed because it let side effects sneak in alongside the wait. With a ref you can only assign a Promise; there's no place for state updates or business logic to hide.
 
 ```tsx
 const pushRef = useRef<Promise<void>>();
@@ -61,6 +61,62 @@ useAgentAction(
   }),
 );
 ```
+
+If you need to throw a custom error on failure, do it inside the promise chain assigned to the ref — not in a separate waitFor function:
+
+```tsx
+onClick={() => {
+  pushRef.current = pushMutation().then(result => {
+    if (result.aborted) throw new Error('Push aborted');
+    return result;
+  });
+}}
+```
+
+## `navigateTo` clicks targets, in order
+
+`navigateTo` clicks one or more AgentTargets before steps run — a shortcut for "first land on the right page." Pass a name to click one, or an array to click a sequence (e.g. open a dropdown, then click an item inside).
+
+```ts
+navigateTo: 'navigate_to_dashboard'
+navigateTo: ['profile-menu', 'settings-tab']
+```
+
+If a route has no UI entry point, add a clickable `<AgentTarget>` somewhere visible — even a hidden-but-mounted element with a Link inside is fine, as long as the click is a real DOM interaction.
+
+For dynamic per-entity routes (e.g. property detail pages), use steps to search and click the row:
+
+```ts
+export const navigateToProperty = defineAction({
+  name: 'navigate_to_property',
+  parameters: z.object({ property_id: z.number() }),
+  navigateTo: 'navigate_to_dashboard',
+  steps: [
+    { label: 'Filter to property', target: 'search-input', value: fromParam('property_id') },
+    { label: 'Open property',      target: (p) => `property_id:${p.property_id}` },
+  ],
+});
+```
+
+## `scrollTo` is declarative — no arbitrary code
+
+Steps and AgentTargets can specify a `scrollTo` to bring a virtualized row into view. The shape is `{ dispatchEvent, detail }` — the engine dispatches a CustomEvent on `window` with the given name and detail; a listener on the page handles the actual scroll.
+
+```ts
+// In a hook that builds steps
+const scrollToFirstProperty: ScrollDispatch = {
+  dispatchEvent: 'agent:scroll-to',
+  detail: (params) => {
+    const id = firstId(params);
+    return id ? { property_id: id } : undefined;
+  },
+};
+
+// Used in a step
+{ label: 'Click edit', target: (p) => `edit:${p.property_id}`, scrollTo: scrollToFirstProperty }
+```
+
+Arbitrary code is intentionally not supported. If you find yourself wanting `setSelectedIds`, `dispatch`, a mutation, or any other side effect — that's a step the agent should click, not a "scroll" that pretends to be passive.
 
 ## Put cross-page steps in `defineAction`
 

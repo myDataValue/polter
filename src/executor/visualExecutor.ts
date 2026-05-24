@@ -271,8 +271,15 @@ async function resolveStepElement(
   skipCheck?: () => boolean,
 ): Promise<HTMLElement | null> {
   if (step.scrollTo) {
-    await step.scrollTo(params);
-    await delay(200, config.signal);
+    const hasDetailFn = step.scrollTo.detail !== undefined;
+    const detail = step.scrollTo.detail?.(params);
+    // Skip dispatch when the detail function returns undefined — matches the
+    // pre-refactor "if (id) dispatch" guard pattern. If no detail function was
+    // provided at all, fire the event with no payload.
+    if (!hasDetailFn || detail !== undefined) {
+      window.dispatchEvent(new CustomEvent(step.scrollTo.dispatchEvent, { detail }));
+      await delay(200, config.signal);
+    }
   }
 
   if (step.target && config.resolveTarget) {

@@ -22,7 +22,6 @@ export function useAgentAction(...configs: ActionDefinition<any>[]): void {
     const item = configsRef.current.find((c) => c.name === actionName);
     const wf = item?.waitFor;
     if (!wf) return;
-    if (typeof wf === 'function') { await wf(); return; }
     await wf.current;
   }, []);
 
