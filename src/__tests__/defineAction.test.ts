@@ -10,24 +10,16 @@ describe('defineAction', () => {
       const action = defineAction({ name, description });
       expect(action.name).toBe(name);
       expect(action.description).toBe(description);
-      expect(action.steps).toBeUndefined();
-      expect(action.route).toBeUndefined();
+      expect(action.navigateTo).toBeUndefined();
       expect(action.parameters).toBeUndefined();
     },
   );
 
-  it.prop([
-    fc.string({ minLength: 1 }),
-    fc.array(fc.record({ label: fc.string(), target: fc.string() }), { minLength: 1 }),
-  ])(
-    'should include steps with correct targets',
-    (name, steps) => {
-      const action = defineAction({ name, description: 'test', steps });
-      expect(action.steps).toHaveLength(steps.length);
-      for (let i = 0; i < steps.length; i++) {
-        expect(action.steps![i].label).toBe(steps[i].label);
-        expect(action.steps![i].target).toBe(steps[i].target);
-      }
+  it.prop([fc.string({ minLength: 1 }), fc.string({ minLength: 1 })])(
+    'should include navigateTo target',
+    (name, target) => {
+      const action = defineAction({ name, description: 'test', navigateTo: target });
+      expect(action.navigateTo).toBe(target);
     },
   );
 });

@@ -2,15 +2,31 @@ import type { z } from 'zod';
 
 export type ExecutionMode = 'guided' | 'instant';
 
-export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>> {
+/**
+ * Action schema — used by `defineAction()` in registry files.
+ * Describes WHAT, WHERE, and (for cross-page actions) HOW.
+ * Components extend with runtime state via `useAgentAction()`.
+ */
+export interface ActionSchema<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>> {
   readonly name: string;
   readonly description: string;
   /** Zod schema for action parameters. */
   readonly parameters?: TSchema;
-  /** Client-side route to navigate to before executing. */
-  readonly route?: (params: z.infer<TSchema>) => string;
+  /**
+   * Navigation before executing steps.
+   * - `string | string[]` — AgentTarget name(s) to click in sequence.
+   * - `(params) => string` — client-side URL path to navigate to (for dynamic routes).
+   */
+  readonly navigateTo?: string | string[] | ((params: z.infer<TSchema>) => string);
   /** Steps the agent walks through to drive the UI. */
   readonly steps?: StepDefinition<z.infer<TSchema>>[];
+}
+
+/**
+ * Full action config — used by `useAgentAction()` in components.
+ * Extends ActionSchema with runtime state (disabled, waitFor).
+ */
+export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>> extends ActionSchema<TSchema> {
   /** When set, the action is disabled and this string is the reason. */
   readonly disabledReason?: string;
   /**
@@ -71,7 +87,7 @@ export interface AgentTargetEntry extends TargetDefinition {
 }
 
 export interface RegisteredAction<TSchema extends z.ZodType = any>
-  extends Pick<ActionDefinition<TSchema>, 'name' | 'description' | 'parameters' | 'route' | 'disabledReason'> {
+  extends Pick<ActionDefinition<TSchema>, 'name' | 'description' | 'parameters' | 'navigateTo' | 'disabledReason'> {
   /** Returns the current steps with fresh closures (via useEffectEvent). */
   readonly resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
   /** Resolved waitFor — always a function (ref form is resolved at registration). */
@@ -94,21 +110,21 @@ interface StepTraceBase {
 
 export type StepTrace =
   | (StepTraceBase & {
-      readonly status: 'completed';
-      readonly targetFound: true;
-      readonly interactionType: 'click' | 'type';
-    })
+    readonly status: 'completed';
+    readonly targetFound: true;
+    readonly interactionType: 'click' | 'type';
+  })
   | (StepTraceBase & {
-      readonly status: 'skipped';
-      readonly targetFound: false;
-      readonly interactionType: 'none';
-    })
+    readonly status: 'skipped';
+    readonly targetFound: false;
+    readonly interactionType: 'none';
+  })
   | (StepTraceBase & {
-      readonly status: 'failed';
-      readonly targetFound: boolean;
-      readonly interactionType: 'none';
-      readonly error: string;
-    });
+    readonly status: 'failed';
+    readonly targetFound: boolean;
+    readonly interactionType: 'none';
+    readonly error: string;
+  });
 
 export interface ExecutionResult {
   readonly actionName: string;
@@ -155,7 +171,7 @@ export interface AgentActionProviderProps {
   onExecutionStart?: (actionName: string) => void;
   onExecutionComplete?: (result: ExecutionResult) => void;
   /** Pre-defined actions whose schemas are available before their components mount. */
-  registry?: ActionDefinition<any>[];
+  registry?: ActionSchema<any>[];
   /** Router integration — called when executing a registry action that needs navigation. */
   navigate?: (path: string) => void | Promise<void>;
   /** Enable dev-mode console warnings for actions missing from the registry. */

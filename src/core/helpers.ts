@@ -1,34 +1,37 @@
 import type { z } from 'zod';
-import type { ActionDefinition } from './types';
+import type { ActionSchema } from './types';
 
 /**
- * Create a typed action definition. Infers `TSchema` from the `parameters`
- * Zod schema so that `steps`, `route`, and `skipIf`/`value`/`target`
- * callbacks all receive typed params.
+ * Define an action schema for the registry.
  *
- * Call at import time for the registry (schema only), then spread into
- * a second `defineAction` at render time to add steps:
+ * Cross-page actions should include `steps` here so the agent shows
+ * the full UI walkthrough even before the target component mounts.
+ * Components extend with runtime state (`waitFor`, `disabledReason`)
+ * via `useAgentAction({ ...schema, waitFor, disabledReason })`.
+ *
+ * Same-page actions (target component is always mounted) can define
+ * steps in the component instead.
  *
  * @example
  * ```ts
- * // actions.ts — schema for the registry
- * export const editMarkup = defineAction({
- *   name: 'edit_markup',
- *   description: 'Edit markup',
- *   parameters: z.object({ property_id: z.number(), markup: z.number() }),
+ * // actions.ts — cross-page action with steps
+ * export const grantAccess = defineAction({
+ *   name: 'grant_access',
+ *   description: 'Grant bot access',
+ *   navigateTo: 'connections-tab',
+ *   steps: [
+ *     { label: 'Select all', target: 'select-all' },
+ *     { label: 'Grant', target: 'grant-btn' },
+ *   ],
  * });
  *
- * // Component — add steps with typed params
- * useAgentAction(
- *   defineAction({ ...editMarkup, steps: [
- *     { label: 'Set value', target: 'input', value: fromParam('markup') },
- *   ]}),
- * );
+ * // Component — runtime state only
+ * useAgentAction({ ...grantAccess, waitFor: ref, disabledReason });
  * ```
  */
 export function defineAction<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>>(
-  config: ActionDefinition<TSchema>,
-): ActionDefinition<TSchema> {
+  config: ActionSchema<TSchema>,
+): ActionSchema<TSchema> {
   return config;
 }
 

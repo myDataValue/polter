@@ -209,15 +209,12 @@ describe('useAgentAction registration', () => {
 // Registry lifecycle
 // ---------------------------------------------------------------------------
 
-const exportCsv = defineAction({ name: 'export_csv', description: 'Export CSV', route: () => '/export' });
+const exportCsv = defineAction({ name: 'export_csv', description: 'Export CSV', navigateTo: 'export-tab' });
 const grantAccess = defineAction({
   name: 'grant_access',
   description: 'Grant access',
   parameters: z.object({ property_ids: z.array(z.number()) }),
-  steps: [
-    { label: 'Click Settings', target: 'settings-tab' },
-    { label: 'Click Grant', target: 'grant-link' },
-  ],
+  navigateTo: ['settings-tab', 'grant-link'],
 });
 
 describe('registry', () => {

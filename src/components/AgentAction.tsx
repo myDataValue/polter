@@ -1,10 +1,10 @@
 import React from 'react';
-import type { ActionDefinition } from '../core/types';
+import type { ActionDefinition, ActionSchema } from '../core/types';
 import { useAgentAction } from '../hooks/useAgentAction';
 import { AgentTarget } from './AgentTarget';
 
 interface AgentActionProps extends Pick<ActionDefinition, 'disabledReason' | 'waitFor'> {
-  action: ActionDefinition<any>;
+  action: ActionSchema<any>;
   children?: React.ReactNode;
 }
 

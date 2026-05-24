@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  ActionDefinition,
+  ActionSchema,
   AgentActionContextValue,
   AgentActionProviderProps,
   AgentTargetEntry,
@@ -13,10 +13,10 @@ import { executeAction } from '../executor/visualExecutor';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
 
-function definitionToRegisteredAction({ waitFor: _, ...def }: ActionDefinition<any>): RegisteredAction {
+function schemaToRegisteredAction(def: ActionSchema<any>): RegisteredAction {
   return {
     ...def,
-    resolveSteps: () => def.steps ?? [],
+    resolveSteps: () => (def.steps as any[]) ?? [],
   };
 }
 
@@ -50,7 +50,7 @@ export function AgentActionProvider({
 
     for (const def of registry ?? []) {
       newNames.add(def.name);
-      const registryAction = definitionToRegisteredAction(def);
+      const registryAction = schemaToRegisteredAction(def);
       registryRef.current.set(def.name, registryAction);
 
       // Only set in actionsRef if no component has already registered a richer version
@@ -80,8 +80,8 @@ export function AgentActionProvider({
     const existing = actionsRef.current.get(incoming.name);
 
     const registryAction = registryRef.current.get(incoming.name);
-    const action = registryAction && !incoming.route
-      ? { ...incoming, route: registryAction.route }
+    const action = registryAction && !incoming.navigateTo
+      ? { ...incoming, navigateTo: registryAction.navigateTo }
       : incoming;
 
     if (devWarnings && registryRef.current.size > 0 && !registryAction) {
@@ -151,8 +151,10 @@ export function AgentActionProvider({
         // unnecessary. Bail early instead of waiting for the full timeout.
         if (skipCheck?.()) return null;
 
+        let foundTarget = false;
         for (const entry of targetsRef.current.values()) {
           if (entry.name === name && entry.element.isConnected) {
+            foundTarget = true;
             if ((entry.element as HTMLButtonElement).disabled) {
               seenDisabled = true;
             } else {
@@ -163,6 +165,10 @@ export function AgentActionProvider({
             }
           }
         }
+
+        // A previously-disabled target was unmounted — the component decided
+        // the action can't proceed (e.g. !isConnected early return).
+        if (seenDisabled && !foundTarget) break;
 
         await new Promise((r) => setTimeout(r, pollInterval));
       }
@@ -205,12 +211,22 @@ export function AgentActionProvider({
     [],
   );
 
-  const navigateToRoute = useCallback(
-    async (action: RegisteredAction, routeParams?: Record<string, unknown>) => {
-      const path = action.route!(routeParams ?? {});
-      await navigateRef.current!(path);
+  const navigateByTarget = useCallback(
+    async (
+      actionName: string,
+      targets: string[],
+      signal?: AbortSignal,
+      params?: Record<string, unknown>,
+    ) => {
+      for (const targetName of targets) {
+        const el = await resolveTarget(actionName, targetName, signal, params);
+        if (!el) {
+          throw new Error(`Navigation target "${targetName}" not found`);
+        }
+        el.click();
+      }
     },
-    [],
+    [resolveTarget],
   );
 
   const execute = useCallback(
@@ -264,12 +280,17 @@ export function AgentActionProvider({
           }
         }
 
-        // If this is a registry action with no DOM targets, navigate first.
-        const targets = action.resolveSteps();
-        if (targets.length === 0 && action.route && navigateRef.current) {
-          await navigateToRoute(action, params);
+        // Navigate before executing steps.
+        const nav = action.navigateTo;
+        if (nav) {
+          if (typeof nav === 'function') {
+            await navigateRef.current!(nav(params ?? {}));
+          } else {
+            const targets = Array.isArray(nav) ? nav : [nav];
+            await navigateByTarget(actionName, targets, controller.signal, params);
+          }
 
-          // Wait for the <AgentAction> component to mount on the new page.
+          // Wait for the component to mount on the new page.
           const mounted = await waitForActionMount(actionName, controller.signal, 5000);
           if (mounted) {
             action = mounted;
@@ -280,7 +301,7 @@ export function AgentActionProvider({
         // dynamic disabled state that the schema-only registry version didn't.
         if (action.disabledReason) {
           const result: ExecutionResult = {
-              actionName,
+            actionName,
             error: action.disabledReason,
             trace: [],
             durationMs: performance.now() - start,
@@ -291,16 +312,14 @@ export function AgentActionProvider({
 
         let result = await executeAction(action, params ?? {}, executorConfig);
 
-        // After registry steps complete (e.g. navigation), the component may
-        // have mounted and provided its own steps. If so, continue with those.
+        // After navigation, the component may have mounted and provided steps.
         const isRegistryOnly = action === registryRef.current.get(actionName);
         if (!result.error && isRegistryOnly) {
           const upgraded = await waitForActionMount(actionName, controller.signal, 5000);
           if (upgraded && upgraded !== registryRef.current.get(actionName)) {
-            // Re-check disabled — the mounted version may have dynamic state.
             if (upgraded.disabledReason) {
               result = {
-                      actionName,
+                actionName,
                 error: upgraded.disabledReason,
                 trace: result.trace,
                 durationMs: performance.now() - start,
@@ -321,12 +340,16 @@ export function AgentActionProvider({
         onExecutionComplete?.(result);
         return result;
       } catch (err) {
+        // If the action acquired a disabledReason during execution (e.g. component
+        // mounted and found the feature unavailable), prefer that user-facing
+        // message over the technical step-level error.
+        const currentAction = actionsRef.current.get(actionName);
         const result: ExecutionResult = {
           actionName,
-          error:
-            err instanceof DOMException && err.name === 'AbortError'
+          error: currentAction?.disabledReason
+            ?? (err instanceof DOMException && err.name === 'AbortError'
               ? 'Execution cancelled'
-              : String(err),
+              : String(err)),
           trace: [],
           durationMs: performance.now() - start,
         };
@@ -339,7 +362,7 @@ export function AgentActionProvider({
         }
       }
     },
-    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, waitForActionMount, navigateToRoute],
+    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, waitForActionMount, navigateByTarget],
   );
 
   const availableActions = useMemo<AvailableAction[]>(
