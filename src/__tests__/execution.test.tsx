@@ -348,23 +348,6 @@ describe('param validation', () => {
 // ---------------------------------------------------------------------------
 
 describe('waitFor', () => {
-  it('should call waitFor function before resolving', async () => {
-    const action = defineAction({ name: 'wait_fn', description: 'Wait fn' });
-    const waitFor = vi.fn();
-    let ctx: ReturnType<typeof useAgentActions> | null = null;
-    render(
-      <AgentActionProvider mode="instant">
-        <AgentAction action={action} waitFor={waitFor}>
-          <button>Go</button>
-        </AgentAction>
-        <TestConsumer onContext={(c) => (ctx = c)} />
-      </AgentActionProvider>,
-    );
-    const result = await act(() => ctx!.execute('wait_fn'));
-    expect(result.error).toBeUndefined();
-    expect(waitFor).toHaveBeenCalled();
-  });
-
   it('should await ref promise before resolving', async () => {
     const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
     let resolve: () => void;

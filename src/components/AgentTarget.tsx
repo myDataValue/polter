@@ -30,12 +30,10 @@ interface AgentTargetProps extends TargetDefinition {
  * </AgentTarget>
  * ```
  */
-export function AgentTarget({ name, scrollTo, children }: AgentTargetProps) {
+export function AgentTarget({ name, children }: AgentTargetProps) {
   const id = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const context = useContext(AgentActionContext);
-  const scrollToRef = useRef(scrollTo);
-  scrollToRef.current = scrollTo;
 
   if (!context) {
     throw new Error('AgentTarget must be used within an AgentActionProvider');
@@ -59,7 +57,7 @@ export function AgentTarget({ name, scrollTo, children }: AgentTargetProps) {
         element = element.firstElementChild as HTMLElement;
       }
       if (element) {
-        registerTarget(id, { name, element, scrollTo: scrollToRef.current });
+        registerTarget(id, { name, element });
       } else {
         unregisterTarget(id);
       }

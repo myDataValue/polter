@@ -12,6 +12,10 @@ import type { ActionSchema } from './types';
  * Same-page actions (target component is always mounted) can define
  * steps in the component instead.
  *
+ * `navigateTo` only accepts AgentTarget name(s) — URL-based navigation is
+ * not supported. If a page isn't reachable by a visible click, it isn't
+ * reachable by ADUI either.
+ *
  * @example
  * ```ts
  * // actions.ts — cross-page action with steps

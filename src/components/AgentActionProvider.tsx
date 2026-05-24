@@ -7,6 +7,7 @@ import type {
   AvailableAction,
   ExecutionResult,
   RegisteredAction,
+  StepDefinition,
 } from '../core/types';
 import { generateToolSchemas } from '../core/schemaGenerator';
 import { executeAction } from '../executor/visualExecutor';
@@ -31,15 +32,12 @@ export function AgentActionProvider({
   onExecutionStart,
   onExecutionComplete,
   registry,
-  navigate,
   devWarnings = false,
 }: AgentActionProviderProps) {
   const actionsRef = useRef<Map<string, RegisteredAction>>(new Map());
   const targetsRef = useRef<Map<string, AgentTargetEntry>>(new Map());
   /** Registry actions stored separately so they can be restored on component unmount. */
   const registryRef = useRef<Map<string, RegisteredAction>>(new Map());
-  const navigateRef = useRef(navigate);
-  navigateRef.current = navigate;
   const [version, setVersion] = useState(0);
   const [isExecuting, setIsExecuting] = useState(false);
   const currentExecutionRef = useRef<AbortController | null>(null);
@@ -89,6 +87,22 @@ export function AgentActionProvider({
         `[polter] Action "${action.name}" is registered but missing from the registry. ` +
         `Add a defineAction() export to an actions.ts file so it appears in the tool schema before mount.`,
       );
+    }
+
+    // Antipattern: defineAction has steps AND useAgentAction supplies its own
+    // steps. Either keep all steps in defineAction (preferred for cross-page)
+    // or remove them from defineAction (same-page action). Splitting causes
+    // racy two-phase execution where the component's steps may silently drop.
+    if (devWarnings && registryAction) {
+      const registrySteps = registryAction.resolveSteps();
+      const incomingSteps = action.resolveSteps();
+      if (registrySteps.length > 0 && incomingSteps.length > 0) {
+        console.warn(
+          `[polter] Action "${action.name}" has steps in both defineAction and useAgentAction. ` +
+          `Pick one — either remove the steps from useAgentAction (just pass runtime state like ` +
+          `waitFor/disabledReason), or remove them from defineAction. See best-practices.md "Put cross-page steps in defineAction".`,
+        );
+      }
     }
 
     actionsRef.current.set(action.name, action);
@@ -158,9 +172,6 @@ export function AgentActionProvider({
             if ((entry.element as HTMLButtonElement).disabled) {
               seenDisabled = true;
             } else {
-              if (entry.scrollTo && params) {
-                await entry.scrollTo(params);
-              }
               return entry.element;
             }
           }
@@ -209,24 +220,6 @@ export function AgentActionProvider({
       return actionsRef.current.get(name) ?? null;
     },
     [],
-  );
-
-  const navigateByTarget = useCallback(
-    async (
-      actionName: string,
-      targets: string[],
-      signal?: AbortSignal,
-      params?: Record<string, unknown>,
-    ) => {
-      for (const targetName of targets) {
-        const el = await resolveTarget(actionName, targetName, signal, params);
-        if (!el) {
-          throw new Error(`Navigation target "${targetName}" not found`);
-        }
-        el.click();
-      }
-    },
-    [resolveTarget],
   );
 
   const execute = useCallback(
@@ -280,37 +273,36 @@ export function AgentActionProvider({
           }
         }
 
-        // Navigate before executing steps.
+        // Prepend navigateTo as synthetic steps so the cursor and spotlight
+        // animate the cross-page click sequence the same way as in-page steps.
+        // Without this, navigateTo would do silent el.click() calls and the
+        // page would appear to teleport — defeating ADUI's "every interaction
+        // visible" promise.
+        //
+        // Skip any target whose element is already marked as the current page
+        // (`aria-current="page"`). Clicking a nav link to the page you're on
+        // just animates pointlessly.
         const nav = action.navigateTo;
-        if (nav) {
-          if (typeof nav === 'function') {
-            await navigateRef.current!(nav(params ?? {}));
-          } else {
-            const targets = Array.isArray(nav) ? nav : [nav];
-            await navigateByTarget(actionName, targets, controller.signal, params);
+        const rawNavTargets = nav ? (Array.isArray(nav) ? nav : [nav]) : [];
+        const navTargets = rawNavTargets.filter((name) => {
+          for (const entry of targetsRef.current.values()) {
+            if (entry.name === name && entry.element.isConnected) {
+              return entry.element.getAttribute('aria-current') !== 'page';
+            }
           }
+          return true;
+        });
+        const actionWithNav: RegisteredAction = navTargets.length > 0
+          ? {
+              ...action,
+              resolveSteps: () => [
+                ...navTargets.map((target): StepDefinition => ({ label: target, target })),
+                ...action.resolveSteps(),
+              ],
+            }
+          : action;
 
-          // Wait for the component to mount on the new page.
-          const mounted = await waitForActionMount(actionName, controller.signal, 5000);
-          if (mounted) {
-            action = mounted;
-          }
-        }
-
-        // Re-check disabled after navigation — the mounted version may have
-        // dynamic disabled state that the schema-only registry version didn't.
-        if (action.disabledReason) {
-          const result: ExecutionResult = {
-            actionName,
-            error: action.disabledReason,
-            trace: [],
-            durationMs: performance.now() - start,
-          };
-          onExecutionComplete?.(result);
-          return result;
-        }
-
-        let result = await executeAction(action, params ?? {}, executorConfig);
+        let result = await executeAction(actionWithNav, params ?? {}, executorConfig);
 
         // After navigation, the component may have mounted and provided steps.
         const isRegistryOnly = action === registryRef.current.get(actionName);
@@ -362,7 +354,7 @@ export function AgentActionProvider({
         }
       }
     },
-    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, waitForActionMount, navigateByTarget],
+    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, waitForActionMount],
   );
 
   const availableActions = useMemo<AvailableAction[]>(
