@@ -25,8 +25,8 @@ export function useAgentAction(...configs: ActionDefinition<any>[]): void {
     await wf.current;
   }, []);
 
-  useEffect(() => {
-    for (const config of configs) {
+  const buildRegistered = useCallback(() => {
+    for (const config of configsRef.current) {
       registerAction({
         ...config,
         waitFor: config.waitFor ? () => resolveWaitFor(config.name) : undefined,
@@ -34,9 +34,13 @@ export function useAgentAction(...configs: ActionDefinition<any>[]): void {
       });
     }
     return () => {
-      for (const config of configs) {
+      for (const config of configsRef.current) {
         unregisterAction(config.name);
       }
     };
-  }, [registerAction, unregisterAction]);
+  }, [registerAction, unregisterAction, getSteps, resolveWaitFor]);
+
+  // Re-register whenever disabledReason changes so actionsRef stays in sync.
+  const disabledKey = configs.map((c) => c.disabledReason ?? '').join('\0');
+  useEffect(buildRegistered, [buildRegistered, disabledKey]);
 }

@@ -122,6 +122,38 @@ Arbitrary code is intentionally not supported. If you find yourself wanting `set
 
 When a step click causes a page navigation, the next step's target doesn't exist yet — it's on the new page. The executor polls up to 5s for each step's target to appear, so cross-page actions work automatically. For targets that take longer to load (API calls), render them with `disabled` during loading — polter polls past disabled elements and clicks when they become enabled.
 
+**Use `disabledReason` for early-return branches where targets won't render.** When a component has early-return paths (loading, error, not-connected) that don't render `<AgentTarget>` elements, set `disabledReason` on the `useAgentAction` call. Polter checks this during target polling and aborts immediately with the user-facing message — no placeholder DOM trees needed.
+
+```tsx
+const notConnected = !loading && !isConnected;
+const disabledReason = notConnected
+  ? "User must log in first"
+  : error
+    ? "Failed to load data"
+    : undefined;
+
+useAgentAction({
+  ...myAction,
+  disabledReason,
+});
+
+if (loading) return <LoadingSpinner />;
+if (!isConnected) return <div>Please log in first</div>;
+if (error) return <ErrorMessage />;
+
+// Main render — targets only exist here
+return (
+  <div>
+    <AgentTarget name="search-input">
+      <Input value={query} onChange={...} />
+    </AgentTarget>
+    ...
+  </div>
+);
+```
+
+Note: don't include loading in `disabledReason` — the 5s target-resolution timeout handles normal loading. Only set `disabledReason` for states where the action genuinely can't proceed.
+
 Define these steps on `defineAction` since they're static and don't need React closures:
 
 ```ts
