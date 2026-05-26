@@ -154,16 +154,34 @@ export function AgentActionProvider({
       const pollInterval = 50;
       const start = Date.now();
       let seenDisabled = false;
+      let componentMounted = false;
 
       // Poll until the target appears and is enabled.
-      // If a disabled match is found, the element is loading — poll indefinitely.
-      // If no match at all, give up after timeout.
-      while (seenDisabled || Date.now() - start < timeout) {
+      // - If a disabled DOM match is found → poll indefinitely (loading).
+      // - If the action's component has mounted (not registry-only) but targets
+      //   haven't appeared → poll indefinitely (component is loading).
+      // - If the action has disabledReason → abort immediately.
+      // - Otherwise give up after timeout.
+      while (seenDisabled || componentMounted || Date.now() - start < timeout) {
         if (signal?.aborted) return null;
-        // Re-evaluate the step's skipIf during polling — a prior step's click
-        // may have triggered a React state update that makes this step
-        // unnecessary. Bail early instead of waiting for the full timeout.
         if (skipCheck?.()) return null;
+
+        const currentAction = actionsRef.current.get(actionName);
+        const isComponentBacked = currentAction && currentAction !== registryRef.current.get(actionName);
+
+        // Action became disabled (component determined it can't proceed).
+        if (currentAction?.disabledReason) {
+          throw new Error(currentAction.disabledReason);
+        }
+
+        // Component mounted but targets not yet rendered — it's loading.
+        // Extend polling past the timeout (same as seenDisabled for DOM elements).
+        if (isComponentBacked && !componentMounted) {
+          componentMounted = true;
+        }
+
+        // Component was mounted but then unregistered (user navigated away).
+        if (componentMounted && !isComponentBacked) break;
 
         let foundTarget = false;
         for (const entry of targetsRef.current.values()) {
@@ -177,16 +195,19 @@ export function AgentActionProvider({
           }
         }
 
-        // A previously-disabled target was unmounted — the component decided
-        // the action can't proceed (e.g. !isConnected early return).
         if (seenDisabled && !foundTarget) break;
 
         await new Promise((r) => setTimeout(r, pollInterval));
       }
 
-      // If the target was previously registered but is now gone, the component
-      // conditionally unmounted it (e.g. early return during loading). Throw a
-      // clear error so the developer renders the target with disabled instead.
+      // Yield once to let React effects propagate (disabledReason registration
+      // runs after the DOM commit that removed targets).
+      await new Promise((r) => setTimeout(r, pollInterval));
+      const postAction = actionsRef.current.get(actionName);
+      if (postAction?.disabledReason) {
+        throw new Error(postAction.disabledReason);
+      }
+
       if (seenTargetNamesRef.current.has(name)) {
         throw new Error(
           `[polter] AgentTarget "${name}" was previously mounted but is now gone. ` +
@@ -304,6 +325,18 @@ export function AgentActionProvider({
 
         let result = await executeAction(actionWithNav, params ?? {}, executorConfig);
 
+        // Prefer the component's disabledReason (e.g. "User must log in") over
+        // the raw step-level error (e.g. "target not found for step X"). Skip
+        // when the run was aborted — the executor's cancellation result must
+        // survive so callers can tell user-initiated abort apart from a
+        // disabled action.
+        if (result.error && !controller.signal.aborted) {
+          const currentAction = actionsRef.current.get(actionName);
+          if (currentAction?.disabledReason) {
+            result = { ...result, error: currentAction.disabledReason };
+          }
+        }
+
         // After navigation, the component may have mounted and provided steps.
         const isRegistryOnly = action === registryRef.current.get(actionName);
         if (!result.error && isRegistryOnly) {
@@ -332,16 +365,15 @@ export function AgentActionProvider({
         onExecutionComplete?.(result);
         return result;
       } catch (err) {
-        // If the action acquired a disabledReason during execution (e.g. component
-        // mounted and found the feature unavailable), prefer that user-facing
-        // message over the technical step-level error.
+        // User-initiated aborts take precedence over disabledReason so callers
+        // can distinguish cancellation from a disabled action. Otherwise prefer
+        // the component's disabledReason over the raw step-level error.
         const currentAction = actionsRef.current.get(actionName);
         const result: ExecutionResult = {
           actionName,
-          error: currentAction?.disabledReason
-            ?? (err instanceof DOMException && err.name === 'AbortError'
-              ? 'Execution cancelled'
-              : String(err)),
+          error: controller.signal.aborted
+            ? 'Execution cancelled'
+            : (currentAction?.disabledReason ?? String(err)),
           trace: [],
           durationMs: performance.now() - start,
         };
