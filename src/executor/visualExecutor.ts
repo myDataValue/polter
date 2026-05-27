@@ -23,6 +23,39 @@ function injectStyles(): void {
       50% { transform: scale(0.85); }
       100% { transform: scale(1); }
     }
+    .polter-cursor svg {
+      display:block;
+      filter:drop-shadow(0 2px 5px rgba(15,23,42,0.3));
+    }
+    .polter-cursor-label {
+      position:absolute;
+      left:19px;
+      top:18px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      height:24px;
+      padding:0 10px;
+      border:1px solid rgba(255,255,255,0.14);
+      border-radius:999px;
+      background:#171717;
+      color:#ffffff;
+      box-shadow:0 8px 20px rgba(15,23,42,0.24);
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:0;
+      line-height:1;
+      white-space:nowrap;
+    }
+    .polter-cursor-label::before {
+      content:"";
+      width:7px;
+      height:7px;
+      border-radius:999px;
+      background:#51b13e;
+      box-shadow:0 0 0 3px rgba(81,177,62,0.18);
+    }
   `;
   document.head.appendChild(style);
 }
@@ -31,9 +64,12 @@ interface OverlayHandle {
   remove: () => void;
 }
 
-const CURSOR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-  <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.48 0 .68-.61.3-.92L5.95 2.87a.5.5 0 0 0-.45.34z" fill="#1e293b" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+const CURSOR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+  <path d="M6.18 3.54v20.2c0 .55.68.81 1.05.41l5.33-5.73a.7.7 0 0 1 .51-.22h8.13c.6 0 .85-.77.36-1.12L7.1 3.08a.58.58 0 0 0-.92.46z" fill="#51B13E" stroke="#ffffff" stroke-width="1.8" stroke-linejoin="round"/>
+  <path d="m13.18 18.42 2.53 5.62c.17.38.62.55 1 .38l2.18-.98c.38-.17.55-.62.38-1l-2.12-4.72" fill="#171717" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
 </svg>`;
+
+const CURSOR_LABEL = 'myData AI';
 
 /**
  * Full-screen overlay during guided execution. pointer-events:none so the
@@ -59,7 +95,7 @@ function createCursor(): OverlayHandle {
 
   const cursor = document.createElement('div');
   cursor.className = 'polter-cursor';
-  cursor.innerHTML = CURSOR_SVG;
+  cursor.innerHTML = `${CURSOR_SVG}<div class="polter-cursor-label">${CURSOR_LABEL}</div>`;
   cursor.style.cssText = `
     position:fixed;
     left:-40px;
@@ -67,7 +103,6 @@ function createCursor(): OverlayHandle {
     z-index:100000;
     pointer-events:none;
     transition:left 0.4s cubic-bezier(0.4,0,0.2,1),top 0.4s cubic-bezier(0.4,0,0.2,1);
-    filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));
   `;
   document.body.appendChild(cursor);
 
@@ -136,11 +171,12 @@ function createSpotlight(
     top:${rect.top - padding - 2}px;
     width:${rect.width + padding * 2 + 4}px;
     height:${rect.height + padding * 2 + 4}px;
-    border:2px solid #3b82f6;
+    border:2px solid #51b13e;
     border-radius:10px;
     z-index:99999;
     pointer-events:none;
     animation:polter-pulse 1.5s ease-in-out infinite;
+    box-shadow:0 0 0 4px rgba(81,177,62,0.12);
   `;
 
   container.appendChild(spotlight);
