@@ -109,11 +109,10 @@ function createCursor(): OverlayHandle {
   return { remove: () => cursor.remove() };
 }
 
-function moveCursorTo(target: HTMLElement, signal?: AbortSignal): Promise<void> {
+function moveCursorTo(rect: DOMRect, signal?: AbortSignal): Promise<void> {
   const cursor = document.querySelector('.polter-cursor') as HTMLElement | null;
   if (!cursor) return Promise.resolve();
 
-  const rect = target.getBoundingClientRect();
   cursor.style.left = `${rect.left + rect.width / 2}px`;
   cursor.style.top = `${rect.top + rect.height / 2}px`;
 
@@ -132,13 +131,12 @@ interface SpotlightHandle {
 }
 
 function createSpotlight(
-  target: HTMLElement,
+  rect: DOMRect,
   label: string,
   config: ExecutorConfig,
 ): SpotlightHandle {
   injectStyles();
 
-  const rect = target.getBoundingClientRect();
   const padding = config.spotlightPadding;
   const overlayRgba = `rgba(0, 0, 0, ${config.overlayOpacity})`;
 
@@ -332,7 +330,7 @@ async function resolveStepElement(
 // ---------------------------------------------------------------------------
 
 interface StepEffects {
-  before(element: HTMLElement, label: string): Promise<void>;
+  before(element: HTMLElement, label: string, refreshElement?: () => Promise<HTMLElement>): Promise<HTMLElement>;
   after(isLast: boolean): Promise<void>;
   type(input: HTMLElement, value: string): Promise<void>;
   click(element: HTMLElement): void;
@@ -359,14 +357,26 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
   let spotlight: SpotlightHandle | null = null;
 
   return {
-    async before(element, label) {
+    async before(element, label, refreshElement?) {
       // Tab backgrounded — skip all visuals, browser throttles setTimeout to 1s+
-      if (document.hidden) return;
+      if (document.hidden) return element;
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await delay(300, config.signal);
-      if (cursor) await moveCursorTo(element, config.signal);
-      spotlight = createSpotlight(element, label, config);
+      // scrollIntoView can trigger virtualizer re-renders that recycle the DOM
+      // node. Re-resolve before positioning visual indicators.
+      if (!element.isConnected && refreshElement) {
+        element = await refreshElement();
+        element.scrollIntoView({ behavior: 'auto', block: 'center' });
+        await delay(50, config.signal);
+      }
+      // Snapshot the rect once — moveCursorTo waits 450ms for its animation,
+      // during which the virtualizer could recycle the element again. Using a
+      // captured rect avoids stale-element reads in createSpotlight.
+      const rect = element.getBoundingClientRect();
+      if (cursor) await moveCursorTo(rect, config.signal);
+      spotlight = createSpotlight(rect, label, config);
       await delay(config.stepDelay, config.signal);
+      return element;
     },
     async after(isLast) {
       spotlight?.remove();
@@ -398,7 +408,7 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
 
 function createInstantEffects(): StepEffects {
   return {
-    async before() { },
+    async before(element) { return element; },
     async after() { },
     async type(input, value) {
       setNativeInputValue(input as HTMLInputElement, value);
@@ -535,7 +545,7 @@ export async function executeAction(
       };
 
       element = await ensureConnected();
-      await fx.before(element, step.label);
+      element = await fx.before(element, step.label, ensureConnected);
       element = await ensureConnected();
 
       // Interact based on step type
