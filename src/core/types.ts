@@ -114,12 +114,36 @@ export interface ToolSchema {
   readonly parameters: Record<string, unknown>;
 }
 
+/**
+ * Why target resolution ended, plus the registry state at that moment. Recorded
+ * on the step trace so "Copy debug" explains a hang/miss without console digging:
+ * matchCount === 0 means no element with that name was mounted (e.g. its row was
+ * virtualized out / scrolled to the wrong index); `candidates` lists mounted
+ * targets sharing the same prefix, which surfaces ID mismatches and typos.
+ */
+export interface ResolveDiagnostics {
+  readonly reason: 'found' | 'aborted' | 'skipped' | 'disabled' | 'timeout' | 'unmounted';
+  readonly matchCount: number;
+  readonly componentMounted: boolean;
+  readonly seenDisabled: boolean;
+  readonly elapsedMs: number;
+  /** Mounted target names sharing the requested name's prefix (ID mismatch hint). */
+  readonly candidates?: readonly string[];
+}
+
+export interface ResolveResult {
+  readonly element: HTMLElement | null;
+  readonly diagnostics: ResolveDiagnostics;
+}
+
 interface StepTraceBase {
   readonly index: number;
   readonly label: string;
   readonly targetType?: 'dynamic' | 'static';
   readonly targetName?: string;
   readonly durationMs: number;
+  /** Target-resolution diagnostics (present when a target was looked up). */
+  readonly resolve?: ResolveDiagnostics;
 }
 
 export type StepTrace =
@@ -163,6 +187,8 @@ export interface ExecutorConfig {
   tooltipEnabled: boolean;
   cursorEnabled: boolean;
   signal?: AbortSignal;
+  /** When true, emit verbose `[polter]` console logs during execution. */
+  debug?: boolean;
   /** Resolve a named target from the AgentTarget registry. */
   resolveTarget?: (
     actionName: string,
@@ -171,7 +197,7 @@ export interface ExecutorConfig {
     params?: Record<string, unknown>,
     timeout?: number,
     skipCheck?: () => boolean,
-  ) => Promise<HTMLElement | null>;
+  ) => Promise<ResolveResult>;
 }
 
 export interface AgentActionProviderProps {
@@ -181,13 +207,25 @@ export interface AgentActionProviderProps {
   spotlightPadding?: number;
   tooltipEnabled?: boolean;
   cursorEnabled?: boolean;
+  /**
+   * Max time (ms) to wait, after a navigation, for the destination page's
+   * component to mount and supply a cross-page action's real steps. A heavy
+   * page can take several seconds to render; too short a wait silently drops
+   * those steps (the action then reports a bare-navigation "success"). Defaults
+   * to 15000, matching the in-step mounted-grace in `resolveTarget`.
+   */
+  mountTimeout?: number;
   children: React.ReactNode;
   onExecutionStart?: (actionName: string) => void;
   onExecutionComplete?: (result: ExecutionResult) => void;
   /** Pre-defined actions whose schemas are available before their components mount. */
   registry?: ActionSchema<any>[];
-  /** Enable dev-mode console warnings for actions missing from the registry. */
-  devWarnings?: boolean;
+  /**
+   * When true, emit verbose `[polter]` console logs during target resolution
+   * and execution, plus dev-mode warnings for actions missing from the
+   * registry — use to diagnose hangs (target never mounts, polls forever).
+   */
+  debug?: boolean;
 }
 
 export interface AgentActionContextValue {

@@ -7,9 +7,12 @@ import type {
   AvailableAction,
   ExecutionResult,
   RegisteredAction,
+  ResolveDiagnostics,
+  ResolveResult,
   StepDefinition,
 } from '../core/types';
 import { generateToolSchemas } from '../core/schemaGenerator';
+import { createDebugLogger, findCandidateTargetNames } from '../core/debugLog';
 import { executeAction } from '../executor/visualExecutor';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
@@ -28,12 +31,17 @@ export function AgentActionProvider({
   spotlightPadding = 8,
   tooltipEnabled = true,
   cursorEnabled = true,
+  mountTimeout = 15000,
   children,
   onExecutionStart,
   onExecutionComplete,
   registry,
-  devWarnings = false,
+  debug = false,
 }: AgentActionProviderProps) {
+  // Held in a ref so the stable (deps: []) resolveTarget closure always reads
+  // the current flag without being re-created.
+  const debugRef = useRef(debug);
+  debugRef.current = debug;
   const actionsRef = useRef<Map<string, RegisteredAction>>(new Map());
   const targetsRef = useRef<Map<string, AgentTargetEntry>>(new Map());
   /** Registry actions stored separately so they can be restored on component unmount. */
@@ -82,7 +90,7 @@ export function AgentActionProvider({
       ? { ...incoming, navigateTo: registryAction.navigateTo }
       : incoming;
 
-    if (devWarnings && registryRef.current.size > 0 && !registryAction) {
+    if (debug && registryRef.current.size > 0 && !registryAction) {
       console.warn(
         `[polter] Action "${action.name}" is registered but missing from the registry. ` +
         `Add a defineAction() export to an actions.ts file so it appears in the tool schema before mount.`,
@@ -93,7 +101,7 @@ export function AgentActionProvider({
     // steps. Either keep all steps in defineAction (preferred for cross-page)
     // or remove them from defineAction (same-page action). Splitting causes
     // racy two-phase execution where the component's steps may silently drop.
-    if (devWarnings && registryAction) {
+    if (debug && registryAction) {
       const registrySteps = registryAction.resolveSteps();
       const incomingSteps = action.resolveSteps();
       if (registrySteps.length > 0 && incomingSteps.length > 0) {
@@ -150,21 +158,61 @@ export function AgentActionProvider({
       params?: Record<string, unknown>,
       timeout = 5000,
       skipCheck?: () => boolean,
-    ): Promise<HTMLElement | null> => {
+    ): Promise<ResolveResult> => {
       const pollInterval = 50;
+      // Cap polling when the action's component is mounted but its target never
+      // renders (e.g. a virtualized row that never scrolls into view). Without a
+      // cap, `componentMounted` keeps the loop alive forever and the whole action
+      // hangs. A disabled DOM match (seenDisabled) is a genuine loading state —
+      // the element exists — so it keeps extending past this cap.
+      const mountedGraceMs = Math.max(timeout, 15000);
       const start = Date.now();
+      const log = createDebugLogger(debugRef.current);
       let seenDisabled = false;
       let componentMounted = false;
+      let polls = 0;
+
+      // Snapshot the registry state into a diagnostics record. matchCount === 0
+      // means nothing with this name is mounted; `candidates` lists mounted
+      // targets sharing the name's prefix (surfaces ID mismatches / typos).
+      const diag = (reason: ResolveDiagnostics['reason']): ResolveDiagnostics => {
+        let matchCount = 0;
+        const names: string[] = [];
+        for (const entry of targetsRef.current.values()) {
+          if (entry.name === name) matchCount++;
+          if (entry.name) names.push(entry.name);
+        }
+        const candidates = matchCount === 0 ? findCandidateTargetNames(names, name) : [];
+        return {
+          reason,
+          matchCount,
+          componentMounted,
+          seenDisabled,
+          elapsedMs: Date.now() - start,
+          candidates: candidates.length ? candidates : undefined,
+        };
+      };
+      const miss = (reason: ResolveDiagnostics['reason']): ResolveResult => {
+        const diagnostics = diag(reason);
+        log('resolveTarget:miss', { actionName, name, ...diagnostics });
+        return { element: null, diagnostics };
+      };
+
+      log('resolveTarget:start', { actionName, name, timeout });
 
       // Poll until the target appears and is enabled.
-      // - If a disabled DOM match is found → poll indefinitely (loading).
+      // - If a disabled DOM match is found → poll while it stays present (loading).
       // - If the action's component has mounted (not registry-only) but targets
-      //   haven't appeared → poll indefinitely (component is loading).
+      //   haven't appeared → keep polling up to `mountedGraceMs`, then give up.
       // - If the action has disabledReason → abort immediately.
-      // - Otherwise give up after timeout.
-      while (seenDisabled || componentMounted || Date.now() - start < timeout) {
-        if (signal?.aborted) return null;
-        if (skipCheck?.()) return null;
+      // - Otherwise give up after `timeout`.
+      while (
+        seenDisabled ||
+        (componentMounted && Date.now() - start < mountedGraceMs) ||
+        Date.now() - start < timeout
+      ) {
+        if (signal?.aborted) return miss('aborted');
+        if (skipCheck?.()) return miss('skipped');
 
         const currentAction = actionsRef.current.get(actionName);
         const isComponentBacked = currentAction && currentAction !== registryRef.current.get(actionName);
@@ -190,12 +238,18 @@ export function AgentActionProvider({
             if ((entry.element as HTMLButtonElement).disabled) {
               seenDisabled = true;
             } else {
-              return entry.element;
+              log('resolveTarget:found', { actionName, name, elapsedMs: Date.now() - start });
+              return { element: entry.element, diagnostics: diag('found') };
             }
           }
         }
 
         if (seenDisabled && !foundTarget) break;
+
+        // Live-watch heartbeat (~1s). matchCount 0 + componentMounted true keeps
+        // polling up to mountedGraceMs, then resolveTarget gives up (step fails).
+        if (polls % 20 === 0) log('resolveTarget:waiting', { actionName, name, ...diag('timeout') });
+        polls++;
 
         await new Promise((r) => setTimeout(r, pollInterval));
       }
@@ -216,7 +270,7 @@ export function AgentActionProvider({
         );
       }
 
-      return null;
+      return miss(componentMounted ? 'unmounted' : 'timeout');
     },
     [],
   );
@@ -275,8 +329,8 @@ export function AgentActionProvider({
           tooltipEnabled,
           cursorEnabled,
           signal: controller.signal,
-          mountTimeout: 5000,
           resolveTarget,
+          debug: debugRef.current,
         };
 
         // Validate params against the Zod schema before executing.
@@ -337,10 +391,22 @@ export function AgentActionProvider({
           }
         }
 
-        // After navigation, the component may have mounted and provided steps.
+        // After navigation, the destination page's component may mount and
+        // supply this action's real steps — the registry version is only a
+        // schema stand-in for cross-page actions. Wait for that handoff, then
+        // run phase 2.
         const isRegistryOnly = action === registryRef.current.get(actionName);
         if (!result.error && isRegistryOnly) {
-          const upgraded = await waitForActionMount(actionName, controller.signal, 5000);
+          // Only a navigation mounts a *new* page, so only then is a slow mount
+          // expected — give it the full mountTimeout (a heavy page can take
+          // several seconds). With no navigation nothing new is coming, so keep
+          // the wait short to stay responsive.
+          const navigated = navTargets.length > 0;
+          const upgraded = await waitForActionMount(
+            actionName,
+            controller.signal,
+            navigated ? mountTimeout : 5000,
+          );
           if (upgraded && upgraded !== registryRef.current.get(actionName)) {
             if (upgraded.disabledReason) {
               result = {
@@ -357,6 +423,19 @@ export function AgentActionProvider({
                 durationMs: performance.now() - start,
               };
             }
+          } else if (navigated && action.resolveSteps().length === 0 && !controller.signal.aborted) {
+            // We navigated, but the destination component never mounted in time,
+            // so this cross-page action's real steps never ran. Report the
+            // failure instead of a bare-navigation "success" — otherwise the
+            // agent narrates a result (e.g. an opened panel) that never happened.
+            result = {
+              actionName,
+              error:
+                `Navigated for "${actionName}" but the page did not finish loading in time, ` +
+                `so the action did not complete. Ask the user to retry.`,
+              trace: result.trace,
+              durationMs: performance.now() - start,
+            };
           }
         }
 
@@ -386,7 +465,7 @@ export function AgentActionProvider({
         }
       }
     },
-    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, onExecutionStart, onExecutionComplete, resolveTarget, waitForActionMount],
+    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, mountTimeout, onExecutionStart, onExecutionComplete, resolveTarget, waitForActionMount],
   );
 
   const availableActions = useMemo<AvailableAction[]>(

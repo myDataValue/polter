@@ -1,4 +1,5 @@
-import type { RegisteredAction, ExecutionResult, StepDefinition, ExecutorConfig, StepTrace } from '../core/types';
+import type { RegisteredAction, ExecutionResult, StepDefinition, ExecutorConfig, StepTrace, ResolveDiagnostics } from '../core/types';
+import { createDebugLogger } from '../core/debugLog';
 
 let stylesInjected = false;
 
@@ -303,7 +304,7 @@ async function resolveStepElement(
   params: Record<string, unknown>,
   config: ExecutorConfig,
   skipCheck?: () => boolean,
-): Promise<HTMLElement | null> {
+): Promise<{ element: HTMLElement | null; diagnostics?: ResolveDiagnostics }> {
   if (step.scrollTo) {
     const hasDetailFn = step.scrollTo.detail !== undefined;
     const detail = step.scrollTo.detail?.(params);
@@ -321,7 +322,7 @@ async function resolveStepElement(
     return config.resolveTarget(actionName, name, config.signal, params, 5000, skipCheck);
   }
 
-  return null;
+  return { element: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -433,11 +434,16 @@ export async function executeAction(
   const executionStart = performance.now();
   const targets = action.resolveSteps();
   const stepTraces: StepTrace[] = [];
+  const log = createDebugLogger(config.debug ?? false);
+  log('execute:start', { action: action.name, mode: config.mode, steps: targets.length, params });
 
   if (targets.length === 0) {
     if (action.waitFor) {
+      log('waitFor:start', { action: action.name });
       await action.waitFor();
+      log('waitFor:done', { action: action.name });
     }
+    log('execute:complete', { action: action.name, durationMs: performance.now() - executionStart });
     return { actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
   }
 
@@ -475,8 +481,11 @@ export async function executeAction(
 
       const skipCheck = step.skipIf ? () => step.skipIf!(params) : undefined;
       let element: HTMLElement | null;
+      let resolveDiag: ResolveDiagnostics | undefined;
       try {
-        element = await resolveStepElement(step, action.name, params, config, skipCheck);
+        const resolved = await resolveStepElement(step, action.name, params, config, skipCheck);
+        element = resolved.element;
+        resolveDiag = resolved.diagnostics;
       } catch (err) {
         // A prior step may have triggered a state change that makes this step
         // unnecessary (e.g. clicking "Opt In" updates pendingOptimizations,
@@ -511,6 +520,7 @@ export async function executeAction(
         if (targets.length > 1) {
           fx.cleanup();
           const reason = `target not found for step "${step.label}"`;
+          log('step:fail', { index: i, label: step.label, targetName, error: reason, ...resolveDiag });
           stepTraces.push({
             index: i,
             label: step.label,
@@ -520,8 +530,10 @@ export async function executeAction(
             targetFound: !!element,
             interactionType: 'none',
             error: reason,
+            resolve: resolveDiag,
             durationMs: performance.now() - stepStart,
           });
+          log('execute:complete', { action: action.name, error: reason, durationMs: performance.now() - executionStart });
           return { actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
         }
         stepTraces.push({
@@ -532,6 +544,7 @@ export async function executeAction(
           targetName,
           targetFound: false,
           interactionType: 'none',
+          resolve: resolveDiag,
           durationMs: performance.now() - stepStart,
         });
         continue;
@@ -539,7 +552,7 @@ export async function executeAction(
       const ensureConnected = async (): Promise<HTMLElement> => {
         if (element!.isConnected) return element!;
         if (!config.resolveTarget || !targetName) throw new Error(`Target "${targetName}" is no longer in the DOM.`);
-        const fresh = await config.resolveTarget(action.name, targetName, config.signal, params, 3000) as HTMLElement;
+        const { element: fresh } = await config.resolveTarget(action.name, targetName, config.signal, params, 3000);
         if (!fresh?.isConnected) throw new Error(`Target "${targetName}" was recycled by a virtualizer and could not be re-resolved.`);
         return fresh;
       };
@@ -574,8 +587,10 @@ export async function executeAction(
         targetName,
         targetFound: true,
         interactionType,
+        resolve: resolveDiag,
         durationMs: performance.now() - stepStart,
       });
+      log('step:done', { index: i, label: step.label, interactionType, durationMs: performance.now() - stepStart });
 
       activeStep = null;
     }
@@ -586,9 +601,12 @@ export async function executeAction(
 
     // Await async work triggered by step clicks
     if (action.waitFor) {
+      log('waitFor:start', { action: action.name });
       await action.waitFor();
+      log('waitFor:done', { action: action.name });
     }
 
+    log('execute:complete', { action: action.name, steps: stepTraces.length, durationMs: performance.now() - executionStart });
     return { actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
   } catch (err) {
     fx.cleanup();
@@ -596,6 +614,7 @@ export async function executeAction(
     const errorMsg = err instanceof DOMException && err.name === 'AbortError'
       ? 'Execution cancelled'
       : String(err);
+    log('execute:error', { action: action.name, error: errorMsg, durationMs: performance.now() - executionStart });
 
     // Trace the step that was in progress when the error occurred
     if (activeStep) {
