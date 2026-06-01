@@ -370,6 +370,39 @@ describe('waitFor', () => {
     expect(result.error).toBeUndefined();
     expect(done).toBe(true);
   });
+
+  it('cancels an in-flight waitFor when a new execution starts', async () => {
+    const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
+    let resolve: () => void;
+    const promiseRef = { current: new Promise<void>((r) => { resolve = r; }) };
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={action} waitFor={promiseRef}>
+          <button>Go</button>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    let first!: Promise<ExecutionResult>;
+    await act(async () => {
+      first = ctx!.execute('wait_ref');
+      await Promise.resolve();
+    });
+
+    let second!: Promise<ExecutionResult>;
+    await act(async () => {
+      second = ctx!.execute('wait_ref');
+      await Promise.resolve();
+    });
+
+    await expect(first).resolves.toMatchObject({ error: 'Execution cancelled' });
+
+    resolve!();
+    const result = await act(() => second);
+    expect(result.error).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
