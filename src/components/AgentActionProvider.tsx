@@ -329,8 +329,8 @@ export function AgentActionProvider({
           tooltipEnabled,
           cursorEnabled,
           signal: controller.signal,
-          resolveTarget,
           debug: debugRef.current,
+          resolveTarget,
         };
 
         // Validate params against the Zod schema before executing.

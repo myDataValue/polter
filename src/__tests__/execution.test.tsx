@@ -398,6 +398,33 @@ describe('resolution diagnostics', () => {
     expect(step?.resolve?.reason).toBe('found');
     expect(step?.resolve?.matchCount).toBeGreaterThanOrEqual(1);
   });
+
+  // Regression: AgentActionProvider must forward `debug` into the executor's
+  // config. Without this, the executor's log() calls (execute:start, step:done,
+  // step:fail, etc.) all silently no-op even when the user passes debug={true}.
+  it('forwards debug=true to the executor so execute:* log lines emit', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        ...valueAction,
+        steps: [{ label: 'click', target: 'btn' }],
+      });
+      return <AgentTarget name="btn"><button data-testid="btn">Go</button></AgentTarget>;
+    }
+    render(
+      <AgentActionProvider mode="instant" debug>
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    await act(() => ctx!.execute('value_test', {}));
+    const events = spy.mock.calls.map((c) => c[0]);
+    expect(events).toContain('[polter] execute:start');
+    expect(events).toContain('[polter] step:done');
+    expect(events).toContain('[polter] execute:complete');
+    spy.mockRestore();
+  });
 });
 
 describe('execution callbacks', () => {
