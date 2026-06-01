@@ -325,6 +325,22 @@ async function resolveStepElement(
   return { element: null };
 }
 
+function awaitWaitFor(action: RegisteredAction, signal?: AbortSignal): Promise<void> {
+  if (!action.waitFor) return Promise.resolve();
+  if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
+
+  const waitPromise = Promise.resolve(action.waitFor());
+  if (!signal) return waitPromise;
+
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    waitPromise.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Step effects — encapsulate all mode-specific visual behavior so the
 // execution loop stays mode-agnostic.
@@ -440,7 +456,7 @@ export async function executeAction(
   if (targets.length === 0) {
     if (action.waitFor) {
       log('waitFor:start', { action: action.name });
-      await action.waitFor();
+      await awaitWaitFor(action, config.signal);
       log('waitFor:done', { action: action.name });
     }
     log('execute:complete', { action: action.name, durationMs: performance.now() - executionStart });
@@ -519,7 +535,9 @@ export async function executeAction(
         }
         if (targets.length > 1) {
           fx.cleanup();
-          const reason = `target not found for step "${step.label}"`;
+          const reason = targetName
+            ? `Target "${targetName}" for action "${action.name}" not found for step "${step.label}"`
+            : `target not found for step "${step.label}"`;
           log('step:fail', { index: i, label: step.label, targetName, error: reason, ...resolveDiag });
           stepTraces.push({
             index: i,
@@ -602,7 +620,7 @@ export async function executeAction(
     // Await async work triggered by step clicks
     if (action.waitFor) {
       log('waitFor:start', { action: action.name });
-      await action.waitFor();
+      await awaitWaitFor(action, config.signal);
       log('waitFor:done', { action: action.name });
     }
 

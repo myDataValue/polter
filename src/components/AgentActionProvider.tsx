@@ -137,13 +137,8 @@ export function AgentActionProvider({
     setVersion((v) => v + 1);
   }, []);
 
-  // Track target names that have been registered at least once — used to detect
-  // conditional rendering (target mounted then unmounted instead of disabled).
-  const seenTargetNamesRef = useRef<Set<string>>(new Set());
-
   const registerTarget = useCallback((id: string, entry: AgentTargetEntry) => {
     targetsRef.current.set(id, entry);
-    if (entry.name) seenTargetNamesRef.current.add(entry.name);
   }, []);
 
   const unregisterTarget = useCallback((id: string) => {
@@ -160,15 +155,19 @@ export function AgentActionProvider({
       skipCheck?: () => boolean,
     ): Promise<ResolveResult> => {
       const pollInterval = 50;
-      // Cap polling when the action's component is mounted but its target never
-      // renders (e.g. a virtualized row that never scrolls into view). Without a
-      // cap, `componentMounted` keeps the loop alive forever and the whole action
-      // hangs. A disabled DOM match (seenDisabled) is a genuine loading state —
-      // the element exists — so it keeps extending past this cap.
-      const mountedGraceMs = Math.max(timeout, 15000);
-      const start = Date.now();
+      const start = performance.now();
       const log = createDebugLogger(debugRef.current);
+      // Disabled targets are the explicit loading signal. Let those extend
+      // past the base timeout, but still cap them so a permanently disabled
+      // target cannot hang an action forever.
+      // `hardCap = timeout + LOADING_EXTENSION_MS` so the extension is
+      // always the same delta past the caller's base timeout, regardless
+      // of how large that base is. (Earlier `Math.max(timeout, …)` form
+      // collapsed for large timeouts and silently disabled the extension.)
+      const LOADING_EXTENSION_MS = 25000;
+      const hardCap = timeout + LOADING_EXTENSION_MS;
       let seenDisabled = false;
+      let disabledMissingPolls = 0;
       let componentMounted = false;
       let polls = 0;
 
@@ -188,7 +187,7 @@ export function AgentActionProvider({
           matchCount,
           componentMounted,
           seenDisabled,
-          elapsedMs: Date.now() - start,
+          elapsedMs: performance.now() - start,
           candidates: candidates.length ? candidates : undefined,
         };
       };
@@ -201,16 +200,13 @@ export function AgentActionProvider({
       log('resolveTarget:start', { actionName, name, timeout });
 
       // Poll until the target appears and is enabled.
-      // - If a disabled DOM match is found → poll while it stays present (loading).
-      // - If the action's component has mounted (not registry-only) but targets
-      //   haven't appeared → keep polling up to `mountedGraceMs`, then give up.
+      // - If a disabled DOM match is found → poll up to hardCap (loading).
       // - If the action has disabledReason → abort immediately.
-      // - Otherwise give up after `timeout`.
-      while (
-        seenDisabled ||
-        (componentMounted && Date.now() - start < mountedGraceMs) ||
-        Date.now() - start < timeout
-      ) {
+      // - Otherwise give up after the base timeout. Component mount is
+      //   diagnostic only; it is not a loading signal because PRO-184 showed
+      //   component-backed actions can be mounted while their target will never
+      //   render.
+      while (performance.now() - start < hardCap) {
         if (signal?.aborted) return miss('aborted');
         if (skipCheck?.()) return miss('skipped');
 
@@ -222,15 +218,11 @@ export function AgentActionProvider({
           throw new Error(currentAction.disabledReason);
         }
 
-        // Component mounted but targets not yet rendered — it's loading.
-        // Extend polling past the timeout (same as seenDisabled for DOM elements).
-        if (isComponentBacked && !componentMounted) {
-          componentMounted = true;
-        }
+        if (isComponentBacked) componentMounted = true;
 
-        // Component was mounted but then unregistered (user navigated away).
-        if (componentMounted && !isComponentBacked) break;
-
+        // Scan registered targets before deciding whether to exit on component
+        // unmount. Action and target unregister effects can run in separate
+        // ticks, and a still-connected target is usable if it is present.
         let foundTarget = false;
         for (const entry of targetsRef.current.values()) {
           if (entry.name === name && entry.element.isConnected) {
@@ -238,16 +230,33 @@ export function AgentActionProvider({
             if ((entry.element as HTMLButtonElement).disabled) {
               seenDisabled = true;
             } else {
-              log('resolveTarget:found', { actionName, name, elapsedMs: Date.now() - start });
+              log('resolveTarget:found', { actionName, name, elapsedMs: performance.now() - start });
               return { element: entry.element, diagnostics: diag('found') };
             }
           }
         }
 
-        if (seenDisabled && !foundTarget) break;
+        // Action's component was mounted at some point but then unregistered —
+        // user navigated away mid-execution. Don't keep polling.
+        if (componentMounted && !isComponentBacked) break;
+
+        // We saw a disabled match earlier and now it's gone entirely — the
+        // component may be swapping disabled → enabled across commits. Tolerate
+        // a few missing polls before concluding it removed the target.
+        if (seenDisabled && !foundTarget) {
+          disabledMissingPolls++;
+          if (disabledMissingPolls >= 3) break;
+        } else {
+          disabledMissingPolls = 0;
+        }
+
+        // Past the base timeout: keep going only when we see the loading-
+        // pattern signal. Otherwise give up so PRO-184-style hangs surface
+        // as a useful diagnostic.
+        if (performance.now() - start >= timeout && !seenDisabled) break;
 
         // Live-watch heartbeat (~1s). matchCount 0 + componentMounted true keeps
-        // polling up to mountedGraceMs, then resolveTarget gives up (step fails).
+        // reporting useful context until resolveTarget gives up.
         if (polls % 20 === 0) log('resolveTarget:waiting', { actionName, name, ...diag('timeout') });
         polls++;
 
@@ -260,14 +269,6 @@ export function AgentActionProvider({
       const postAction = actionsRef.current.get(actionName);
       if (postAction?.disabledReason) {
         throw new Error(postAction.disabledReason);
-      }
-
-      if (seenTargetNamesRef.current.has(name)) {
-        throw new Error(
-          `[polter] AgentTarget "${name}" was previously mounted but is now gone. ` +
-          `This usually means the component conditionally unmounts it during loading. ` +
-          `Render the target with disabled={isLoading} instead of unmounting it.`,
-        );
       }
 
       return miss(componentMounted ? 'unmounted' : 'timeout');
