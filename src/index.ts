@@ -27,6 +27,8 @@ export type {
   RegisteredAction,
   ToolSchema,
   StepTrace,
+  ResolveDiagnostics,
+  ResolveResult,
   ExecutionResult,
   AvailableAction,
   ExecutorConfig,

@@ -12,6 +12,7 @@ import { useAgentActions } from '../hooks/useAgentActions';
 import { useAgentAction } from '../hooks/useAgentAction';
 import { defineAction } from '../core/helpers';
 import { fromParam } from '../core/helpers';
+import type { ExecutionResult } from '../core/types';
 import { z } from 'zod';
 import { TestConsumer } from './testUtils';
 
@@ -375,6 +376,30 @@ describe('waitFor', () => {
 // Execution callbacks
 // ---------------------------------------------------------------------------
 
+describe('resolution diagnostics', () => {
+  it('records resolve diagnostics on the step trace when a target is found', async () => {
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        ...valueAction,
+        steps: [{ label: 'type', value: 'x', target: 'input' }],
+      });
+      return <AgentTarget name="input"><input data-testid="input" /></AgentTarget>;
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    const result = await act(() => ctx!.execute('value_test', {}));
+    const step = result.trace.find((s) => s.targetName === 'input');
+    expect(step?.resolve).toBeDefined();
+    expect(step?.resolve?.reason).toBe('found');
+    expect(step?.resolve?.matchCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('execution callbacks', () => {
   it('should fire onExecutionStart and onExecutionComplete', async () => {
     const action = defineAction({ name: 'tracked', description: 'Tracked' });
@@ -390,5 +415,71 @@ describe('execution callbacks', () => {
     await act(() => ctx!.execute('tracked'));
     expect(onStart).toHaveBeenCalledWith('tracked');
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ actionName: 'tracked' }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-page navigation handoff
+//
+// A cross-page action (registry schema with `navigateTo` but no steps of its
+// own) gets its real steps from the destination page's component, which only
+// mounts after navigation. The provider must wait for that mount, then run
+// phase 2 — and if the component never shows up, report failure rather than a
+// bare-navigation "success" (which makes the agent narrate, e.g., an opened
+// panel that never opened).
+// ---------------------------------------------------------------------------
+
+describe('cross-page navigation handoff', () => {
+  const crossPage = defineAction({
+    name: 'open_panel',
+    description: 'Open a panel that lives on another page',
+    navigateTo: 'dash-nav',
+  });
+  // Stable reference — real callers pass a module-level registry, not an inline
+  // array. A fresh array each render would churn the provider's registry
+  // identity and defeat the registry-vs-component check the handoff relies on.
+  const REGISTRY = [crossPage];
+
+  it('reports an error (not a bare-nav success) when the destination component never mounts', async () => {
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant" mountTimeout={50} registry={REGISTRY}>
+        <AgentTarget name="dash-nav"><button>Dashboard</button></AgentTarget>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    const result = await act(() => ctx!.execute('open_panel'));
+    // Navigation itself happened…
+    expect(result.trace.some((s) => s.targetName === 'dash-nav')).toBe(true);
+    // …but the panel's own steps never ran, so this must NOT look like success.
+    expect(result.error).toBeDefined();
+  });
+
+  it('runs the destination component’s steps once it mounts after navigation', async () => {
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Late() {
+      useAgentAction({ ...crossPage, steps: [{ label: 'open', target: 'panel-btn' }] });
+      return <AgentTarget name="panel-btn"><button data-testid="panel-btn">Open</button></AgentTarget>;
+    }
+    const Tree = ({ mounted }: { mounted: boolean }) => (
+      <AgentActionProvider mode="instant" mountTimeout={2000} registry={REGISTRY}>
+        <AgentTarget name="dash-nav"><button>Dashboard</button></AgentTarget>
+        {mounted ? <Late /> : null}
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>
+    );
+    const { rerender } = render(<Tree mounted={false} />);
+
+    let resultP: Promise<ExecutionResult> | null = null;
+    await act(async () => {
+      resultP = ctx!.execute('open_panel'); // phase 1 navigates, then waits for mount
+      rerender(<Tree mounted />); // destination component mounts during the wait
+    });
+    const result = await act(() => resultP!);
+
+    expect(result.error).toBeUndefined();
+    expect(
+      result.trace.some((s) => s.targetName === 'panel-btn' && s.status === 'completed'),
+    ).toBe(true);
   });
 });

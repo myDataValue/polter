@@ -47,13 +47,21 @@ export function AgentTarget({ name, children }: AgentTargetProps) {
 
     const resolveAndRegister = () => {
       let element = wrapper.firstElementChild as HTMLElement | null;
-      // Skip display:contents wrappers (e.g. nested AgentAction div) that have zero dimensions.
-      // Check getComputedStyle instead of getBoundingClientRect — it works in jsdom.
-      while (
-        element &&
-        getComputedStyle(element).display === 'contents' &&
-        element.firstElementChild
-      ) {
+      // Descend through wrapper divs (display:contents, zero dimensions) to the
+      // first real element. polter's own nested wrappers (AgentAction/AgentTarget)
+      // carry the data-polter-target marker, so we check that first: it is a plain
+      // attribute read (no layout) and short-circuits before getComputedStyle.
+      // This matters inside virtualized lists (rows constantly mounting/unmounting
+      // on scroll), where reading getComputedStyle on every MutationObserver fire
+      // forced ~650ms of reflow per scroll gesture. Only when the marker is absent
+      // do we fall back to getComputedStyle, so a consumer's own display:contents
+      // wrapper placed directly inside the target is still descended. The marker
+      // path also works in jsdom.
+      while (element && element.firstElementChild) {
+        const isPolterWrapper = element.hasAttribute('data-polter-target');
+        if (!isPolterWrapper && getComputedStyle(element).display !== 'contents') {
+          break;
+        }
         element = element.firstElementChild as HTMLElement;
       }
       if (element) {
@@ -76,7 +84,7 @@ export function AgentTarget({ name, children }: AgentTargetProps) {
   }, [id, name, registerTarget, unregisterTarget]);
 
   return (
-    <div ref={wrapperRef} style={{ display: 'contents' }}>
+    <div ref={wrapperRef} data-polter-target="" style={{ display: 'contents' }}>
       {children}
     </div>
   );

@@ -271,7 +271,7 @@ completes. Pass a React ref (safe — can't do work in a ref) or a function
 | `onExecutionComplete` | `(result: ExecutionResult) => void` | — |
 | `registry` | `ActionDefinition[]` | — |
 | `navigate` | `(path: string) => void \| Promise<void>` | — |
-| `devWarnings` | `boolean` | `false` |
+| `debug` | `boolean` | `false` |
 
 ### Disabled actions
 
