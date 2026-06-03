@@ -14,6 +14,8 @@ import type {
 import { generateToolSchemas } from '../core/schemaGenerator';
 import { createDebugLogger, findCandidateTargetNames } from '../core/debugLog';
 import { executeAction } from '../executor/visualExecutor';
+import { matchTargets } from '../resolvers';
+import type { TargetIntent } from '../resolvers/types';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
 
@@ -153,6 +155,7 @@ export function AgentActionProvider({
       params?: Record<string, unknown>,
       timeout = 5000,
       skipCheck?: () => boolean,
+      intent?: TargetIntent,
     ): Promise<ResolveResult> => {
       const pollInterval = 50;
       const start = performance.now();
@@ -205,7 +208,9 @@ export function AgentActionProvider({
       // - Otherwise give up after the base timeout. Component mount is
       //   diagnostic only; it is not a loading signal because PRO-184 showed
       //   component-backed actions can be mounted while their target will never
-      //   render.
+      //   render. (An `intent` fallback also gives up at the base timeout — the
+      //   scoring resolver matches against what's already rendered, so if it
+      //   hasn't matched by then the target is genuinely absent.)
       while (performance.now() - start < hardCap) {
         if (signal?.aborted) return miss('aborted');
         if (skipCheck?.()) return miss('skipped');
@@ -236,6 +241,26 @@ export function AgentActionProvider({
           }
         }
 
+        // Flexible fallback: no exact-name match this tick. If the step described what it
+        // wants (intent), match it against registered targets' self-descriptions —
+        // tolerant of partial id-sets, labels, and number-vs-string ids.
+        if (!foundTarget && intent) {
+          const connected = [...targetsRef.current.values()].filter(
+            (e) => e.element.isConnected,
+          );
+          const result = matchTargets(connected, intent);
+          if (result.status === 'matched') {
+            foundTarget = true;
+            if ((result.target.element as HTMLButtonElement).disabled) {
+              seenDisabled = true;
+            } else {
+              log('resolveTarget:found', { actionName, name, via: 'intent', elapsedMs: performance.now() - start });
+              return { element: result.target.element, diagnostics: diag('found') };
+            }
+          }
+          // 'ambiguous' / 'miss' → keep polling; a clearer/at-all match may still render.
+        }
+
         // Action's component was mounted at some point but then unregistered —
         // user navigated away mid-execution. Don't keep polling.
         if (componentMounted && !isComponentBacked) break;
@@ -252,7 +277,7 @@ export function AgentActionProvider({
 
         // Past the base timeout: keep going only when we see the loading-
         // pattern signal. Otherwise give up so PRO-184-style hangs surface
-        // as a useful diagnostic.
+        // as a useful diagnostic. (Also bounds the intent fallback.)
         if (performance.now() - start >= timeout && !seenDisabled) break;
 
         // Live-watch heartbeat (~1s). matchCount 0 + componentMounted true keeps
