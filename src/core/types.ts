@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { TargetAttrs, TargetIntent } from '../resolvers/types';
 
 export type ExecutionMode = 'guided' | 'instant';
 
@@ -68,6 +69,13 @@ export interface StepDefinition<TParams = Record<string, unknown>> {
    */
   readonly target?: string | ((params: TParams) => string);
   /**
+   * Optional semantic fallback for resolving the target. When the exact `target`
+   * name isn't found in the registry, the executor matches this intent (role +
+   * attrs) against registered targets' self-descriptions — tolerant of partial
+   * id-sets, labels, and number-vs-string ids. Static, or per-params.
+   */
+  readonly intent?: TargetIntent | ((params: TParams) => TargetIntent | undefined);
+  /**
    * Value to type into the target element. When present, the executor types
    * into the resolved element instead of clicking it.
    *
@@ -85,6 +93,12 @@ export interface StepDefinition<TParams = Record<string, unknown>> {
   readonly scrollTo?: ScrollDispatch<TParams>;
   /** Skip this step at execution time when the predicate returns true. */
   readonly skipIf?: (params: TParams) => boolean;
+  /**
+   * Per-step resolve timeout in ms (default 5000). Use a short value for a "try the
+   * already-visible target" probe so it fails fast when the target isn't rendered and the
+   * caller can fall back (e.g. to a search-then-click path) without a long stall.
+   */
+  readonly timeout?: number;
 }
 
 /** Shared fields describing an AgentTarget — consumed by AgentTarget props and the registered AgentTargetEntry. */
@@ -94,6 +108,14 @@ export interface TargetDefinition {
    * and/or row identity into the name (e.g. `name={`edit_markup:${id}`}`).
    */
   readonly name: string;
+  /**
+   * Optional structured self-description for flexible, attribute-based resolution.
+   * When a step can't be matched by exact `name`, the executor scores its `intent`
+   * against these (e.g. `role: 'type', attrs: { label: 'Apartments', ids: ['201','219'] }`),
+   * so a partial id-set / label / number-vs-string id still finds this target.
+   */
+  readonly role?: string;
+  readonly attrs?: TargetAttrs;
 }
 
 export interface AgentTargetEntry extends TargetDefinition {
@@ -189,7 +211,12 @@ export interface ExecutorConfig {
   signal?: AbortSignal;
   /** When true, emit verbose `[polter]` console logs during execution. */
   debug?: boolean;
-  /** Resolve a named target from the AgentTarget registry. */
+  /**
+   * Resolve a target from the AgentTarget registry. Matches the exact `name` first;
+   * if that isn't registered and an `intent` is supplied, falls back to flexible
+   * attribute-based resolution against targets' self-descriptions. Returns the
+   * element plus resolution diagnostics.
+   */
   resolveTarget?: (
     actionName: string,
     name: string,
@@ -197,6 +224,7 @@ export interface ExecutorConfig {
     params?: Record<string, unknown>,
     timeout?: number,
     skipCheck?: () => boolean,
+    intent?: TargetIntent,
   ) => Promise<ResolveResult>;
 }
 

@@ -15,6 +15,23 @@ export { defineAction, fromParam } from './core/helpers';
 // Schema utilities
 export { zodToJsonSchema, generateToolSchemas } from './core/schemaGenerator';
 
+// Flexible target resolution (attribute-based, complements exact-name lookup)
+export {
+  matchTargets,
+  scoreTarget,
+  scoreAttrValue,
+  MATCH_THRESHOLD,
+  AMBIGUITY_MARGIN,
+} from './resolvers';
+export type {
+  TargetAttrValue,
+  TargetAttrs,
+  TargetIntent,
+  DescribedTarget,
+  TargetCandidate,
+  TargetMatch,
+} from './resolvers';
+
 // Types
 export type {
   ActionSchema,

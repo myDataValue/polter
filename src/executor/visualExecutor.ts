@@ -2,6 +2,10 @@ import type { RegisteredAction, ExecutionResult, StepDefinition, ExecutorConfig,
 import { createDebugLogger } from '../core/debugLog';
 
 let stylesInjected = false;
+// The cursor persists its position across actions so it glides from where it
+// last stopped instead of snapping back to the off-screen origin each step.
+let lastCursorPos: { x: number; y: number } | null = null;
+let cursorRemovalTimer: ReturnType<typeof setTimeout> | null = null;
 
 function injectStyles(): void {
   if (stylesInjected) return;
@@ -91,31 +95,76 @@ function createBlockingOverlay(): OverlayHandle {
   return { remove: () => overlay.remove() };
 }
 
-function createCursor(): OverlayHandle {
+function cancelPendingCursorRemoval(): void {
+  if (cursorRemovalTimer !== null) {
+    clearTimeout(cursorRemovalTimer);
+    cursorRemovalTimer = null;
+  }
+}
+
+/**
+ * Defer cursor removal so back-to-back actions reuse the same element and the
+ * cursor glides between targets; the next action cancels the pending removal.
+ * Only a genuinely idle agent (no follow-up step) lets the timer fire.
+ */
+function scheduleCursorRemoval(): void {
+  cancelPendingCursorRemoval();
+  cursorRemovalTimer = setTimeout(() => {
+    cursorRemovalTimer = null;
+    document.querySelector('.polter-cursor')?.remove();
+  }, 800);
+}
+
+function getOrCreateCursor(): OverlayHandle {
   injectStyles();
+  cancelPendingCursorRemoval();
+
+  // Reuse a still-present cursor so it continues from its current position
+  // rather than re-entering from the corner each action.
+  const existing = document.querySelector('.polter-cursor') as HTMLElement | null;
+  if (existing) {
+    return { remove: scheduleCursorRemoval };
+  }
 
   const cursor = document.createElement('div');
   cursor.className = 'polter-cursor';
   cursor.innerHTML = `${CURSOR_SVG}<div class="polter-cursor-label">${CURSOR_LABEL}</div>`;
+  // Start where the cursor last stopped. The first-ever appearance has no
+  // recorded position, so it glides in from the off-screen top-left corner —
+  // that initial entrance is intentional; only subsequent resets were the bug.
+  const start = lastCursorPos ?? { x: -40, y: -40 };
   cursor.style.cssText = `
     position:fixed;
-    left:-40px;
-    top:-40px;
+    left:${start.x}px;
+    top:${start.y}px;
     z-index:100000;
     pointer-events:none;
     transition:left 0.4s cubic-bezier(0.4,0,0.2,1),top 0.4s cubic-bezier(0.4,0,0.2,1);
   `;
   document.body.appendChild(cursor);
 
-  return { remove: () => cursor.remove() };
+  return { remove: scheduleCursorRemoval };
+}
+
+// A connected-but-unlaid-out target reports an all-zero box: width/height 0 at (0,0).
+// Happens when the target is in a tab that isn't open, hidden at a responsive
+// breakpoint, or measured mid-re-render. Its "centre" is (0,0), so moving the cursor
+// or spotlight there snaps them to the top-left corner — the classic "stuck cursor".
+export function isDegenerateRect(rect: Pick<DOMRect, 'width' | 'height'>): boolean {
+  return rect.width === 0 && rect.height === 0;
 }
 
 function moveCursorTo(rect: DOMRect, signal?: AbortSignal): Promise<void> {
   const cursor = document.querySelector('.polter-cursor') as HTMLElement | null;
   if (!cursor) return Promise.resolve();
+  // Don't fly the cursor to (0,0) for an off-layout target — leave it where it was.
+  if (isDegenerateRect(rect)) return Promise.resolve();
 
-  cursor.style.left = `${rect.left + rect.width / 2}px`;
-  cursor.style.top = `${rect.top + rect.height / 2}px`;
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  cursor.style.left = `${x}px`;
+  cursor.style.top = `${y}px`;
+  lastCursorPos = { x, y };
 
   return delay(450, signal);
 }
@@ -317,9 +366,21 @@ async function resolveStepElement(
     }
   }
 
-  if (step.target && config.resolveTarget) {
-    const name = typeof step.target === 'function' ? step.target(params) : step.target;
-    return config.resolveTarget(actionName, name, config.signal, params, 5000, skipCheck);
+  const intent =
+    typeof step.intent === 'function' ? step.intent(params) : step.intent;
+
+  if ((step.target || intent) && config.resolveTarget) {
+    const name =
+      typeof step.target === 'function' ? step.target(params) : (step.target ?? '');
+    return config.resolveTarget(
+      actionName,
+      name,
+      config.signal,
+      params,
+      step.timeout ?? 5000,
+      skipCheck,
+      intent,
+    );
   }
 
   return { element: null };
@@ -370,7 +431,7 @@ function simulateFullClick(element: HTMLElement): void {
 
 function createGuidedEffects(config: ExecutorConfig): StepEffects {
   const blocker = createBlockingOverlay();
-  const cursor = config.cursorEnabled ? createCursor() : null;
+  const cursor = config.cursorEnabled ? getOrCreateCursor() : null;
   let spotlight: SpotlightHandle | null = null;
 
   return {
@@ -390,8 +451,12 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
       // during which the virtualizer could recycle the element again. Using a
       // captured rect avoids stale-element reads in createSpotlight.
       const rect = element.getBoundingClientRect();
-      if (cursor) await moveCursorTo(rect, config.signal);
-      spotlight = createSpotlight(rect, label, config);
+      // Off-layout target (hidden tab, narrow-screen breakpoint, mid re-render):
+      // skip the visual move + spotlight so they don't snap to the top-left corner.
+      // The action itself still runs — only the misleading cursor jump is suppressed.
+      const offLayout = isDegenerateRect(rect);
+      if (cursor && !offLayout) await moveCursorTo(rect, config.signal);
+      if (!offLayout) spotlight = createSpotlight(rect, label, config);
       await delay(config.stepDelay, config.signal);
       return element;
     },

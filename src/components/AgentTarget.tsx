@@ -30,7 +30,7 @@ interface AgentTargetProps extends TargetDefinition {
  * </AgentTarget>
  * ```
  */
-export function AgentTarget({ name, children }: AgentTargetProps) {
+export function AgentTarget({ name, role, attrs, children }: AgentTargetProps) {
   const id = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const context = useContext(AgentActionContext);
@@ -40,6 +40,13 @@ export function AgentTarget({ name, children }: AgentTargetProps) {
   }
 
   const { registerTarget, unregisterTarget } = context;
+
+  // Keep the latest self-description without forcing re-registration on every render
+  // (callers typically pass an inline `attrs={{...}}` object). Re-register only when the
+  // serialised content actually changes.
+  const descriptionRef = useRef({ role, attrs });
+  descriptionRef.current = { role, attrs };
+  const attrsKey = attrs ? JSON.stringify(attrs) : '';
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -65,7 +72,8 @@ export function AgentTarget({ name, children }: AgentTargetProps) {
         element = element.firstElementChild as HTMLElement;
       }
       if (element) {
-        registerTarget(id, { name, element });
+        const { role: r, attrs: a } = descriptionRef.current;
+        registerTarget(id, { name, element, role: r, attrs: a });
       } else {
         unregisterTarget(id);
       }
@@ -81,7 +89,7 @@ export function AgentTarget({ name, children }: AgentTargetProps) {
       observer.disconnect();
       unregisterTarget(id);
     };
-  }, [id, name, registerTarget, unregisterTarget]);
+  }, [id, name, role, attrsKey, registerTarget, unregisterTarget]);
 
   return (
     <div ref={wrapperRef} data-polter-target="" style={{ display: 'contents' }}>
