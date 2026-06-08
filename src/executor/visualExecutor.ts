@@ -637,7 +637,13 @@ export async function executeAction(
         if (element!.isConnected) return element!;
         if (!config.resolveTarget || !targetName) throw new Error(`Target "${targetName}" is no longer in the DOM.`);
         const { element: fresh } = await config.resolveTarget(action.name, targetName, config.signal, params, 3000);
-        if (!fresh?.isConnected) throw new Error(`Target "${targetName}" was recycled by a virtualizer and could not be re-resolved.`);
+        if (!fresh?.isConnected) throw new Error(
+          `Target "${targetName}" was found, then left the DOM before it could be used, and could ` +
+          `not be re-resolved within 3s. This is a UI timing/config issue — NOT a login or extension ` +
+          `problem. Common causes: the action's steps are registered in both defineAction and ` +
+          `useAgentAction (double-click — look for a "[polter] ... steps in both" error); an earlier ` +
+          `step's side effect swapped the render branch out; or a virtualized list recycled the row.`,
+        );
         return fresh;
       };
 

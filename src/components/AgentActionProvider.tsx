@@ -25,6 +25,22 @@ function schemaToRegisteredAction(def: ActionSchema<any>): RegisteredAction {
     resolveSteps: () => (def.steps as any[]) ?? [],
   };
 }
+/**
+ * Report a CRITICAL polter misconfiguration — one that silently corrupts
+ * behaviour rather than just looking untidy (e.g. a step registered in two
+ * places, which makes the executor run it twice and recycle its own target).
+ *
+ * NOTE: this deliberately does NOT throw. registerAction runs inside a React
+ * effect, and an effect that throws makes React unmount the whole tree (no error
+ * boundary → white screen) — so a single misconfigured action anywhere would
+ * crash the entire app on mount. We log at console.error level (louder than the
+ * old console.warn, surfaces in CI logs) without taking the app down. Escalating
+ * to a hard failure is only safe once every existing violation is fixed AND the
+ * check moves somewhere a throw can't unmount the app (e.g. execution time).
+ */
+function reportPolterMisconfig(message: string): void {
+  console.error(`[polter] ${message}`);
+}
 
 export function AgentActionProvider({
   mode = 'guided',
@@ -99,18 +115,22 @@ export function AgentActionProvider({
       );
     }
 
-    // Antipattern: defineAction has steps AND useAgentAction supplies its own
-    // steps. Either keep all steps in defineAction (preferred for cross-page)
-    // or remove them from defineAction (same-page action). Splitting causes
-    // racy two-phase execution where the component's steps may silently drop.
-    if (debug && registryAction) {
+    // CRITICAL antipattern: the same action has steps in BOTH defineAction and
+    // useAgentAction. The executor then runs a racy two-phase pass that clicks
+    // the target twice; the first click's side effects can unmount it before the
+    // second, surfacing as a bogus "recycled by a virtualizer" error. Steps must
+    // live in ONE place. Checked unconditionally (not debug-gated) and thrown so
+    // it can't silently ship again.
+    if (registryAction) {
       const registrySteps = registryAction.resolveSteps();
       const incomingSteps = action.resolveSteps();
       if (registrySteps.length > 0 && incomingSteps.length > 0) {
-        console.warn(
-          `[polter] Action "${action.name}" has steps in both defineAction and useAgentAction. ` +
-          `Pick one — either remove the steps from useAgentAction (just pass runtime state like ` +
-          `waitFor/disabledReason), or remove them from defineAction. See best-practices.md "Put cross-page steps in defineAction".`,
+        reportPolterMisconfig(
+          `Action "${action.name}" has steps in both defineAction and useAgentAction. ` +
+          `Put them in ONE place: keep the steps in defineAction and pass "steps: undefined" to ` +
+          `useAgentAction (static cross-page steps), OR define them only in the component and keep ` +
+          `defineAction a stepless schema stand-in (dynamic, param-dependent steps — e.g. editPmsMarkup). ` +
+          `Defining them in both makes the executor click the target twice and recycle it.`,
         );
       }
     }
@@ -325,12 +345,9 @@ export function AgentActionProvider({
 
   const execute = useCallback(
     async (actionName: string, params?: Record<string, unknown>): Promise<ExecutionResult> => {
-      currentExecutionRef.current?.abort();
-      const controller = new AbortController();
-      currentExecutionRef.current = controller;
       const start = performance.now();
 
-      let action = actionsRef.current.get(actionName);
+      const action = actionsRef.current.get(actionName);
       if (!action) {
         return { actionName, error: `Action "${actionName}" not found`, trace: [], durationMs: performance.now() - start };
       }
@@ -342,6 +359,15 @@ export function AgentActionProvider({
           durationMs: performance.now() - start,
         };
       }
+
+      // Claim execution: supersede any in-flight run and become the owner.
+      // Lookup/validation happens first (above) so a bogus or disabled action
+      // never cancels a running one — and never claims ownership without
+      // reaching the finally that releases it. Only the current owner may flip
+      // isExecuting off (see finally), so a superseded run can't clobber this one.
+      currentExecutionRef.current?.abort();
+      const controller = new AbortController();
+      currentExecutionRef.current = controller;
 
       setIsExecuting(true);
       onExecutionStart?.(actionName);
@@ -485,9 +511,15 @@ export function AgentActionProvider({
         onExecutionComplete?.(result);
         return result;
       } finally {
-        setIsExecuting(false);
+        // Only the still-current owner returns to idle. A run that a newer
+        // execute() superseded must NOT reset the flag the newer run set —
+        // otherwise consumers that edge-detect isExecuting (e.g. the agent
+        // "view changed" toast) see a spurious true→false→true at a
+        // chained-action boundary, and a rank=0 Auto-Optimize shortcut can fire
+        // mid-execution. abortExecution handles the manual-cancel reset.
         if (currentExecutionRef.current === controller) {
           currentExecutionRef.current = null;
+          setIsExecuting(false);
         }
       }
     },
@@ -517,6 +549,9 @@ export function AgentActionProvider({
       currentExecutionRef.current.abort();
       currentExecutionRef.current = null;
     }
+    // The aborted run's finally now no-ops (it's no longer the owner), so the
+    // reset lives here.
+    setIsExecuting(false);
   }, []);
 
   const contextValue = useMemo<AgentActionContextValue>(

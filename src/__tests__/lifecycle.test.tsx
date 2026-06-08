@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { it as fcIt, fc } from '@fast-check/vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
@@ -41,6 +41,59 @@ describe('context boundaries', () => {
     },
   ])('$name should throw when used outside AgentActionProvider', ({ render: renderEl }) => {
     expect(() => render(renderEl())).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Critical misconfig guard: steps in BOTH defineAction and useAgentAction is
+// logged loudly (console.error). It deliberately does NOT throw — registerAction
+// runs in a React effect, and an effect that throws unmounts the whole tree
+// (one misconfigured action would white-screen the app).
+// ---------------------------------------------------------------------------
+
+function loggedStepsInBoth(spy: ReturnType<typeof vi.spyOn>): boolean {
+  return spy.mock.calls.some(
+    (args: unknown[]) => typeof args[0] === 'string' && (args[0] as string).includes('steps in both'),
+  );
+}
+
+describe('critical misconfiguration guards', () => {
+  // The registry prop is synced into the provider in an effect, and child effects
+  // run before the parent's — so mount the provider first (registry settles), then
+  // rerender to mount the component. Mirrors how real components register after the
+  // provider, and the cross-page test's registry handoff.
+  it('console.errors when an action has steps in both defineAction and useAgentAction', () => {
+    const dup = defineAction({
+      name: 'dup_steps',
+      description: 'has steps in the registry',
+      steps: [{ label: 'click', target: 'btn' }],
+    });
+    const REGISTRY = [dup];
+    function Comp() {
+      useAgentAction({ ...dup }); // spread re-adds the registry steps → two places
+      return null;
+    }
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { rerender } = render(<AgentActionProvider registry={REGISTRY}>{null}</AgentActionProvider>);
+    rerender(<AgentActionProvider registry={REGISTRY}><Comp /></AgentActionProvider>);
+    const flagged = loggedStepsInBoth(errSpy);
+    errSpy.mockRestore();
+    expect(flagged).toBe(true);
+  });
+
+  it('does NOT flag the canonical split (steps only in the component, stepless registry stand-in)', () => {
+    const standIn = defineAction({ name: 'split_ok', description: 'stand-in', navigateTo: 'nav' });
+    const REGISTRY = [standIn];
+    function Comp() {
+      useAgentAction({ ...standIn, steps: [{ label: 'click', target: 'btn' }] });
+      return null;
+    }
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { rerender } = render(<AgentActionProvider registry={REGISTRY}>{null}</AgentActionProvider>);
+    rerender(<AgentActionProvider registry={REGISTRY}><Comp /></AgentActionProvider>);
+    const flagged = loggedStepsInBoth(errSpy);
+    errSpy.mockRestore();
+    expect(flagged).toBe(false);
   });
 });
 
