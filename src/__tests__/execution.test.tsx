@@ -423,6 +423,74 @@ describe('waitFor', () => {
     const result = await act(() => second);
     expect(result.error).toBeUndefined();
   });
+
+  it('keeps isExecuting true when a new execution supersedes an in-flight one', async () => {
+    const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
+    let resolve: () => void;
+    const promiseRef = { current: new Promise<void>((r) => { resolve = r; }) };
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={action} waitFor={promiseRef}>
+          <button>Go</button>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    let first!: Promise<ExecutionResult>;
+    await act(async () => {
+      first = ctx!.execute('wait_ref');
+      await Promise.resolve();
+    });
+    expect(ctx!.isExecuting).toBe(true);
+
+    // The second execution supersedes the first. The first's finally must NOT
+    // clobber isExecuting back to false while the second is still running —
+    // consumers that edge-detect isExecuting (the agent "view changed" toast,
+    // the rank=0 Auto-Optimize shortcut) would otherwise see a spurious
+    // true→false→true mid-sequence.
+    let second!: Promise<ExecutionResult>;
+    await act(async () => {
+      second = ctx!.execute('wait_ref');
+      await Promise.resolve();
+    });
+    await expect(first).resolves.toMatchObject({ error: 'Execution cancelled' });
+    expect(ctx!.isExecuting).toBe(true);
+
+    // Completing the live execution returns to idle.
+    resolve!();
+    await act(() => second);
+    expect(ctx!.isExecuting).toBe(false);
+  });
+
+  it('resets isExecuting when execution is aborted', async () => {
+    const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
+    const promiseRef = { current: new Promise<void>(() => { /* never resolves */ }) };
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={action} waitFor={promiseRef}>
+          <button>Go</button>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    let exec!: Promise<ExecutionResult>;
+    await act(async () => {
+      exec = ctx!.execute('wait_ref');
+      await Promise.resolve();
+    });
+    expect(ctx!.isExecuting).toBe(true);
+
+    await act(async () => {
+      ctx!.abortExecution();
+      await Promise.resolve();
+    });
+    expect(ctx!.isExecuting).toBe(false);
+    await expect(exec).resolves.toMatchObject({ error: 'Execution cancelled' });
+  });
 });
 
 // ---------------------------------------------------------------------------
