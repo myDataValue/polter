@@ -386,14 +386,14 @@ async function resolveStepElement(
   return { element: null };
 }
 
-function awaitWaitFor(action: RegisteredAction, signal?: AbortSignal): Promise<void> {
-  if (!action.waitFor) return Promise.resolve();
+function awaitWaitFor(action: RegisteredAction, signal?: AbortSignal): Promise<unknown> {
+  if (!action.waitFor) return Promise.resolve(undefined);
   if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
 
   const waitPromise = Promise.resolve(action.waitFor());
   if (!signal) return waitPromise;
 
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<unknown>((resolve, reject) => {
     const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
     signal.addEventListener('abort', onAbort, { once: true });
     waitPromise.then(resolve, reject).finally(() => {
@@ -519,13 +519,14 @@ export async function executeAction(
   log('execute:start', { action: action.name, mode: config.mode, steps: targets.length, params });
 
   if (targets.length === 0) {
+    let outcome: unknown;
     if (action.waitFor) {
       log('waitFor:start', { action: action.name });
-      await awaitWaitFor(action, config.signal);
+      outcome = await awaitWaitFor(action, config.signal);
       log('waitFor:done', { action: action.name });
     }
     log('execute:complete', { action: action.name, durationMs: performance.now() - executionStart });
-    return { actionName: action.name, trace: [], durationMs: performance.now() - executionStart };
+    return { actionName: action.name, trace: [], durationMs: performance.now() - executionStart, outcome };
   }
 
   const fx = config.mode === 'instant'
@@ -683,14 +684,15 @@ export async function executeAction(
     fx.cleanup();
 
     // Await async work triggered by step clicks
+    let outcome: unknown;
     if (action.waitFor) {
       log('waitFor:start', { action: action.name });
-      await awaitWaitFor(action, config.signal);
+      outcome = await awaitWaitFor(action, config.signal);
       log('waitFor:done', { action: action.name });
     }
 
     log('execute:complete', { action: action.name, steps: stepTraces.length, durationMs: performance.now() - executionStart });
-    return { actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart };
+    return { actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart, outcome };
   } catch (err) {
     fx.cleanup();
 

@@ -371,6 +371,26 @@ describe('waitFor', () => {
     expect(done).toBe(true);
   });
 
+  it('surfaces the resolved waitFor value as result.outcome', async () => {
+    const action = defineAction({ name: 'wait_outcome', description: 'Wait outcome' });
+    let resolve: (v: unknown) => void;
+    const promiseRef = { current: new Promise<unknown>((r) => { resolve = r; }) };
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={action} waitFor={promiseRef}>
+          <button>Go</button>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    const exec = act(() => ctx!.execute('wait_outcome').then((r) => r));
+    resolve!({ applied: true, confirmationShown: false, propertyCount: 1 });
+    const result = await exec;
+    expect(result.error).toBeUndefined();
+    expect(result.outcome).toEqual({ applied: true, confirmationShown: false, propertyCount: 1 });
+  });
+
   it('cancels an in-flight waitFor when a new execution starts', async () => {
     const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
     let resolve: () => void;

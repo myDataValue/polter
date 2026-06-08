@@ -18,11 +18,11 @@ export function useAgentAction(...configs: ActionDefinition<any>[]): void {
     return (item?.steps as StepDefinition[] | undefined) ?? [];
   }, []);
 
-  const resolveWaitFor = useCallback(async (actionName: string) => {
+  const resolveWaitFor = useCallback(async (actionName: string): Promise<unknown> => {
     const item = configsRef.current.find((c) => c.name === actionName);
     const wf = item?.waitFor;
-    if (!wf) return;
-    await wf.current;
+    if (!wf) return undefined;
+    return await wf.current;
   }, []);
 
   const buildRegistered = useCallback(() => {
