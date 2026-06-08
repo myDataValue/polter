@@ -126,8 +126,10 @@ export interface RegisteredAction<TSchema extends z.ZodType = any>
   extends Pick<ActionDefinition<TSchema>, 'name' | 'description' | 'parameters' | 'navigateTo' | 'disabledReason'> {
   /** Returns the current steps with fresh closures (via useEffectEvent). */
   readonly resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
-  /** Resolved waitFor — always a function (ref form is resolved at registration). */
-  readonly waitFor?: () => void | Promise<void>;
+  /** Resolved waitFor — always a function (ref form is resolved at registration).
+   *  Its resolved value is surfaced as ExecutionResult.outcome so the caller can
+   *  report what actually happened (e.g. applied immediately vs. confirmed). */
+  readonly waitFor?: () => unknown;
 }
 
 export interface ToolSchema {
@@ -192,6 +194,10 @@ export interface ExecutionResult {
   readonly error?: string;
   readonly trace: readonly StepTrace[];
   readonly durationMs: number;
+  /** Value the action's `waitFor` promise resolved to, if any. Lets an action
+   *  report a structured outcome to the agent (e.g. whether a confirmation card
+   *  was shown) instead of the agent inferring it from a static prompt. */
+  readonly outcome?: unknown;
 }
 
 export interface AvailableAction {
