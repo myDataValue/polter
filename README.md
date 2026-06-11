@@ -174,7 +174,11 @@ export const editItem = defineAction({
   parameters: z.object({
     item_id: z.string(),
   }),
-  route: (p) => `/items/${p.item_id}/edit`,
+  navigateTo: 'items-nav',
+  steps: [
+    { label: 'Find item', target: 'item-search', value: (p) => p.item_id },
+    { label: 'Open item', target: (p) => `item:${p.item_id}` },
+  ],
 });
 ```
 
@@ -188,15 +192,12 @@ import { exportData } from './features/reports/actions';
 export const agentRegistry = [editItem, exportData];
 ```
 
-### 3. Pass to provider with your router
+### 3. Pass the registry to the provider
 
 ```tsx
 import { agentRegistry } from './registry';
 
-<AgentActionProvider
-  registry={agentRegistry}
-  navigate={(path) => router.push(path)}
->
+<AgentActionProvider registry={agentRegistry}>
   <App />
 </AgentActionProvider>
 ```
@@ -217,9 +218,8 @@ import { editItem } from './actions';
 1. On mount, the provider registers all registry actions as schema-only entries
    — the agent sees them immediately
 2. When the agent calls `execute('edit_item', { item_id: '42' })`:
-   - Provider calculates the route: `/items/42/edit`
-   - Calls your `navigate()` function
-   - Waits for the `<AgentAction>` component to mount on the new page
+   - Provider clicks the `items-nav` AgentTarget
+   - Waits for the destination UI to mount the search and row targets
    - Runs the visual execution (spotlight, click, etc.)
 3. When the component unmounts (user navigates away), the action reverts to
    schema-only — never disappears from the agent's view
@@ -242,8 +242,8 @@ export const grantAccess = defineAction({
 
 If an action's last step triggers async work (a mutation, a streaming response),
 use `waitFor` on the component or hook to hold the action open until it
-completes. Pass a React ref (safe — can't do work in a ref) or a function
-(escape hatch for custom promise construction).
+completes. Pass a React ref whose `.current` is set to the Promise by the click
+handler.
 
 ## API
 
@@ -267,10 +267,11 @@ completes. Pass a React ref (safe — can't do work in a ref) or a function
 | `overlayOpacity` | `number` | `0.5` |
 | `spotlightPadding` | `number` | `8` |
 | `tooltipEnabled` | `boolean` | `true` |
+| `cursorEnabled` | `boolean` | `true` |
+| `mountTimeout` | `number` | `15000` |
 | `onExecutionStart` | `(name: string) => void` | — |
 | `onExecutionComplete` | `(result: ExecutionResult) => void` | — |
-| `registry` | `ActionDefinition[]` | — |
-| `navigate` | `(path: string) => void \| Promise<void>` | — |
+| `registry` | `ActionSchema[]` | — |
 | `debug` | `boolean` | `false` |
 
 ### Disabled actions
