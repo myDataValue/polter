@@ -57,7 +57,7 @@ flowchart TB
 
 **What this surfaces:** the React-coupled surface is *only* the boxes in the top subgraph (Provider + 3 components + 3 hooks). Everything below — `core/`, the registry data structures, the executor — is already pure TS today. The cyan/blue line is roughly the same line as `src/components/` + `src/hooks/` vs. `src/core/` + `src/executor/`. The pure side contains all the *behavior*; the React side is mostly lifecycle wiring.
 
-A subtlety worth flagging: the Provider keeps **two** action maps. `registryRef` holds the schema-only entries from the `registry` prop, so the LLM sees tool schemas before any component mounts. `actionsRef` holds the active version — when a component mounts, its richer entry (with steps) overrides the registry version; on unmount the registry version is restored. This is what lets a registry action navigate to a route, wait for the component to mount, then run the mounted component's steps.
+A subtlety worth flagging: the Provider keeps **two** action maps. `registryRef` holds the schema-only entries from the `registry` prop, so the LLM sees tool schemas before any component mounts. `actionsRef` holds the active version — when a component mounts, its richer entry (with steps) overrides the registry version; on unmount the registry version is restored. This is what lets a registry action click navigation targets, wait for the destination component to mount, then run the mounted component's steps.
 
 ### 1b. The React boundary, isolated
 
@@ -109,10 +109,10 @@ classDiagram
     +name string
     +description string
     +parameters? ZodSchema
-    +route? (params) ⇒ string
+    +navigateTo? string | string[]
     +steps? StepDefinition[]
     +disabledReason? string
-    +waitFor? RefObject | () ⇒ Promise
+    +waitFor? RefObject
   }
   class StepDefinition~TParams~ {
     +label string
@@ -123,7 +123,7 @@ classDiagram
   }
   class RegisteredAction {
     +name, description, parameters
-    +route?, disabledReason?
+    +navigateTo?, disabledReason?
     +resolveSteps() StepDefinition[]
     +waitFor? () ⇒ Promise
   }
@@ -215,10 +215,8 @@ sequenceDiagram
     Provider-->>LLM: ExecutionResult{ error: disabledReason }
   end
   Provider->>Provider: validate params against Zod schema
-  alt steps empty AND action.route AND navigate prop set
-    Provider->>DOM: navigate(route(params))
-    Provider->>ActionsRef: waitForActionMount (poll)
-    Note over Provider,ActionsRef: action upgrades from schemaOnly to mounted
+  opt action.navigateTo
+    Provider->>Exec: prepend synthetic navigation steps for each target
   end
   Provider->>Exec: executeAction(action, params, config)
   Exec->>ActionsRef: action.resolveSteps()
@@ -267,7 +265,7 @@ sequenceDiagram
 
 Two execution-flow features that aren't immediately visible from the type diagrams:
 
-- **Registry-driven navigation.** A registry-only action with `route` set but no steps will navigate first, then poll `actionsRef` until the matching component mounts (`waitForActionMount`, 5s timeout). This is how you ship an LLM-callable schema before the component for that screen has rendered.
+- **Registry-driven navigation.** A registry-only action with `navigateTo` set clicks the named AgentTarget(s), then polls `actionsRef` until the matching component mounts (`waitForActionMount`, using `mountTimeout`). This is how you ship an LLM-callable schema before the component for that screen has rendered.
 - **Two-phase execution.** When a registry-only action runs and succeeds without an upgrade happening *during* execution, the Provider gives the component another chance to mount and runs the mounted version's steps too. The traces concatenate. This makes "navigate then act" composable without writing it as a goal tree by hand.
 - **Re-checking `skipIf` during target polling.** `resolveTarget` is given a `skipCheck` closure; if a prior step's click triggered a state update that makes the current step unnecessary, the executor bails the wait early instead of timing out. This is a partial workaround for the same problem Q1 wants to solve at the design level.
 
@@ -367,11 +365,11 @@ Out of scope (for now): full DOM/AX-tree dump, à la WebArena/Mind2Web. High tok
 
 ### Q7. Auto-generate steps to navigate the UI tree
 
-**Today:** Single-route navigation via `defineAction.route`, mediated by the `registry` + `navigate` props on `AgentActionProvider` and `waitForActionMount`. So "navigate, wait, then run mounted steps" is *built in* for one route hop. Multi-step nav (route → tab → modal → form) is still hand-authored as a `steps[]` array.
+**Today:** Target-driven navigation via `defineAction.navigateTo`, mediated by the `registry` prop on `AgentActionProvider` and `waitForActionMount`. So "click a visible navigation target, wait, then run mounted steps" is built in. Multi-step nav (tab → modal → form) is still hand-authored as a `steps[]` array or a `navigateTo` target sequence.
 
-**Leaning:** Falls out of Q1 + a route registry. "Reach state X" becomes a goal node; `defineAction.route` is one provider; tab/modal-open are other providers. The executor's existing depth-first walk handles it. No new primitive needed.
+**Leaning:** Falls out of Q1 + a navigation-target registry. "Reach state X" becomes a goal node; `defineAction.navigateTo` is one provider; tab/modal-open are other providers. The executor's existing depth-first walk handles it. No new primitive needed.
 
-**Implications:** Q1 must land first. Then add a small route-registry helper (`<AgentRoute path="/customers/:id" target="customer-detail">`) to make declaring "to be on this route" composable.
+**Implications:** Q1 must land first. Then add a small navigation-target helper if needed to make "to be on this screen" composable without introducing URL-based shortcuts.
 
 ### Q8. Non-UI tool calls
 
@@ -389,7 +387,7 @@ Out of scope (for now): full DOM/AX-tree dump, à la WebArena/Mind2Web. High tok
 
 Hooking *deeper* into React (fiber traversal, react-reconciler hooks, displayName-based auto-detection) was considered and dropped: React internals aren't a stable API, the wins (auto-target detection) are better delivered via a build-time codemod, and the things we actually want (idempotent steps, structured state) come from Q1, not from fiber visibility.
 
-**Implications:** Lift `AgentActionProvider:23-369` (the function body — registry refs, registry-prop sync, register/unregister, resolveTarget, waitForActionMount, navigateToRoute, execute) into `core/createPolter.ts`. Provider becomes ~50 LOC. `useSyncExternalStore` for subscriptions. Tests pass unchanged (black-box against public API). See Diagram 1b for the moves/stays split.
+**Implications:** Lift `AgentActionProvider:23-369` (the function body — registry refs, registry-prop sync, register/unregister, resolveTarget, waitForActionMount, navigateTo target preparation, execute) into `core/createPolter.ts`. Provider becomes ~50 LOC. `useSyncExternalStore` for subscriptions. Tests pass unchanged (black-box against public API). See Diagram 1b for the moves/stays split.
 
 ---
 
