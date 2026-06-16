@@ -101,6 +101,14 @@ flowchart LR
 
 **What this surfaces:** the adapter surface is small (7 thin shells) and homogeneous (all just call `polter.register*` in lifecycle hooks). A `@polter/vue` or `@polter/vanilla` would mirror this same shape. `AgentDevTools` is the lone fat React-only component; it stays in the adapter because it *is* a UI.
 
+### 1c. Attribute-based target resolution (shipped)
+
+Target lookup is no longer exact-name-only. A step may carry an optional `intent` (role + attrs), and an `AgentTarget` may carry a structured self-description (`role` + `attrs`) alongside its `name`. When the executor can't resolve a step's exact `target` name in the registry, `AgentActionProvider.resolveTarget` falls back to `matchTargets(connected, intent)` (`src/resolvers/`), scoring the step's intent against every registered target's self-description and logging the hit as `via: 'intent'`.
+
+This makes resolution tolerant of the drift that used to break exact-name targets: a partial id-set, a label instead of an id, or a number-vs-string id still finds the right element. `matchTargets` returns a discriminated result — matched / ambiguous / miss with ranked candidates — so an ambiguous or absent match is reported rather than silently lost (`role` is a hard filter; attrs are token-normalised and scored by set-overlap; `MATCH_THRESHOLD = 0.5`, `AMBIGUITY_MARGIN = 0.15` in `src/resolvers/scoring.ts`).
+
+The resolver is pure TS in `src/resolvers/` (no React), wired into both the Provider's `resolveTarget` and the executor's step loop. It complements the exact-name lookup rather than replacing it.
+
 ### 2. Type relationships
 
 ```mermaid
@@ -117,9 +125,11 @@ classDiagram
   class StepDefinition~TParams~ {
     +label string
     +target? string | (params) ⇒ string
+    +intent? TargetIntent | (params) ⇒ TargetIntent
     +value? string | (params) ⇒ string | undefined
     +scrollTo? (params) ⇒ void | Promise
     +skipIf? (params) ⇒ bool
+    +timeout? number
   }
   class RegisteredAction {
     +name, description, parameters
@@ -129,7 +139,8 @@ classDiagram
   }
   class AgentTargetEntry {
     +name string
-    +scrollTo? fn
+    +role? string
+    +attrs? TargetAttrs
     +element HTMLElement
   }
   class ExecutionResult {
@@ -137,6 +148,7 @@ classDiagram
     +error? string
     +trace StepTrace[]
     +durationMs number
+    +outcome? unknown
   }
   class StepTrace {
     «discriminated on status»
@@ -341,7 +353,7 @@ Out of scope (for now): full DOM/AX-tree dump, à la WebArena/Mind2Web. High tok
 
 ### Q4. Should actions return values, not just on failure?
 
-**Today:** `ExecutionResult { actionName, error?, trace, durationMs }`. No payload. Error presence is the signal — the `success` boolean was removed in v2 in favor of error-as-narrowing.
+**Today (partial):** `ExecutionResult { actionName, error?, trace, durationMs, outcome? }`. Error presence is the signal — the `success` boolean was removed in v2 in favor of error-as-narrowing. `outcome` already carries the value the action's `waitFor` promise resolved to, so an action can report a structured result (e.g. applied-immediately vs. confirmation-card-shown). What's still missing is a *declared* return type: no `returns: ZodSchema` on `defineAction` and no generic `ExecutionResult<T>`, so the LLM can't see the shape up front.
 
 **Leaning:** Yes. Add `returns: ZodSchema` to `defineAction` and a component-side `getResult: () => T` callback. Most natural for actions like `find_customer` (returns the record), `count_active` (returns the number). Doesn't conflict with anything.
 
@@ -417,6 +429,9 @@ The framework-agnostic core path quietly happens as a side effect of step 1. Whe
 | `src/components/AgentAction.tsx` | 26 | Convenience wrapper over `useAgentAction` + `<AgentTarget>` |
 | `src/components/AgentTarget.tsx` | 99 | Target registration + `MutationObserver` for nested mounts |
 | `src/hooks/useAgentAction.ts` | 46 | Hook-based registration; latest-config ref pattern |
+| `src/resolvers/scoring.ts` | 141 | Attribute-based target matching — `matchTargets`, scoring, thresholds (see 1c) |
+| `src/resolvers/types.ts` | 71 | `TargetIntent` / `TargetAttrs` / match-result types |
+| `src/components/AgentDevTools.tsx` | 602 | In-app dev UI for inspecting and running actions (React-only; stays in the adapter) |
 | `examples/basic/src/App.tsx:99-125` | — | The `skipIf` pile — best case study for Q1 |
 
 ## Verification (when we start moving)

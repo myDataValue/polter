@@ -224,26 +224,12 @@ import { editItem } from './actions';
 3. When the component unmounts (user navigates away), the action reverts to
    schema-only — never disappears from the agent's view
 
-**Cross-page actions** — use `steps` on `defineAction` for steps that cross page
-boundaries. The executor polls up to 5s for each step's target to appear.
-For targets behind slow API calls, render them with `disabled` during loading —
-polter polls past disabled elements and clicks when they become enabled:
-
-```ts
-export const grantAccess = defineAction({
-  name: 'grant_access',
-  description: 'Grant bot access to properties',
-  steps: [
-    { label: 'Click Settings', target: 'settings-tab' },
-    { label: 'Click Grant Access', target: 'grant-link' },
-  ],
-});
-```
-
-If an action's last step triggers async work (a mutation, a streaming response),
-use `waitFor` on the component or hook to hold the action open until it
-completes. Pass a React ref whose `.current` is set to the Promise by the click
-handler.
+**Cross-page actions and async waits** — put steps that cross page boundaries on
+`defineAction` (the executor polls for each target to appear, including past
+`disabled` elements), and use `waitFor` when a step triggers async work. These
+patterns are covered in depth in
+[best practices](docs/best-practices.md#put-cross-page-steps-in-defineaction)
+(cross-page steps and `waitFor`).
 
 ## API
 
