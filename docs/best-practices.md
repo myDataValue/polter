@@ -100,7 +100,7 @@ export const navigateToProperty = defineAction({
 
 ## `scrollTo` is declarative — no arbitrary code
 
-Steps and AgentTargets can specify a `scrollTo` to bring a virtualized row into view. The shape is `{ dispatchEvent, detail }` — the engine dispatches a CustomEvent on `window` with the given name and detail; a listener on the page handles the actual scroll.
+Steps can specify a `scrollTo` to bring a virtualized row into view. The shape is `{ dispatchEvent, detail }` — the engine dispatches a CustomEvent on `window` with the given name and detail; a listener on the page handles the actual scroll.
 
 ```ts
 // In a hook that builds steps
@@ -385,7 +385,7 @@ action's full shape in one place and matches how cross-page steps in
 )}
 
 // Good — AgentAction always registered, button conditionally rendered inside
-<AgentAction action={grantAccess} disabled={!isReady} disabledReason="Not ready">
+<AgentAction action={grantAccess} disabledReason={!isReady ? "Not ready" : undefined}>
   {isReady && (
     <Button onClick={handleGrant}>Grant Access</Button>
   )}
@@ -696,16 +696,16 @@ export const importData = defineAction({
 Good for: auth requirements, feature flags, usage notes that don't change at
 runtime.
 
-**`disabled` / `disabledReason` — dynamic availability (enforced)**
+**`disabledReason` — dynamic availability (enforced)**
 
-Use for state that changes at runtime and the agent must not violate. Disabled
-actions are removed from the tool schema entirely — the LLM cannot call them.
+Use for state that changes at runtime and the agent must not violate. When
+`disabledReason` is set the action is removed from the tool schema entirely — the
+LLM cannot call it.
 
 ```tsx
 <AgentAction
   action={pushChanges}
-  disabled={!hasPendingChanges}
-  disabledReason="No pending changes to push"
+  disabledReason={!hasPendingChanges ? "No pending changes to push" : undefined}
 >
   <SaveButton />
 </AgentAction>
@@ -718,7 +718,7 @@ dynamically disabled.
 **`skipIf` — step-level preconditions (enforced)**
 
 Use for steps within an action that may or may not be needed depending on
-current UI state. Unlike `disabled` (which prevents the entire action), `skipIf`
+current UI state. Unlike `disabledReason` (which prevents the entire action), `skipIf`
 allows the action to proceed while skipping individual steps that are already
 satisfied.
 

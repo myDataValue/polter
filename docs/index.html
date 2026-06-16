@@ -675,7 +675,7 @@
       <a href="#how" class="btn btn-secondary">See how it works</a>
     </div>
     <div class="install-cmd">
-      $ <code>npm install polter</code>
+      $ <code>npm install @mydatavalue/polter</code>
     </div>
   </section>
 
@@ -752,7 +752,8 @@
           <h3>Register actions</h3>
           <p>Wrap any element. Polter handles the rest.</p>
           <div class="code-block">
-<span class="tag">&lt;AgentAction</span> <span class="attr">name</span>=<span class="str">"export_csv"</span> <span class="attr">description</span>=<span class="str">"Export to CSV"</span><span class="tag">&gt;</span>
+<span class="kw">const</span> exportCsv = <span class="fn">defineAction</span>({ <span class="attr">name</span>: <span class="str">"export_csv"</span>, <span class="attr">description</span>: <span class="str">"Export to CSV"</span> });
+<span class="tag">&lt;AgentAction</span> <span class="attr">action</span>={exportCsv}<span class="tag">&gt;</span>
   <span class="tag">&lt;ExportButton</span> <span class="tag">/&gt;</span>
 <span class="tag">&lt;/AgentAction&gt;</span>
           </div>
@@ -824,7 +825,7 @@
     <h2>Build your UI once. The agent drives it. Zero duplicate tools.</h2>
     <div class="hero-actions">
       <a href="https://github.com/myDataValue/polter" class="btn btn-primary">View on GitHub</a>
-      <a href="https://www.npmjs.com/package/polter" class="btn btn-secondary">npm package</a>
+      <a href="https://www.npmjs.com/package/@mydatavalue/polter" class="btn btn-secondary">npm package</a>
     </div>
   </section>
 

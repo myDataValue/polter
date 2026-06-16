@@ -53,7 +53,7 @@ Permanent dependency isn't part of the deal.
 ## Install
 
 ```bash
-npm install polter
+npm install @mydatavalue/polter
 # peer deps
 npm install react react-dom zod
 ```
@@ -61,7 +61,7 @@ npm install react react-dom zod
 ## Quick Start
 
 ```tsx
-import { AgentActionProvider, AgentAction, AgentTarget, useAgentAction, useAgentActions } from 'polter';
+import { AgentActionProvider, AgentAction, AgentTarget, useAgentAction, useAgentActions } from '@mydatavalue/polter';
 import { z } from 'zod';
 ```
 
@@ -130,7 +130,7 @@ const { schemas, execute, availableActions, isExecuting } = useAgentActions();
 ### 4. Integrate with existing handlers
 
 ```tsx
-import { useAgentCommandRouter } from 'polter';
+import { useAgentCommandRouter } from '@mydatavalue/polter';
 
 // Wraps any existing command handler — registered actions get visual execution,
 // unregistered ones fall through to your original handler.
@@ -165,7 +165,7 @@ knowledge of every action upfront (single LLM roundtrip).
 
 ```tsx
 // features/items/actions.ts
-import { defineAction } from 'polter';
+import { defineAction } from '@mydatavalue/polter';
 import { z } from 'zod';
 
 export const editItem = defineAction({
@@ -287,8 +287,10 @@ handler.
 ```
 
 Disabled actions appear in `availableActions` but are excluded from `schemas`.
-Calling `execute()` on a disabled action returns `{ success: false, error: "No
-unsaved changes" }`.
+Calling `execute()` on a disabled action returns an `ExecutionResult` whose
+`error` is set to the reason (`{ actionName, error: "No unsaved changes", trace:
+[], durationMs }`) — there is no `success` field; the presence of `error` signals
+failure.
 
 ### CSS customization
 

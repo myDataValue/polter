@@ -409,18 +409,18 @@ The framework-agnostic core path quietly happens as a side effect of step 1. Whe
 
 | File | LOC | Role |
 |---|---:|---|
-| `src/components/AgentActionProvider.tsx` | 400 | Two action maps + targets map + execute orchestration — Phase 1 lift target |
-| `src/executor/visualExecutor.ts` | 557 | Step loop, element resolution, click/type/spotlight effects — Q1 target |
-| `src/core/types.ts` | 177 | All shared types — Q4/Q6 target |
-| `src/core/helpers.ts` | 48 | `defineAction` + `fromParam` helper — Q4/Q6/Q8 target |
+| `src/components/AgentActionProvider.tsx` | 587 | Two action maps + targets map + execute orchestration — Phase 1 lift target |
+| `src/executor/visualExecutor.ts` | 729 | Step loop, element resolution, click/type/spotlight effects — Q1 target |
+| `src/core/types.ts` | 277 | All shared types — Q4/Q6 target |
+| `src/core/helpers.ts` | 55 | `defineAction` + `fromParam` helper — Q4/Q6/Q8 target |
 | `src/core/schemaGenerator.ts` | 29 | Zod v4 → JSON Schema |
 | `src/components/AgentAction.tsx` | 26 | Convenience wrapper over `useAgentAction` + `<AgentTarget>` |
-| `src/components/AgentTarget.tsx` | 85 | Target registration + `MutationObserver` for nested mounts |
-| `src/hooks/useAgentAction.ts` | 43 | Hook-based registration; latest-config ref pattern |
+| `src/components/AgentTarget.tsx` | 99 | Target registration + `MutationObserver` for nested mounts |
+| `src/hooks/useAgentAction.ts` | 46 | Hook-based registration; latest-config ref pattern |
 | `examples/basic/src/App.tsx:99-125` | — | The `skipIf` pile — best case study for Q1 |
 
 ## Verification (when we start moving)
 
 - Existing tests in `src/__tests__/` are black-box against the public API; they should pass through Phase 1 unchanged. Any failing test signals an unintended public-API change.
-- `examples/basic` is the integration test: run `pnpm dev` from there and confirm `find_and_email` and `filter_and_export` still work end-to-end.
+- `examples/basic` is the integration test: run `npm run dev` from there and confirm `find_and_email` and `filter_and_export` still work end-to-end.
 - For Q1, port `find_and_email` to `state()` form in a branch and verify both paths produce identical execution traces (`StepTrace[]`).
