@@ -292,7 +292,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 /**
  * Set an input's value in a way that triggers React's onChange.
  */
-function setNativeInputValue(input: HTMLInputElement, value: string): void {
+export function setNativeInputValue(input: HTMLInputElement, value: string): void {
   const nativeSetter =
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set ??
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
@@ -310,7 +310,7 @@ function setNativeInputValue(input: HTMLInputElement, value: string): void {
 /**
  * Simulate typing into an input character by character.
  */
-async function simulateTyping(element: HTMLElement, value: string, signal?: AbortSignal): Promise<void> {
+export async function simulateTyping(element: HTMLElement, value: string, signal?: AbortSignal): Promise<void> {
   const input = element as HTMLInputElement;
   input.focus();
 
@@ -347,7 +347,7 @@ async function simulateTyping(element: HTMLElement, value: string, signal?: Abor
 /**
  * Resolve the element for a step by polling the AgentTarget registry.
  */
-async function resolveStepElement(
+export async function resolveStepElement(
   step: StepDefinition,
   actionName: string,
   params: Record<string, unknown>,
@@ -420,7 +420,7 @@ interface StepEffects {
  * (Tabs, Select, DropdownMenu, etc.) respond. Plain `element.click()` only
  * fires a `click` event, but Radix activates on `pointerdown`.
  */
-function simulateFullClick(element: HTMLElement): void {
+export function simulateFullClick(element: HTMLElement): void {
   const opts: PointerEventInit = { bubbles: true, cancelable: true, composed: true };
   element.dispatchEvent(new PointerEvent('pointerdown', opts));
   element.dispatchEvent(new MouseEvent('mousedown', opts));
