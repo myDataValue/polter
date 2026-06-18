@@ -82,7 +82,7 @@ flowchart LR
   subgraph moves["Moves to @polter/core"]
     direction TB
     CreatePolter["createPolter()<br/>(new factory)"]:::core
-    RegistryLogic["actions + registry + targets maps,<br/>resolveTarget, waitForActionMount,<br/>execute orchestration<br/>(lifted from AgentActionProvider:23-369)"]:::core
+    RegistryLogic["actions + registry + targets maps,<br/>resolveTarget, waitForActionMount,<br/>execute orchestration<br/>(lifted from AgentActionProvider:45-587)"]:::core
     Exec2[visualExecutor]:::core
     Core2["defineAction + fromParam +<br/>schemaGenerator + types"]:::core
     GoalTree["state({ test, achieve })<br/>goal-tree primitive (Q1)"]:::core
@@ -399,7 +399,7 @@ Out of scope (for now): full DOM/AX-tree dump, à la WebArena/Mind2Web. High tok
 
 Hooking *deeper* into React (fiber traversal, react-reconciler hooks, displayName-based auto-detection) was considered and dropped: React internals aren't a stable API, the wins (auto-target detection) are better delivered via a build-time codemod, and the things we actually want (idempotent steps, structured state) come from Q1, not from fiber visibility.
 
-**Implications:** Lift `AgentActionProvider:23-369` (the function body — registry refs, registry-prop sync, register/unregister, resolveTarget, waitForActionMount, navigateTo target preparation, execute) into `core/createPolter.ts`. Provider becomes ~50 LOC. `useSyncExternalStore` for subscriptions. Tests pass unchanged (black-box against public API). See Diagram 1b for the moves/stays split.
+**Implications:** Lift `AgentActionProvider:45-587` (the function body — registry refs, registry-prop sync, register/unregister, resolveTarget, waitForActionMount, navigateTo target preparation, execute) into `core/createPolter.ts`. Provider becomes ~50 LOC. `useSyncExternalStore` for subscriptions. Tests pass unchanged (black-box against public API). See Diagram 1b for the moves/stays split.
 
 ---
 
