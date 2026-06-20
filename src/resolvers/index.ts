@@ -7,19 +7,18 @@
  * right element — and an ambiguous or missing match is reported rather than silently lost.
  */
 
+export {
+  AMBIGUITY_MARGIN,
+  MATCH_THRESHOLD,
+  matchTargets,
+  scoreAttrValue,
+  scoreTarget,
+} from './scoring';
 export type {
-  TargetAttrValue,
-  TargetAttrs,
-  TargetIntent,
   DescribedTarget,
+  TargetAttrs,
+  TargetAttrValue,
   TargetCandidate,
+  TargetIntent,
   TargetMatch,
 } from './types';
-
-export {
-  matchTargets,
-  scoreTarget,
-  scoreAttrValue,
-  MATCH_THRESHOLD,
-  AMBIGUITY_MARGIN,
-} from './scoring';

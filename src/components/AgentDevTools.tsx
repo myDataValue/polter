@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useAgentActions } from '../hooks/useAgentActions';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AvailableAction, ExecutionResult, StepTrace, ToolSchema } from '../core/types';
+import { useAgentActions } from '../hooks/useAgentActions';
 
 interface AgentDevToolsProps {
   /** Default open state. */
@@ -27,13 +28,19 @@ const PANEL_WIDTH = 440;
 function getSchemaFields(
   schemas: ToolSchema[],
   actionName: string,
-): { name: string; type: string; description?: string; enumValues?: string[]; isRequired: boolean }[] {
+): {
+  name: string;
+  type: string;
+  description?: string;
+  enumValues?: string[];
+  isRequired: boolean;
+}[] {
   const schema = schemas.find((s) => s.name === actionName);
   if (!schema?.parameters) return [];
 
   const params = schema.parameters as Record<string, unknown>;
   const properties = (params.properties ?? {}) as Record<string, Record<string, unknown>>;
-  const required = ((params.required ?? []) as string[]);
+  const required = (params.required ?? []) as string[];
 
   return Object.entries(properties).map(([name, prop]) => ({
     name,
@@ -54,6 +61,7 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
   const [tab, setTab] = useState<'actions' | 'log'>('actions');
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: grandfathered at Biome adoption — fix and remove over time
   useEffect(() => {
     if (tab === 'log') logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [log, tab]);
@@ -93,7 +101,13 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
                   id: entryId,
                   action: action.name,
                   timestamp: Date.now(),
-                  result: { success: false, actionName: action.name, error: `Invalid JSON for ${field.name}`, trace: [], durationMs: 0 },
+                  result: {
+                    success: false,
+                    actionName: action.name,
+                    error: `Invalid JSON for ${field.name}`,
+                    trace: [],
+                    durationMs: 0,
+                  },
                 },
               ]);
               return;
@@ -104,7 +118,10 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
         }
       }
 
-      setLog((prev) => [...prev, { id: entryId, action: action.name, params, timestamp: Date.now() }]);
+      setLog((prev) => [
+        ...prev,
+        { id: entryId, action: action.name, params, timestamp: Date.now() },
+      ]);
       const result = await execute(action.name, params);
       setLog((prev) => prev.map((e) => (e.id === entryId ? { ...e, result } : e)));
     },
@@ -118,6 +135,7 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
   // Toggle button
   if (!open) {
     return (
+      // biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time
       <button
         onClick={() => setOpen(true)}
         style={{
@@ -151,6 +169,8 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
   return (
     <>
       {/* Backdrop */}
+      {/** biome-ignore lint/a11y/noStaticElementInteractions: grandfathered at Biome adoption — fix and remove over time */}
+      {/** biome-ignore lint/a11y/useKeyWithClickEvents: grandfathered at Biome adoption — fix and remove over time */}
       <div
         onClick={() => setOpen(false)}
         style={{
@@ -195,6 +215,7 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
               {availableActions.length} actions registered · {mode} mode
             </div>
           </div>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button onClick={() => setOpen(false)} style={closeBtnStyle}>
             ✕
           </button>
@@ -202,9 +223,11 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid #1e293b' }}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button onClick={() => setTab('actions')} style={tabStyle(tab === 'actions')}>
             Actions
           </button>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button onClick={() => setTab('log')} style={tabStyle(tab === 'log')}>
             Log {log.length > 0 && `(${log.length})`}
           </button>
@@ -223,19 +246,22 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
               />
             </div>
 
-            {filtered.length > 0 && filtered.map((action) => (
-              <ActionRow
-                key={action.name}
-                action={action}
-                schemas={schemas}
-                expanded={expandedAction === action.name}
-                onToggle={() => setExpandedAction(expandedAction === action.name ? null : action.name)}
-                fieldValues={paramInputs[action.name] ?? {}}
-                onFieldChange={(field, value) => setFieldValue(action.name, field, value)}
-                onRun={() => handleExecute(action)}
-                isExecuting={isExecuting}
-              />
-            ))}
+            {filtered.length > 0 &&
+              filtered.map((action) => (
+                <ActionRow
+                  key={action.name}
+                  action={action}
+                  schemas={schemas}
+                  expanded={expandedAction === action.name}
+                  onToggle={() =>
+                    setExpandedAction(expandedAction === action.name ? null : action.name)
+                  }
+                  fieldValues={paramInputs[action.name] ?? {}}
+                  onFieldChange={(field, value) => setFieldValue(action.name, field, value)}
+                  onRun={() => handleExecute(action)}
+                  isExecuting={isExecuting}
+                />
+              ))}
 
             {filtered.length === 0 && (
               <div style={{ padding: 20, color: '#475569', textAlign: 'center' }}>
@@ -252,38 +278,65 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
             ) : (
               <>
                 <div style={{ padding: '8px 20px', display: 'flex', justifyContent: 'flex-end' }}>
+                  {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
                   <button onClick={() => setLog([])} style={clearBtnStyle}>
                     Clear
                   </button>
                 </div>
                 {log.map((entry) => (
-                  <div key={entry.id} style={{ padding: '10px 20px', borderBottom: '1px solid #1e293b' }}>
+                  <div
+                    key={entry.id}
+                    style={{ padding: '10px 20px', borderBottom: '1px solid #1e293b' }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <StatusDot result={entry.result} />
                       <span style={{ fontWeight: 600, fontSize: 13 }}>{entry.action}</span>
                       <span style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>
-                        {entry.result?.durationMs != null && `${(entry.result.durationMs / 1000).toFixed(1)}s · `}
+                        {entry.result?.durationMs != null &&
+                          `${(entry.result.durationMs / 1000).toFixed(1)}s · `}
                         {new Date(entry.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
-                    {entry.params && <pre style={logParamsStyle}>{JSON.stringify(entry.params, null, 2)}</pre>}
+                    {entry.params && (
+                      <pre style={logParamsStyle}>{JSON.stringify(entry.params, null, 2)}</pre>
+                    )}
                     {entry.result?.error && (
-                      <div style={{ marginTop: 4, fontSize: 12, color: '#f87171' }}>{entry.result.error}</div>
+                      <div style={{ marginTop: 4, fontSize: 12, color: '#f87171' }}>
+                        {entry.result.error}
+                      </div>
                     )}
                     {entry.result?.trace && entry.result.trace.length > 0 && (
                       <div style={{ marginTop: 6, borderTop: '1px solid #1e293b', paddingTop: 6 }}>
                         {entry.result.trace.map((step) => (
-                          <div key={step.index} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', fontSize: 11 }}>
+                          <div
+                            key={step.index}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '2px 0',
+                              fontSize: 11,
+                            }}
+                          >
                             <StepStatusIcon status={step.status} />
-                            <span style={{ color: '#64748b', minWidth: 16 }}>{step.index + 1}.</span>
-                            <span style={{
-                              color: step.status === 'failed' ? '#f87171' : step.status === 'skipped' ? '#475569' : '#e2e8f0',
-                              flex: 1,
-                              minWidth: 0,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}>
+                            <span style={{ color: '#64748b', minWidth: 16 }}>
+                              {step.index + 1}.
+                            </span>
+                            <span
+                              style={{
+                                color:
+                                  step.status === 'failed'
+                                    ? '#f87171'
+                                    : step.status === 'skipped'
+                                      ? '#475569'
+                                      : '#e2e8f0',
+                                flex: 1,
+                                minWidth: 0,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
                               {step.label}
                               {step.targetName && (
                                 <span style={{ color: '#64748b', marginLeft: 6, fontSize: 10 }}>
@@ -334,6 +387,7 @@ function ActionRow({
   const fields = getSchemaFields(schemas, action.name);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: grandfathered at Biome adoption — fix and remove over time
     <div
       style={{
         padding: '10px 20px',
@@ -348,8 +402,12 @@ function ActionRow({
         }
       }}
     >
+      {/** biome-ignore lint/a11y/noStaticElementInteractions: grandfathered at Biome adoption — fix and remove over time */}
+      {/** biome-ignore lint/a11y/useKeyWithClickEvents: grandfathered at Biome adoption — fix and remove over time */}
       <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>{expanded ? '\u25BC' : '\u25B6'}</span>
+        <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>
+          {expanded ? '\u25BC' : '\u25B6'}
+        </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontWeight: 600, color: '#93c5fd' }}>{action.name}</span>
@@ -386,6 +444,7 @@ function ActionRow({
             {action.disabledReason ?? action.description}
           </div>
         </div>
+        {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -414,7 +473,10 @@ function ActionRow({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {fields.map((field) => (
                 <div key={field.name}>
-                  <label style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 3 }}>
+                  {/** biome-ignore lint/a11y/noLabelWithoutControl: grandfathered at Biome adoption — fix and remove over time */}
+                  <label
+                    style={{ fontSize: 11, color: '#64748b', display: 'block', marginBottom: 3 }}
+                  >
                     {field.name}
                     {field.isRequired && <span style={{ color: '#f87171', marginLeft: 2 }}>*</span>}
                     {field.description && (
@@ -448,7 +510,7 @@ function ActionRow({
                     <textarea
                       value={fieldValues[field.name] ?? ''}
                       onChange={(e) => onFieldChange(field.name, e.target.value)}
-                      placeholder='[1, 2, 3]'
+                      placeholder="[1, 2, 3]"
                       rows={2}
                       style={textareaStyle}
                     />
@@ -473,7 +535,6 @@ function ActionRow({
   );
 }
 
-
 function StatusDot({ result }: { result?: ExecutionResult }) {
   const color = !result ? '#fbbf24' : result.error ? '#f87171' : '#4ade80';
   return (
@@ -490,12 +551,28 @@ function StatusDot({ result }: { result?: ExecutionResult }) {
   );
 }
 
-const stepStatusSymbols: Record<StepTrace['status'], string> = { completed: '\u2713', skipped: '\u25CB', failed: '\u2717' };
-const stepStatusColors: Record<StepTrace['status'], string> = { completed: '#4ade80', skipped: '#475569', failed: '#f87171' };
+const stepStatusSymbols: Record<StepTrace['status'], string> = {
+  completed: '\u2713',
+  skipped: '\u25CB',
+  failed: '\u2717',
+};
+const stepStatusColors: Record<StepTrace['status'], string> = {
+  completed: '#4ade80',
+  skipped: '#475569',
+  failed: '#f87171',
+};
 
 function StepStatusIcon({ status }: { status: StepTrace['status'] }) {
   return (
-    <span style={{ fontSize: 10, color: stepStatusColors[status], flexShrink: 0, width: 12, textAlign: 'center' }}>
+    <span
+      style={{
+        fontSize: 10,
+        color: stepStatusColors[status],
+        flexShrink: 0,
+        width: 12,
+        textAlign: 'center',
+      }}
+    >
       {stepStatusSymbols[status]}
     </span>
   );

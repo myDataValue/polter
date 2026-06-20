@@ -45,7 +45,8 @@ export interface ActionSchema<TSchema extends z.ZodType = z.ZodType<Record<strin
  * Full action config — used by `useAgentAction()` in components.
  * Extends ActionSchema with runtime state (disabled, waitFor).
  */
-export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>> extends ActionSchema<TSchema> {
+export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>>
+  extends ActionSchema<TSchema> {
   /** When set, the action is disabled and this string is the reason. */
   readonly disabledReason?: string;
   /**
@@ -122,8 +123,12 @@ export interface AgentTargetEntry extends TargetDefinition {
   readonly element: HTMLElement;
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
 export interface RegisteredAction<TSchema extends z.ZodType = any>
-  extends Pick<ActionDefinition<TSchema>, 'name' | 'description' | 'parameters' | 'navigateTo' | 'disabledReason'> {
+  extends Pick<
+    ActionDefinition<TSchema>,
+    'name' | 'description' | 'parameters' | 'navigateTo' | 'disabledReason'
+  > {
   /** Returns the current steps with fresh closures (via useEffectEvent). */
   readonly resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
   /** Resolved waitFor — always a function (ref form is resolved at registration).
@@ -172,21 +177,21 @@ interface StepTraceBase {
 
 export type StepTrace =
   | (StepTraceBase & {
-    readonly status: 'completed';
-    readonly targetFound: true;
-    readonly interactionType: 'click' | 'type';
-  })
+      readonly status: 'completed';
+      readonly targetFound: true;
+      readonly interactionType: 'click' | 'type';
+    })
   | (StepTraceBase & {
-    readonly status: 'skipped';
-    readonly targetFound: false;
-    readonly interactionType: 'none';
-  })
+      readonly status: 'skipped';
+      readonly targetFound: false;
+      readonly interactionType: 'none';
+    })
   | (StepTraceBase & {
-    readonly status: 'failed';
-    readonly targetFound: boolean;
-    readonly interactionType: 'none';
-    readonly error: string;
-  });
+      readonly status: 'failed';
+      readonly targetFound: boolean;
+      readonly interactionType: 'none';
+      readonly error: string;
+    });
 
 export interface ExecutionResult {
   readonly actionName: string;
@@ -253,6 +258,7 @@ export interface AgentActionProviderProps {
   onExecutionStart?: (actionName: string) => void;
   onExecutionComplete?: (result: ExecutionResult) => void;
   /** Pre-defined actions whose schemas are available before their components mount. */
+  // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
   registry?: ActionSchema<any>[];
   /**
    * When true, emit verbose `[polter]` console logs during target resolution

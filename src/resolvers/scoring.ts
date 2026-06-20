@@ -42,10 +42,7 @@ function isEmptyAttr(value: TargetAttrValue): boolean {
  * positive value is full or partial agreement. Values are compared as lowercased string
  * tokens, so `405776` (number) matches `"405776"` (string) and casing is ignored.
  */
-export function scoreAttrValue(
-  target: TargetAttrValue,
-  intent: TargetAttrValue,
-): number {
+export function scoreAttrValue(target: TargetAttrValue, intent: TargetAttrValue): number {
   const multi = Array.isArray(target) || Array.isArray(intent);
   const t = toTokens(target);
   const i = toTokens(intent);
@@ -82,10 +79,7 @@ export function scoreAttrValue(
  * - Attrs the target does NOT expose are neutral (skipped), so partial metadata still matches.
  * - The score is the mean of the contributing attrs; `null` if nothing was comparable.
  */
-export function scoreTarget(
-  target: DescribedTarget,
-  intent: TargetIntent,
-): number | null {
+export function scoreTarget(target: DescribedTarget, intent: TargetIntent): number | null {
   if (intent.role !== undefined && target.role !== intent.role) return null;
 
   const intentAttrs = intent.attrs ?? {};

@@ -1,4 +1,7 @@
+// biome-ignore lint/correctness/noUnusedImports: grandfathered at Biome adoption — fix and remove over time
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createDebugLogger, findCandidateTargetNames } from '../core/debugLog';
+import { generateToolSchemas } from '../core/schemaGenerator';
 import type {
   ActionSchema,
   AgentActionContextValue,
@@ -11,17 +14,17 @@ import type {
   ResolveResult,
   StepDefinition,
 } from '../core/types';
-import { generateToolSchemas } from '../core/schemaGenerator';
-import { createDebugLogger, findCandidateTargetNames } from '../core/debugLog';
 import { executeAction } from '../executor/visualExecutor';
 import { matchTargets } from '../resolvers';
 import type { TargetIntent } from '../resolvers/types';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
 
+// biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
 function schemaToRegisteredAction(def: ActionSchema<any>): RegisteredAction {
   return {
     ...def,
+    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
     resolveSteps: () => (def.steps as any[]) ?? [],
   };
 }
@@ -100,18 +103,20 @@ export function AgentActionProvider({
     setVersion((v) => v + 1);
   }, [registry]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: grandfathered at Biome adoption — fix and remove over time
   const registerAction = useCallback((incoming: RegisteredAction) => {
     const existing = actionsRef.current.get(incoming.name);
 
     const registryAction = registryRef.current.get(incoming.name);
-    const action = registryAction && !incoming.navigateTo
-      ? { ...incoming, navigateTo: registryAction.navigateTo }
-      : incoming;
+    const action =
+      registryAction && !incoming.navigateTo
+        ? { ...incoming, navigateTo: registryAction.navigateTo }
+        : incoming;
 
     if (debug && registryRef.current.size > 0 && !registryAction) {
       console.warn(
         `[polter] Action "${action.name}" is registered but missing from the registry. ` +
-        `Add a defineAction() export to an actions.ts file so it appears in the tool schema before mount.`,
+          `Add a defineAction() export to an actions.ts file so it appears in the tool schema before mount.`,
       );
     }
 
@@ -127,10 +132,10 @@ export function AgentActionProvider({
       if (registrySteps.length > 0 && incomingSteps.length > 0) {
         reportPolterMisconfig(
           `Action "${action.name}" has steps in both defineAction and useAgentAction. ` +
-          `Put them in ONE place: keep the steps in defineAction and pass "steps: undefined" to ` +
-          `useAgentAction (static cross-page steps), OR define them only in the component and keep ` +
-          `defineAction a stepless schema stand-in (dynamic, param-dependent steps — e.g. editPmsMarkup). ` +
-          `Defining them in both makes the executor click the target twice and recycle it.`,
+            `Put them in ONE place: keep the steps in defineAction and pass "steps: undefined" to ` +
+            `useAgentAction (static cross-page steps), OR define them only in the component and keep ` +
+            `defineAction a stepless schema stand-in (dynamic, param-dependent steps — e.g. editPmsMarkup). ` +
+            `Defining them in both makes the executor click the target twice and recycle it.`,
         );
       }
     }
@@ -172,6 +177,7 @@ export function AgentActionProvider({
       actionName: string,
       name: string,
       signal?: AbortSignal,
+      // biome-ignore lint/correctness/noUnusedFunctionParameters: grandfathered at Biome adoption — fix and remove over time
       params?: Record<string, unknown>,
       timeout = 5000,
       skipCheck?: () => boolean,
@@ -236,7 +242,8 @@ export function AgentActionProvider({
         if (skipCheck?.()) return miss('skipped');
 
         const currentAction = actionsRef.current.get(actionName);
-        const isComponentBacked = currentAction && currentAction !== registryRef.current.get(actionName);
+        const isComponentBacked =
+          currentAction && currentAction !== registryRef.current.get(actionName);
 
         // Action became disabled (component determined it can't proceed).
         if (currentAction?.disabledReason) {
@@ -255,7 +262,11 @@ export function AgentActionProvider({
             if ((entry.element as HTMLButtonElement).disabled) {
               seenDisabled = true;
             } else {
-              log('resolveTarget:found', { actionName, name, elapsedMs: performance.now() - start });
+              log('resolveTarget:found', {
+                actionName,
+                name,
+                elapsedMs: performance.now() - start,
+              });
               return { element: entry.element, diagnostics: diag('found') };
             }
           }
@@ -265,16 +276,19 @@ export function AgentActionProvider({
         // wants (intent), match it against registered targets' self-descriptions —
         // tolerant of partial id-sets, labels, and number-vs-string ids.
         if (!foundTarget && intent) {
-          const connected = [...targetsRef.current.values()].filter(
-            (e) => e.element.isConnected,
-          );
+          const connected = [...targetsRef.current.values()].filter((e) => e.element.isConnected);
           const result = matchTargets(connected, intent);
           if (result.status === 'matched') {
             foundTarget = true;
             if ((result.target.element as HTMLButtonElement).disabled) {
               seenDisabled = true;
             } else {
-              log('resolveTarget:found', { actionName, name, via: 'intent', elapsedMs: performance.now() - start });
+              log('resolveTarget:found', {
+                actionName,
+                name,
+                via: 'intent',
+                elapsedMs: performance.now() - start,
+              });
               return { element: result.target.element, diagnostics: diag('found') };
             }
           }
@@ -302,7 +316,8 @@ export function AgentActionProvider({
 
         // Live-watch heartbeat (~1s). matchCount 0 + componentMounted true keeps
         // reporting useful context until resolveTarget gives up.
-        if (polls % 20 === 0) log('resolveTarget:waiting', { actionName, name, ...diag('timeout') });
+        if (polls % 20 === 0)
+          log('resolveTarget:waiting', { actionName, name, ...diag('timeout') });
         polls++;
 
         await new Promise((r) => setTimeout(r, pollInterval));
@@ -323,7 +338,11 @@ export function AgentActionProvider({
 
   /** Poll actionsRef until the action has DOM targets (component mounted after navigation). */
   const waitForActionMount = useCallback(
-    async (name: string, signal?: AbortSignal, timeout = 5000): Promise<RegisteredAction | null> => {
+    async (
+      name: string,
+      signal?: AbortSignal,
+      timeout = 5000,
+    ): Promise<RegisteredAction | null> => {
       const maxWait = timeout;
       const pollInterval = 50;
       const start = Date.now();
@@ -349,7 +368,12 @@ export function AgentActionProvider({
 
       const action = actionsRef.current.get(actionName);
       if (!action) {
-        return { actionName, error: `Action "${actionName}" not found`, trace: [], durationMs: performance.now() - start };
+        return {
+          actionName,
+          error: `Action "${actionName}" not found`,
+          trace: [],
+          durationMs: performance.now() - start,
+        };
       }
       if (action.disabledReason) {
         return {
@@ -386,16 +410,20 @@ export function AgentActionProvider({
         };
 
         // Validate params against the Zod schema before executing.
+        // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
         const schema = action.parameters as any;
         if (schema?.safeParse) {
           const validation = schema.safeParse(params ?? {});
           if (!validation.success) {
             const missing = validation.error.issues
+              // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
               .map((i: any) => i.path.join('.'))
               .filter(Boolean);
-            const error = missing.length > 0
-              ? `Required parameters missing: ${missing.join(', ')}`
-              : validation.error.issues.map((i: any) => i.message).join('; ');
+            const error =
+              missing.length > 0
+                ? `Required parameters missing: ${missing.join(', ')}`
+                : // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
+                  validation.error.issues.map((i: any) => i.message).join('; ');
             return { actionName, error, trace: [], durationMs: performance.now() - start };
           }
         }
@@ -419,15 +447,16 @@ export function AgentActionProvider({
           }
           return true;
         });
-        const actionWithNav: RegisteredAction = navTargets.length > 0
-          ? {
-              ...action,
-              resolveSteps: () => [
-                ...navTargets.map((target): StepDefinition => ({ label: target, target })),
-                ...action.resolveSteps(),
-              ],
-            }
-          : action;
+        const actionWithNav: RegisteredAction =
+          navTargets.length > 0
+            ? {
+                ...action,
+                resolveSteps: () => [
+                  ...navTargets.map((target): StepDefinition => ({ label: target, target })),
+                  ...action.resolveSteps(),
+                ],
+              }
+            : action;
 
         let result = await executeAction(actionWithNav, params ?? {}, executorConfig);
 
@@ -475,7 +504,11 @@ export function AgentActionProvider({
                 durationMs: performance.now() - start,
               };
             }
-          } else if (navigated && action.resolveSteps().length === 0 && !controller.signal.aborted) {
+          } else if (
+            navigated &&
+            action.resolveSteps().length === 0 &&
+            !controller.signal.aborted
+          ) {
             // We navigated, but the destination component never mounted in time,
             // so this cross-page action's real steps never ran. Report the
             // failure instead of a bare-navigation "success" — otherwise the
@@ -523,9 +556,22 @@ export function AgentActionProvider({
         }
       }
     },
-    [mode, stepDelay, overlayOpacity, spotlightPadding, tooltipEnabled, cursorEnabled, mountTimeout, onExecutionStart, onExecutionComplete, resolveTarget, waitForActionMount],
+    [
+      mode,
+      stepDelay,
+      overlayOpacity,
+      spotlightPadding,
+      tooltipEnabled,
+      cursorEnabled,
+      mountTimeout,
+      onExecutionStart,
+      onExecutionComplete,
+      resolveTarget,
+      waitForActionMount,
+    ],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: grandfathered at Biome adoption — fix and remove over time
   const availableActions = useMemo<AvailableAction[]>(
     () =>
       Array.from(actionsRef.current.values()).map((a) => ({
@@ -538,6 +584,7 @@ export function AgentActionProvider({
     [version],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: grandfathered at Biome adoption — fix and remove over time
   const schemas = useMemo(
     () => generateToolSchemas(Array.from(actionsRef.current.values())),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -581,7 +628,5 @@ export function AgentActionProvider({
     ],
   );
 
-  return (
-    <AgentActionContext.Provider value={contextValue}>{children}</AgentActionContext.Provider>
-  );
+  return <AgentActionContext.Provider value={contextValue}>{children}</AgentActionContext.Provider>;
 }

@@ -1,17 +1,18 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import React, { useState, useRef, useCallback } from 'react';
+import { act, cleanup, render, screen } from '@testing-library/react';
+import React, { useCallback, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { render, act, cleanup, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 
 afterEach(() => {
   cleanup();
 });
+
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { AgentTarget } from '../components/AgentTarget';
-import { useAgentAction } from '../hooks/useAgentAction';
 import { defineAction } from '../core/helpers';
+import { useAgentAction } from '../hooks/useAgentAction';
+import type { useAgentActions } from '../hooks/useAgentActions';
 import { TestConsumer } from './testUtils';
-import { useAgentActions } from '../hooks/useAgentActions';
 
 // PRO-184 reproduction — virtualized table + InlineEditableCell.
 //
@@ -74,9 +75,7 @@ function FakeVirtualizer({
       {visible.map((p) => (
         // Stable key on id when not recycling, but recycleVersion bumps
         // unmount-then-remount every row in the window.
-        <React.Fragment key={`${p.id}:${recycleVersion}`}>
-          {renderRow(p.id)}
-        </React.Fragment>
+        <React.Fragment key={`${p.id}:${recycleVersion}`}>{renderRow(p.id)}</React.Fragment>
       ))}
     </div>
   );
@@ -95,6 +94,7 @@ function CellWithLocalState({ propertyId }: { propertyId: number }) {
     </AgentTarget>
   ) : (
     <AgentTarget name={`edit-${propertyId}`}>
+      {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
       <button data-testid={`btn-${propertyId}`} onClick={() => setEditing(true)}>
         edit
       </button>
@@ -119,6 +119,7 @@ function CellWithSharedState({
     </AgentTarget>
   ) : (
     <AgentTarget name={`edit-${propertyId}`}>
+      {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
       <button data-testid={`btn-${propertyId}`} onClick={() => meta.setEditing(key, true)}>
         edit
       </button>
@@ -157,9 +158,11 @@ function Harness({
     steps: [
       {
         label: 'Click edit price',
+        // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
         target: (p: any) => `edit-${p.property_id}`,
         scrollTo: {
           dispatchEvent: 'agent:scroll-to',
+          // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
           detail: (p: any) => ({ property_id: p.property_id }),
         },
       },
@@ -242,12 +245,16 @@ describe('PRO-184 — virtualized table + InlineEditableCell with LOCAL state', 
     // later moment, not the moment polter polled.
     const inputPresenceSamples: boolean[] = [];
     const sampler = setInterval(() => {
-      inputPresenceSamples.push(!!document.querySelector(`[data-testid="input-${TARGET_PROPERTY}"]`));
+      inputPresenceSamples.push(
+        !!document.querySelector(`[data-testid="input-${TARGET_PROPERTY}"]`),
+      );
     }, 50);
 
+    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
     let result: any;
     try {
       result = await act(async () =>
+        // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
         race(ctx!.execute('edit_markup', { property_id: TARGET_PROPERTY }), 12000),
       );
     } finally {
@@ -255,11 +262,15 @@ describe('PRO-184 — virtualized table + InlineEditableCell with LOCAL state', 
     }
 
     // Polter now fails cleanly with a diagnostic error (a fix from this PR).
+    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
     expect((result as any).__timedOut).toBeUndefined();
+    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
     expect((result as any).error).toMatch(/Target "acc-markup-input"/);
+    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
     expect((result as any).error).toMatch(/edit_markup/);
 
     // The input was never on screen while polter was looking.
+    // biome-ignore lint/complexity/useIndexOf: grandfathered at Biome adoption — fix and remove over time
     const firstPoll = inputPresenceSamples.findIndex((p) => p === true);
     expect(firstPoll).toBe(-1);
   }, 20000);
@@ -280,10 +291,13 @@ describe('PRO-184 — same scenario, editing state lifted to shared map', () => 
     );
 
     const result = await act(async () =>
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       race(ctx!.execute('edit_markup', { property_id: TARGET_PROPERTY }), 5000),
     );
 
+    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
     expect((result as any).__timedOut).toBeUndefined();
+    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
     expect((result as any).error).toBeUndefined();
     expect((screen.getByTestId(`input-${TARGET_PROPERTY}`) as HTMLInputElement).value).toBe('25');
   }, 15000);
@@ -311,7 +325,10 @@ describe('PRO-184 — disabled-while-loading pattern still works', () => {
       });
       return (
         <AgentTarget name="go">
-          <button data-testid="go" disabled={!ready}>go</button>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button data-testid="go" disabled={!ready}>
+            go
+          </button>
         </AgentTarget>
       );
     }
@@ -327,6 +344,7 @@ describe('PRO-184 — disabled-while-loading pattern still works', () => {
     // Kick off execution; the button is disabled, so polter must keep
     // polling past the 5s base timeout. After ~6.5s we enable it via
     // flushSync so the test environment commits immediately.
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const exec = act(async () => ctx!.execute('slow_load'));
     setTimeout(() => {
       flushSync(() => setReadyRef.current?.(true));
@@ -354,10 +372,13 @@ describe('PRO-184 — control: no recycle, local state works fine', () => {
     );
 
     const result = await act(async () =>
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       race(ctx!.execute('edit_markup', { property_id: TARGET_PROPERTY }), 5000),
     );
 
+    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
     expect((result as any).__timedOut).toBeUndefined();
+    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
     expect((result as any).error).toBeUndefined();
     expect((screen.getByTestId(`input-${TARGET_PROPERTY}`) as HTMLInputElement).value).toBe('25');
   }, 15000);

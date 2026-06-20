@@ -1,7 +1,8 @@
 import { useCallback, useContext, useEffect, useRef } from 'react';
-import type { ActionDefinition, StepDefinition } from '../core/types';
 import { AgentActionContext } from '../components/AgentActionProvider';
+import type { ActionDefinition, StepDefinition } from '../core/types';
 
+// biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
 export function useAgentAction(...configs: ActionDefinition<any>[]): void {
   const context = useContext(AgentActionContext);
   if (!context) {
@@ -42,5 +43,6 @@ export function useAgentAction(...configs: ActionDefinition<any>[]): void {
 
   // Re-register whenever disabledReason changes so actionsRef stays in sync.
   const disabledKey = configs.map((c) => c.disabledReason ?? '').join('\0');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: grandfathered at Biome adoption — fix and remove over time
   useEffect(buildRegistered, [buildRegistered, disabledKey]);
 }

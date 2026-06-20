@@ -1,14 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { z } from 'zod';
 import {
   AgentActionProvider,
-  AgentTarget,
   AgentDevTools,
+  AgentTarget,
   defineAction,
   fromParam,
   useAgentAction,
   useAgentActions,
 } from '@mydatavalue/polter';
+// biome-ignore lint/correctness/noUnusedImports: grandfathered at Biome adoption — fix and remove over time
+import React, { useEffect, useRef, useState } from 'react';
+import { z } from 'zod';
 
 // ============================================================================
 // Toast (tiny zero-dep notification system)
@@ -24,6 +25,7 @@ let toastState: ToastMessage[] = [];
 const toastListeners = new Set<(messages: ToastMessage[]) => void>();
 
 function emitToasts() {
+  // biome-ignore lint/suspicious/useIterableCallbackReturn: grandfathered at Biome adoption — fix and remove over time
   toastListeners.forEach((listener) => listener(toastState));
 }
 
@@ -71,13 +73,69 @@ interface Customer {
 }
 
 const ALL_CUSTOMERS: Customer[] = [
-  { id: 1, name: 'Sarah Chen', email: 'sarah@acme.io', status: 'active', plan: 'Pro', joined: 'Mar 2024', mrr: 99 },
-  { id: 2, name: 'James Rivera', email: 'james@stellar.co', status: 'trial', plan: 'Free', joined: 'Jan 2026', mrr: 0 },
-  { id: 3, name: 'Priya Patel', email: 'priya@nexus.dev', status: 'active', plan: 'Enterprise', joined: 'Sep 2023', mrr: 499 },
-  { id: 4, name: 'Tom Anderson', email: 'tom@beacon.io', status: 'churned', plan: 'Pro', joined: 'May 2023', mrr: 0 },
-  { id: 5, name: 'Maya Tanaka', email: 'maya@drift.app', status: 'active', plan: 'Pro', joined: 'Feb 2025', mrr: 99 },
-  { id: 6, name: 'Alex Volkov', email: 'alex@horizon.co', status: 'trial', plan: 'Free', joined: 'Jan 2026', mrr: 0 },
-  { id: 7, name: 'Lina Okafor', email: 'lina@vertex.io', status: 'active', plan: 'Enterprise', joined: 'Jul 2023', mrr: 499 },
+  {
+    id: 1,
+    name: 'Sarah Chen',
+    email: 'sarah@acme.io',
+    status: 'active',
+    plan: 'Pro',
+    joined: 'Mar 2024',
+    mrr: 99,
+  },
+  {
+    id: 2,
+    name: 'James Rivera',
+    email: 'james@stellar.co',
+    status: 'trial',
+    plan: 'Free',
+    joined: 'Jan 2026',
+    mrr: 0,
+  },
+  {
+    id: 3,
+    name: 'Priya Patel',
+    email: 'priya@nexus.dev',
+    status: 'active',
+    plan: 'Enterprise',
+    joined: 'Sep 2023',
+    mrr: 499,
+  },
+  {
+    id: 4,
+    name: 'Tom Anderson',
+    email: 'tom@beacon.io',
+    status: 'churned',
+    plan: 'Pro',
+    joined: 'May 2023',
+    mrr: 0,
+  },
+  {
+    id: 5,
+    name: 'Maya Tanaka',
+    email: 'maya@drift.app',
+    status: 'active',
+    plan: 'Pro',
+    joined: 'Feb 2025',
+    mrr: 99,
+  },
+  {
+    id: 6,
+    name: 'Alex Volkov',
+    email: 'alex@horizon.co',
+    status: 'trial',
+    plan: 'Free',
+    joined: 'Jan 2026',
+    mrr: 0,
+  },
+  {
+    id: 7,
+    name: 'Lina Okafor',
+    email: 'lina@vertex.io',
+    status: 'active',
+    plan: 'Enterprise',
+    joined: 'Jul 2023',
+    mrr: 499,
+  },
 ];
 
 // ============================================================================
@@ -102,10 +160,28 @@ function Dashboard() {
       description: 'Find a customer by name, open their record, and draft an email',
       parameters: z.object({ name: z.string().describe('Full customer name') }),
       steps: [
-        { label: 'Type the name', value: fromParam('name'), target: 'search', skipIf: ({ name }) => selected?.name === name || search === name },
-        { label: 'Open status filter', target: 'status-toggle', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' || dropdownOpen },
-        { label: 'Reset to all', target: 'status:all', skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all' },
-        { label: 'Click the customer', target: (p) => `find_and_email/customer:${p.name}`, skipIf: ({ name }) => selected?.name === name },
+        {
+          label: 'Type the name',
+          value: fromParam('name'),
+          target: 'search',
+          skipIf: ({ name }) => selected?.name === name || search === name,
+        },
+        {
+          label: 'Open status filter',
+          target: 'status-toggle',
+          skipIf: ({ name }) =>
+            filtered.some((c) => c.name === name) || statusFilter === 'all' || dropdownOpen,
+        },
+        {
+          label: 'Reset to all',
+          target: 'status:all',
+          skipIf: ({ name }) => filtered.some((c) => c.name === name) || statusFilter === 'all',
+        },
+        {
+          label: 'Click the customer',
+          target: (p) => `find_and_email/customer:${p.name}`,
+          skipIf: ({ name }) => selected?.name === name,
+        },
         { label: "Click 'Send email'", target: 'find_and_email/send-email-btn' },
       ],
     }),
@@ -117,8 +193,16 @@ function Dashboard() {
       }),
       steps: [
         { label: 'Clear search', value: '', target: 'search', skipIf: () => search === '' },
-        { label: 'Open status filter', target: 'status-toggle', skipIf: ({ status }) => statusFilter === status || dropdownOpen },
-        { label: 'Pick a status', target: (p) => `status:${p.status}`, skipIf: ({ status }) => statusFilter === status },
+        {
+          label: 'Open status filter',
+          target: 'status-toggle',
+          skipIf: ({ status }) => statusFilter === status || dropdownOpen,
+        },
+        {
+          label: 'Pick a status',
+          target: (p) => `status:${p.status}`,
+          skipIf: ({ status }) => statusFilter === status,
+        },
         { label: 'Click export', target: 'export-btn' },
       ],
     }),
@@ -153,10 +237,8 @@ function Dashboard() {
 
         <div className="dropdown">
           <AgentTarget name="status-toggle">
-            <button
-              className="btn"
-              onClick={() => setDropdownOpen((v) => !v)}
-            >
+            {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+            <button className="btn" onClick={() => setDropdownOpen((v) => !v)}>
               Status: {statusFilter} ▾
             </button>
           </AgentTarget>
@@ -164,6 +246,7 @@ function Dashboard() {
             <div className="dropdown-menu">
               {(['all', 'active', 'trial', 'churned'] as const).map((s) => (
                 <AgentTarget key={s} name={`status:${s}`}>
+                  {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
                   <button
                     className="dropdown-item"
                     onClick={() => {
@@ -180,6 +263,7 @@ function Dashboard() {
         </div>
 
         <AgentTarget name="export-btn">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button
             className="btn btn-primary"
             onClick={() => showToast('✨ Exported customers to CSV')}
@@ -198,13 +282,13 @@ function Dashboard() {
         </div>
         {filtered.map((c) => (
           <AgentTarget key={c.id} name={`find_and_email/customer:${c.name}`}>
-            <div
-              className="table-row table-row-clickable"
-              onClick={() => setSelected(c)}
-            >
+            {/** biome-ignore lint/a11y/useKeyWithClickEvents: grandfathered at Biome adoption — fix and remove over time */}
+            {/** biome-ignore lint/a11y/noStaticElementInteractions: grandfathered at Biome adoption — fix and remove over time */}
+            <div className="table-row table-row-clickable" onClick={() => setSelected(c)}>
               <div className="name">{c.name}</div>
               <div className="email">{c.email}</div>
               <div>
+                {/** biome-ignore lint/style/useTemplate: grandfathered at Biome adoption — fix and remove over time */}
                 <span className={'badge ' + c.status}>{c.status}</span>
               </div>
               <div>{c.plan}</div>
@@ -215,10 +299,15 @@ function Dashboard() {
 
       {/* Customer detail modal */}
       {selected && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: grandfathered at Biome adoption — fix and remove over time
+        // biome-ignore lint/a11y/noStaticElementInteractions: grandfathered at Biome adoption — fix and remove over time
         <div className="modal-overlay" onClick={() => setSelected(null)}>
+          {/** biome-ignore lint/a11y/useKeyWithClickEvents: grandfathered at Biome adoption — fix and remove over time */}
+          {/** biome-ignore lint/a11y/noStaticElementInteractions: grandfathered at Biome adoption — fix and remove over time */}
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{selected.name}</h2>
+              {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
               <button className="modal-close" onClick={() => setSelected(null)}>
                 ✕
               </button>
@@ -230,6 +319,7 @@ function Dashboard() {
               </div>
               <div className="detail-row">
                 <span className="detail-label">Status</span>
+                {/** biome-ignore lint/style/useTemplate: grandfathered at Biome adoption — fix and remove over time */}
                 <span className={'badge ' + selected.status}>{selected.status}</span>
               </div>
               <div className="detail-row">
@@ -247,6 +337,7 @@ function Dashboard() {
             </div>
             <div className="modal-footer">
               <AgentTarget name="find_and_email/send-email-btn">
+                {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
                 <button
                   className="btn btn-primary"
                   onClick={() => showToast(`✨ AI: Drafting email to ${selected.email}`)}
@@ -281,7 +372,7 @@ interface Suggestion {
 const SUGGESTIONS: Suggestion[] = [
   {
     user: 'Find Sarah Chen and draft an email to her',
-    agent: "On it. Let me search for her, open her record, and draft the email:",
+    agent: 'On it. Let me search for her, open her record, and draft the email:',
     action: 'find_and_email',
     params: { name: 'Sarah Chen' },
   },
@@ -301,6 +392,7 @@ function AgentPanel() {
   const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: grandfathered at Biome adoption — fix and remove over time
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isThinking]);
@@ -327,12 +419,15 @@ function AgentPanel() {
 
       <div className="chat-messages">
         {messages.map((m, i) => (
+          // biome-ignore lint/style/useTemplate: grandfathered at Biome adoption — fix and remove over time
+          // biome-ignore lint/suspicious/noArrayIndexKey: grandfathered at Biome adoption — fix and remove over time
           <div key={i} className={'msg ' + m.role}>
             {m.text}
           </div>
         ))}
         {isThinking && (
           <div className="msg agent">
+            {/** biome-ignore lint/a11y/useAriaPropsSupportedByRole: grandfathered at Biome adoption — fix and remove over time */}
             <span className="typing-dots" aria-label="Agent thinking">
               <span></span>
               <span></span>
@@ -345,16 +440,15 @@ function AgentPanel() {
 
       <div className="suggestions">
         {isExecuting ? (
-          <button
-            className="suggestion stop-btn"
-            onClick={() => abortExecution()}
-          >
+          // biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time
+          <button className="suggestion stop-btn" onClick={() => abortExecution()}>
             Stop execution
           </button>
         ) : (
           <>
             <div className="suggestions-label">Try these</div>
             {SUGGESTIONS.map((s) => (
+              // biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time
               <button
                 key={s.action + JSON.stringify(s.params)}
                 className="suggestion"

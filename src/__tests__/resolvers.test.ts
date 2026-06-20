@@ -1,20 +1,24 @@
+import { fc, it } from '@fast-check/vitest';
 import { describe, expect } from 'vitest';
-import { it, fc } from '@fast-check/vitest';
-import {
-  matchTargets,
-  scoreAttrValue,
-  scoreTarget,
-  AMBIGUITY_MARGIN,
-} from '../resolvers';
 import type { DescribedTarget } from '../resolvers';
+import { AMBIGUITY_MARGIN, matchTargets, scoreAttrValue, scoreTarget } from '../resolvers';
 
 // A small fixture mirroring real ranking targets.
-const APARTMENTS = { role: 'type', attrs: { label: 'Apartments', ids: ['201', '219'], level: 'CITY' } };
+const APARTMENTS = {
+  role: 'type',
+  attrs: { label: 'Apartments', ids: ['201', '219'], level: 'CITY' },
+};
 const VILLAS = { role: 'type', attrs: { label: 'Villas', ids: ['213'], level: 'CITY' } };
 const SYKES = { role: 'operator', attrs: { id: '405776', label: 'Sykes Holiday Cottages' } };
 const GUESTREADY = { role: 'operator', attrs: { id: '15357642', label: 'GuestReady' } };
-const LONDON_CITY = { role: 'location', attrs: { destId: -2601889, label: 'London', level: 'CITY' } };
-const HYDEPARK = { role: 'location', attrs: { destId: 44, label: 'Hydepark, London', level: 'DISTRICT' } };
+const LONDON_CITY = {
+  role: 'location',
+  attrs: { destId: -2601889, label: 'London', level: 'CITY' },
+};
+const HYDEPARK = {
+  role: 'location',
+  attrs: { destId: 44, label: 'Hydepark, London', level: 'DISTRICT' },
+};
 
 const TARGETS: DescribedTarget[] = [APARTMENTS, VILLAS, SYKES, GUESTREADY, LONDON_CITY, HYDEPARK];
 
@@ -43,7 +47,9 @@ describe('scoreTarget', () => {
 
   it('disqualifies on a present-but-contradictory attr (wrong level)', () => {
     // Asking for a DISTRICT entity must not match a CITY-level target.
-    expect(scoreTarget(LONDON_CITY, { role: 'location', attrs: { label: 'London', level: 'DISTRICT' } })).toBeNull();
+    expect(
+      scoreTarget(LONDON_CITY, { role: 'location', attrs: { label: 'London', level: 'DISTRICT' } }),
+    ).toBeNull();
   });
 
   it('ignores attrs the target does not describe (neutral, not penalised)', () => {
@@ -83,10 +89,16 @@ describe('matchTargets', () => {
   });
 
   it('keeps level-specific dests apart (London CITY vs Hydepark DISTRICT)', () => {
-    const district = matchTargets(TARGETS, { role: 'location', attrs: { label: 'London', level: 'DISTRICT' } });
+    const district = matchTargets(TARGETS, {
+      role: 'location',
+      attrs: { label: 'London', level: 'DISTRICT' },
+    });
     // Only Hydepark is at DISTRICT; London CITY is disqualified by the level mismatch.
     if (district.status === 'matched') expect(district.target).toBe(HYDEPARK);
-    const city = matchTargets(TARGETS, { role: 'location', attrs: { destId: -2601889, level: 'CITY' } });
+    const city = matchTargets(TARGETS, {
+      role: 'location',
+      attrs: { destId: -2601889, level: 'CITY' },
+    });
     expect(city.status).toBe('matched');
     if (city.status === 'matched') expect(city.target).toBe(LONDON_CITY);
   });

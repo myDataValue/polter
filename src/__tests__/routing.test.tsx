@@ -1,11 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { act, render } from '@testing-library/react';
 import React from 'react';
-import { render, act } from '@testing-library/react';
-import { AgentActionProvider } from '../components/AgentActionProvider';
+import { describe, expect, it, vi } from 'vitest';
 import { AgentAction } from '../components/AgentAction';
-import { useAgentCommandRouter } from '../hooks/useAgentCommandRouter';
+import { AgentActionProvider } from '../components/AgentActionProvider';
 import { defineAction } from '../core/helpers';
 import type { ExecutionResult } from '../core/types';
+import { useAgentCommandRouter } from '../hooks/useAgentCommandRouter';
 
 interface Command {
   action: string;
@@ -38,12 +38,14 @@ describe('useAgentCommandRouter', () => {
     render(
       <AgentActionProvider mode="instant">
         <AgentAction action={syncAction}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button onClick={onClick}>Sync</button>
         </AgentAction>
         <RouterConsumer fallback={fallback} onRouter={(r) => (router = r)} />
       </AgentActionProvider>,
     );
 
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     await act(() => router!({ action: 'sync', payload: { id: 1 } }));
     expect(onClick).toHaveBeenCalled();
     expect(fallback).not.toHaveBeenCalled();
@@ -59,6 +61,7 @@ describe('useAgentCommandRouter', () => {
       </AgentActionProvider>,
     );
 
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     await act(() => router!({ action: 'unknown_action' }));
     expect(fallback).toHaveBeenCalledWith({ action: 'unknown_action' });
   });
@@ -70,6 +73,7 @@ describe('useAgentCommandRouter', () => {
     render(
       <AgentActionProvider mode="instant">
         <AgentAction action={lockedAction} disabledReason="Not ready">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button>Locked</button>
         </AgentAction>
         <RouterConsumer fallback={fallback} onRouter={(r) => (router = r)} />
@@ -78,6 +82,7 @@ describe('useAgentCommandRouter', () => {
 
     let result: ExecutionResult | undefined;
     await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       result = await router!({ action: 'locked' });
     });
     expect(result).toMatchObject({ actionName: 'locked', error: 'Not ready' });
@@ -94,6 +99,7 @@ describe('useAgentCommandRouter', () => {
     );
 
     // Should not throw
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     await act(() => router!({ action: 'anything' }));
   });
 });

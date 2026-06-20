@@ -1,6 +1,6 @@
 import { useContext } from 'react';
-import type { AgentActionContextValue } from '../core/types';
 import { AgentActionContext } from '../components/AgentActionProvider';
+import type { AgentActionContextValue } from '../core/types';
 
 export function useAgentActions(): AgentActionContextValue {
   const context = useContext(AgentActionContext);

@@ -1,6 +1,7 @@
-import React, { useContext, useEffect, useId, useRef } from 'react';
-import { AgentActionContext } from './AgentActionProvider';
+import type React from 'react';
+import { useContext, useEffect, useId, useRef } from 'react';
 import type { TargetDefinition } from '../core/types';
+import { AgentActionContext } from './AgentActionProvider';
 
 interface AgentTargetProps extends TargetDefinition {
   children: React.ReactNode;
@@ -48,6 +49,7 @@ export function AgentTarget({ name, role, attrs, children }: AgentTargetProps) {
   descriptionRef.current = { role, attrs };
   const attrsKey = attrs ? JSON.stringify(attrs) : '';
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: grandfathered at Biome adoption — fix and remove over time
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
@@ -64,6 +66,7 @@ export function AgentTarget({ name, role, attrs, children }: AgentTargetProps) {
       // do we fall back to getComputedStyle, so a consumer's own display:contents
       // wrapper placed directly inside the target is still descended. The marker
       // path also works in jsdom.
+      // biome-ignore lint/complexity/useOptionalChain: grandfathered at Biome adoption — fix and remove over time
       while (element && element.firstElementChild) {
         const isPolterWrapper = element.hasAttribute('data-polter-target');
         if (!isPolterWrapper && getComputedStyle(element).display !== 'contents') {
