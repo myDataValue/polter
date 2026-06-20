@@ -1,5 +1,12 @@
-import type { RegisteredAction, ExecutionResult, StepDefinition, ExecutorConfig, StepTrace, ResolveDiagnostics } from '../core/types';
 import { createDebugLogger } from '../core/debugLog';
+import type {
+  ExecutionResult,
+  ExecutorConfig,
+  RegisteredAction,
+  ResolveDiagnostics,
+  StepDefinition,
+  StepTrace,
+} from '../core/types';
 
 let stylesInjected = false;
 // The cursor persists its position across actions so it glides from where it
@@ -173,18 +180,20 @@ function animateCursorClick(): void {
   const cursor = document.querySelector('.polter-cursor') as HTMLElement | null;
   if (!cursor) return;
   cursor.style.animation = 'polter-cursor-click 0.2s ease';
-  cursor.addEventListener('animationend', () => { cursor.style.animation = ''; }, { once: true });
+  cursor.addEventListener(
+    'animationend',
+    () => {
+      cursor.style.animation = '';
+    },
+    { once: true },
+  );
 }
 
 interface SpotlightHandle {
   remove: () => void;
 }
 
-function createSpotlight(
-  rect: DOMRect,
-  label: string,
-  config: ExecutorConfig,
-): SpotlightHandle {
+function createSpotlight(rect: DOMRect, label: string, config: ExecutorConfig): SpotlightHandle {
   injectStyles();
 
   const padding = config.spotlightPadding;
@@ -238,9 +247,7 @@ function createSpotlight(
 
     const spaceBelow = window.innerHeight - rect.bottom - padding;
     const isBelow = spaceBelow > 60;
-    const tooltipTop = isBelow
-      ? rect.bottom + padding + 12
-      : rect.top - padding - 44;
+    const tooltipTop = isBelow ? rect.bottom + padding + 12 : rect.top - padding - 44;
 
     tooltip.style.cssText = `
       position:fixed;
@@ -310,7 +317,11 @@ export function setNativeInputValue(input: HTMLInputElement, value: string): voi
 /**
  * Simulate typing into an input character by character.
  */
-export async function simulateTyping(element: HTMLElement, value: string, signal?: AbortSignal): Promise<void> {
+export async function simulateTyping(
+  element: HTMLElement,
+  value: string,
+  signal?: AbortSignal,
+): Promise<void> {
   const input = element as HTMLInputElement;
   input.focus();
 
@@ -366,12 +377,10 @@ export async function resolveStepElement(
     }
   }
 
-  const intent =
-    typeof step.intent === 'function' ? step.intent(params) : step.intent;
+  const intent = typeof step.intent === 'function' ? step.intent(params) : step.intent;
 
   if ((step.target || intent) && config.resolveTarget) {
-    const name =
-      typeof step.target === 'function' ? step.target(params) : (step.target ?? '');
+    const name = typeof step.target === 'function' ? step.target(params) : (step.target ?? '');
     return config.resolveTarget(
       actionName,
       name,
@@ -408,7 +417,11 @@ function awaitWaitFor(action: RegisteredAction, signal?: AbortSignal): Promise<u
 // ---------------------------------------------------------------------------
 
 interface StepEffects {
-  before(element: HTMLElement, label: string, refreshElement?: () => Promise<HTMLElement>): Promise<HTMLElement>;
+  before(
+    element: HTMLElement,
+    label: string,
+    refreshElement?: () => Promise<HTMLElement>,
+  ): Promise<HTMLElement>;
   after(isLast: boolean): Promise<void>;
   type(input: HTMLElement, value: string): Promise<void>;
   click(element: HTMLElement): void;
@@ -490,8 +503,10 @@ function createGuidedEffects(config: ExecutorConfig): StepEffects {
 
 function createInstantEffects(): StepEffects {
   return {
-    async before(element) { return element; },
-    async after() { },
+    async before(element) {
+      return element;
+    },
+    async after() {},
     async type(input, value) {
       setNativeInputValue(input as HTMLInputElement, value);
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -501,7 +516,7 @@ function createInstantEffects(): StepEffects {
     click(element) {
       simulateFullClick(element);
     },
-    cleanup() { },
+    cleanup() {},
   };
 }
 
@@ -525,13 +540,19 @@ export async function executeAction(
       outcome = await awaitWaitFor(action, config.signal);
       log('waitFor:done', { action: action.name });
     }
-    log('execute:complete', { action: action.name, durationMs: performance.now() - executionStart });
-    return { actionName: action.name, trace: [], durationMs: performance.now() - executionStart, outcome };
+    log('execute:complete', {
+      action: action.name,
+      durationMs: performance.now() - executionStart,
+    });
+    return {
+      actionName: action.name,
+      trace: [],
+      durationMs: performance.now() - executionStart,
+      outcome,
+    };
   }
 
-  const fx = config.mode === 'instant'
-    ? createInstantEffects()
-    : createGuidedEffects(config);
+  const fx = config.mode === 'instant' ? createInstantEffects() : createGuidedEffects(config);
 
   // Track in-progress step for the catch block
   let activeStep: { index: number; step: StepDefinition; start: number } | null = null;
@@ -558,9 +579,11 @@ export async function executeAction(
       activeStep = { index: i, step, start: stepStart };
 
       const resolvedTarget = typeof step.target === 'function' ? step.target(params) : step.target;
-      const targetType: StepTrace['targetType'] = typeof step.target === 'function' ? 'dynamic' : 'static';
+      const targetType: StepTrace['targetType'] =
+        typeof step.target === 'function' ? 'dynamic' : 'static';
       const targetName = resolvedTarget;
 
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       const skipCheck = step.skipIf ? () => step.skipIf!(params) : undefined;
       let element: HTMLElement | null;
       let resolveDiag: ResolveDiagnostics | undefined;
@@ -604,7 +627,13 @@ export async function executeAction(
           const reason = targetName
             ? `Target "${targetName}" for action "${action.name}" not found for step "${step.label}"`
             : `target not found for step "${step.label}"`;
-          log('step:fail', { index: i, label: step.label, targetName, error: reason, ...resolveDiag });
+          log('step:fail', {
+            index: i,
+            label: step.label,
+            targetName,
+            error: reason,
+            ...resolveDiag,
+          });
           stepTraces.push({
             index: i,
             label: step.label,
@@ -617,8 +646,17 @@ export async function executeAction(
             resolve: resolveDiag,
             durationMs: performance.now() - stepStart,
           });
-          log('execute:complete', { action: action.name, error: reason, durationMs: performance.now() - executionStart });
-          return { actionName: action.name, error: reason, trace: stepTraces, durationMs: performance.now() - executionStart };
+          log('execute:complete', {
+            action: action.name,
+            error: reason,
+            durationMs: performance.now() - executionStart,
+          });
+          return {
+            actionName: action.name,
+            error: reason,
+            trace: stepTraces,
+            durationMs: performance.now() - executionStart,
+          };
         }
         stepTraces.push({
           index: i,
@@ -634,16 +672,25 @@ export async function executeAction(
         continue;
       }
       const ensureConnected = async (): Promise<HTMLElement> => {
+        // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
         if (element!.isConnected) return element!;
-        if (!config.resolveTarget || !targetName) throw new Error(`Target "${targetName}" is no longer in the DOM.`);
-        const { element: fresh } = await config.resolveTarget(action.name, targetName, config.signal, params, 3000);
-        if (!fresh?.isConnected) throw new Error(
-          `Target "${targetName}" was found, then left the DOM before it could be used, and could ` +
-          `not be re-resolved within 3s. This is a UI timing/config issue — NOT a login or extension ` +
-          `problem. Common causes: the action's steps are registered in both defineAction and ` +
-          `useAgentAction (double-click — look for a "[polter] ... steps in both" error); an earlier ` +
-          `step's side effect swapped the render branch out; or a virtualized list recycled the row.`,
+        if (!config.resolveTarget || !targetName)
+          throw new Error(`Target "${targetName}" is no longer in the DOM.`);
+        const { element: fresh } = await config.resolveTarget(
+          action.name,
+          targetName,
+          config.signal,
+          params,
+          3000,
         );
+        if (!fresh?.isConnected)
+          throw new Error(
+            `Target "${targetName}" was found, then left the DOM before it could be used, and could ` +
+              `not be re-resolved within 3s. This is a UI timing/config issue — NOT a login or extension ` +
+              `problem. Common causes: the action's steps are registered in both defineAction and ` +
+              `useAgentAction (double-click — look for a "[polter] ... steps in both" error); an earlier ` +
+              `step's side effect swapped the render branch out; or a virtualized list recycled the row.`,
+          );
         return fresh;
       };
 
@@ -653,15 +700,19 @@ export async function executeAction(
 
       // Interact based on step type
       let interactionType: StepTrace['interactionType'] = 'click';
-      const resolvedValue = step.value !== undefined
-        ? (typeof step.value === 'function' ? step.value(params) : step.value)
-        : undefined;
+      const resolvedValue =
+        step.value !== undefined
+          ? typeof step.value === 'function'
+            ? step.value(params)
+            : step.value
+          : undefined;
 
       if (resolvedValue !== undefined) {
         interactionType = 'type';
-        const inputEl = (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')
-          ? element
-          : element.querySelector('input, textarea') ?? element;
+        const inputEl =
+          element.tagName === 'INPUT' || element.tagName === 'TEXTAREA'
+            ? element
+            : (element.querySelector('input, textarea') ?? element);
         await fx.type(inputEl as HTMLElement, resolvedValue);
       } else {
         fx.click(element);
@@ -680,7 +731,12 @@ export async function executeAction(
         resolve: resolveDiag,
         durationMs: performance.now() - stepStart,
       });
-      log('step:done', { index: i, label: step.label, interactionType, durationMs: performance.now() - stepStart });
+      log('step:done', {
+        index: i,
+        label: step.label,
+        interactionType,
+        durationMs: performance.now() - stepStart,
+      });
 
       activeStep = null;
     }
@@ -697,15 +753,29 @@ export async function executeAction(
       log('waitFor:done', { action: action.name });
     }
 
-    log('execute:complete', { action: action.name, steps: stepTraces.length, durationMs: performance.now() - executionStart });
-    return { actionName: action.name, trace: stepTraces, durationMs: performance.now() - executionStart, outcome };
+    log('execute:complete', {
+      action: action.name,
+      steps: stepTraces.length,
+      durationMs: performance.now() - executionStart,
+    });
+    return {
+      actionName: action.name,
+      trace: stepTraces,
+      durationMs: performance.now() - executionStart,
+      outcome,
+    };
   } catch (err) {
     fx.cleanup();
 
-    const errorMsg = err instanceof DOMException && err.name === 'AbortError'
-      ? 'Execution cancelled'
-      : String(err);
-    log('execute:error', { action: action.name, error: errorMsg, durationMs: performance.now() - executionStart });
+    const errorMsg =
+      err instanceof DOMException && err.name === 'AbortError'
+        ? 'Execution cancelled'
+        : String(err);
+    log('execute:error', {
+      action: action.name,
+      error: errorMsg,
+      durationMs: performance.now() - executionStart,
+    });
 
     // Trace the step that was in progress when the error occurred
     if (activeStep) {
@@ -724,6 +794,11 @@ export async function executeAction(
       });
     }
 
-    return { actionName: action.name, error: errorMsg, trace: stepTraces, durationMs: performance.now() - executionStart };
+    return {
+      actionName: action.name,
+      error: errorMsg,
+      trace: stepTraces,
+      durationMs: performance.now() - executionStart,
+    };
   }
 }

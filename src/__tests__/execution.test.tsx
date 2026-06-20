@@ -1,19 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
 import fc from 'fast-check';
+import { describe, expect, it, vi } from 'vitest';
 
 const DOM_PROPERTY_OPTS = { numRuns: 20 };
 const DOM_TIMEOUT = 30_000;
+
+import { act, cleanup, render } from '@testing-library/react';
 import React from 'react';
-import { render, act, cleanup } from '@testing-library/react';
-import { AgentActionProvider } from '../components/AgentActionProvider';
-import { AgentAction } from '../components/AgentAction';
-import { AgentTarget } from '../components/AgentTarget';
-import { useAgentActions } from '../hooks/useAgentActions';
-import { useAgentAction } from '../hooks/useAgentAction';
-import { defineAction } from '../core/helpers';
-import { fromParam } from '../core/helpers';
-import type { ExecutionResult } from '../core/types';
 import { z } from 'zod';
+import { AgentAction } from '../components/AgentAction';
+import { AgentActionProvider } from '../components/AgentActionProvider';
+import { AgentTarget } from '../components/AgentTarget';
+import { defineAction, fromParam } from '../core/helpers';
+import type { ExecutionResult } from '../core/types';
+import { useAgentAction } from '../hooks/useAgentAction';
+import type { useAgentActions } from '../hooks/useAgentActions';
 import { TestConsumer } from './testUtils';
 
 // ---------------------------------------------------------------------------
@@ -28,11 +28,13 @@ describe('click execution', () => {
     render(
       <AgentActionProvider mode="instant">
         <AgentAction action={action}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button onClick={onClick}>Go</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const result = await act(() => ctx!.execute('click_test'));
     expect(result.error).toBeUndefined();
     expect(onClick).toHaveBeenCalled();
@@ -46,7 +48,9 @@ describe('click execution', () => {
 const valueAction = defineAction({ name: 'value_test', description: 'Value' });
 
 describe('value typing', () => {
-  it('should type any literal string value into the target input', { timeout: DOM_TIMEOUT }, async () => {
+  it('should type any literal string value into the target input', {
+    timeout: DOM_TIMEOUT,
+  }, async () => {
     await fc.assert(
       fc.asyncProperty(fc.string(), async (literal) => {
         let ctx: ReturnType<typeof useAgentActions> | null = null;
@@ -55,7 +59,11 @@ describe('value typing', () => {
             ...valueAction,
             steps: [{ label: 'type', value: literal, target: 'input' }],
           });
-          return <AgentTarget name="input"><input data-testid="input" /></AgentTarget>;
+          return (
+            <AgentTarget name="input">
+              <input data-testid="input" />
+            </AgentTarget>
+          );
         }
         render(
           <AgentActionProvider mode="instant">
@@ -63,18 +71,25 @@ describe('value typing', () => {
             <TestConsumer onContext={(c) => (ctx = c)} />
           </AgentActionProvider>,
         );
+        // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
         await act(() => ctx!.execute('value_test'));
-        expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe(literal);
+        expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe(
+          literal,
+        );
         cleanup();
       }),
       DOM_PROPERTY_OPTS,
     );
   });
 
-  it('should type a fromParam-resolved value for any param name and value', { timeout: DOM_TIMEOUT }, async () => {
+  it('should type a fromParam-resolved value for any param name and value', {
+    timeout: DOM_TIMEOUT,
+  }, async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 1 }).filter((s) => !Object.prototype.hasOwnProperty.call(Object.prototype, s)),
+        fc
+          .string({ minLength: 1 })
+          .filter((s) => !Object.prototype.hasOwnProperty.call(Object.prototype, s)),
         fc.string(),
         async (paramName, paramValue) => {
           let ctx: ReturnType<typeof useAgentActions> | null = null;
@@ -83,7 +98,11 @@ describe('value typing', () => {
               ...valueAction,
               steps: [{ label: 'type', value: fromParam(paramName), target: 'input' }],
             });
-            return <AgentTarget name="input"><input data-testid="input" /></AgentTarget>;
+            return (
+              <AgentTarget name="input">
+                <input data-testid="input" />
+              </AgentTarget>
+            );
           }
           render(
             <AgentActionProvider mode="instant">
@@ -91,8 +110,11 @@ describe('value typing', () => {
               <TestConsumer onContext={(c) => (ctx = c)} />
             </AgentActionProvider>,
           );
+          // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
           await act(() => ctx!.execute('value_test', { [paramName]: paramValue }));
-          expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe(paramValue);
+          expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe(
+            paramValue,
+          );
           cleanup();
         },
       ),
@@ -107,7 +129,12 @@ describe('value typing', () => {
         ...valueAction,
         steps: [{ label: 'maybe type', value: fromParam('missing'), target: 'btn' }],
       });
-      return <AgentTarget name="btn"><button onClick={onClick}>Go</button></AgentTarget>;
+      return (
+        <AgentTarget name="btn">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button onClick={onClick}>Go</button>
+        </AgentTarget>
+      );
     }
     render(
       <AgentActionProvider mode="instant">
@@ -115,6 +142,7 @@ describe('value typing', () => {
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     await act(() => ctx!.execute('value_test', {}));
     expect(onClick).toHaveBeenCalled();
   });
@@ -137,7 +165,12 @@ describe('skipIf', () => {
             ...skipAction,
             steps: [{ label: 'step', target: 'btn', skipIf: () => shouldSkip }],
           });
-          return <AgentTarget name="btn"><button onClick={onClick}>Go</button></AgentTarget>;
+          return (
+            <AgentTarget name="btn">
+              {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+              <button onClick={onClick}>Go</button>
+            </AgentTarget>
+          );
         }
         render(
           <AgentActionProvider mode="instant">
@@ -145,6 +178,7 @@ describe('skipIf', () => {
             <TestConsumer onContext={(c) => (ctx = c)} />
           </AgentActionProvider>,
         );
+        // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
         await act(() => ctx!.execute('skip_test'));
         expect(onClick).toHaveBeenCalledTimes(shouldSkip ? 0 : 1);
         cleanup();
@@ -161,7 +195,12 @@ describe('skipIf', () => {
         ...skipAction,
         steps: [{ label: 'step', target: 'btn', skipIf: predicate }],
       });
-      return <AgentTarget name="btn"><button>Go</button></AgentTarget>;
+      return (
+        <AgentTarget name="btn">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Go</button>
+        </AgentTarget>
+      );
     }
     render(
       <AgentActionProvider mode="instant">
@@ -169,6 +208,7 @@ describe('skipIf', () => {
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     await act(() => ctx!.execute('skip_test', { skip: true, other: 'y' }));
     expect(predicate).toHaveBeenCalledWith({ skip: true, other: 'y' });
   });
@@ -179,7 +219,9 @@ describe('skipIf', () => {
 // ---------------------------------------------------------------------------
 
 describe('closure freshness', () => {
-  it('should read the latest skipIf closure for any sequence of state changes', { timeout: DOM_TIMEOUT }, async () => {
+  it('should read the latest skipIf closure for any sequence of state changes', {
+    timeout: DOM_TIMEOUT,
+  }, async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.array(fc.boolean(), { minLength: 1, maxLength: 20 }),
@@ -195,7 +237,12 @@ describe('closure freshness', () => {
               ...skipAction,
               steps: [{ label: 'step', target: 'btn', skipIf: () => skip }],
             });
-            return <AgentTarget name="btn"><button onClick={onClick}>Go</button></AgentTarget>;
+            return (
+              <AgentTarget name="btn">
+                {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+                <button onClick={onClick}>Go</button>
+              </AgentTarget>
+            );
           }
           render(
             <AgentActionProvider mode="instant">
@@ -207,6 +254,7 @@ describe('closure freshness', () => {
           let expectedClicks = 0;
           for (const shouldSkip of sequence) {
             act(() => setSkip(shouldSkip));
+            // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
             await act(() => ctx!.execute('skip_test'));
             if (!shouldSkip) expectedClicks += 1;
           }
@@ -218,38 +266,44 @@ describe('closure freshness', () => {
     );
   });
 
-  it('should read the latest value closure for any sequence of state changes', { timeout: DOM_TIMEOUT }, async () => {
+  it('should read the latest value closure for any sequence of state changes', {
+    timeout: DOM_TIMEOUT,
+  }, async () => {
     await fc.assert(
-      fc.asyncProperty(
-        fc.array(fc.string(), { minLength: 1, maxLength: 10 }),
-        async (suffixes) => {
-          let setSuffix: (v: string) => void = () => {};
-          let ctx: ReturnType<typeof useAgentActions> | null = null;
+      fc.asyncProperty(fc.array(fc.string(), { minLength: 1, maxLength: 10 }), async (suffixes) => {
+        let setSuffix: (v: string) => void = () => {};
+        let ctx: ReturnType<typeof useAgentActions> | null = null;
 
-          function Harness() {
-            const [suffix, setter] = React.useState(suffixes[0]);
-            setSuffix = setter;
-            useAgentAction({
-              ...valueAction,
-              steps: [{ label: 'type', value: (p) => `${p.tag}-${suffix}`, target: 'input' }],
-            });
-            return <AgentTarget name="input"><input data-testid="input" /></AgentTarget>;
-          }
-          render(
-            <AgentActionProvider mode="instant">
-              <Harness />
-              <TestConsumer onContext={(c) => (ctx = c)} />
-            </AgentActionProvider>,
+        function Harness() {
+          const [suffix, setter] = React.useState(suffixes[0]);
+          setSuffix = setter;
+          useAgentAction({
+            ...valueAction,
+            steps: [{ label: 'type', value: (p) => `${p.tag}-${suffix}`, target: 'input' }],
+          });
+          return (
+            <AgentTarget name="input">
+              <input data-testid="input" />
+            </AgentTarget>
           );
+        }
+        render(
+          <AgentActionProvider mode="instant">
+            <Harness />
+            <TestConsumer onContext={(c) => (ctx = c)} />
+          </AgentActionProvider>,
+        );
 
-          for (const suffix of suffixes) {
-            act(() => setSuffix(suffix));
-            await act(() => ctx!.execute('value_test', { tag: 'x' }));
-            expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe(`x-${suffix}`);
-          }
-          cleanup();
-        },
-      ),
+        for (const suffix of suffixes) {
+          act(() => setSuffix(suffix));
+          // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+          await act(() => ctx!.execute('value_test', { tag: 'x' }));
+          expect((document.querySelector('[data-testid="input"]') as HTMLInputElement).value).toBe(
+            `x-${suffix}`,
+          );
+        }
+        cleanup();
+      }),
       DOM_PROPERTY_OPTS,
     );
   });
@@ -269,6 +323,7 @@ describe('error handling', () => {
             <TestConsumer onContext={(c) => (ctx = c)} />
           </AgentActionProvider>,
         );
+        // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
         const result = await act(() => ctx!.execute(name));
         expect(result.error).toBeDefined();
         expect(result.error).toContain('not found');
@@ -286,11 +341,13 @@ describe('error handling', () => {
         render(
           <AgentActionProvider mode="instant">
             <AgentAction action={action} disabledReason={reason}>
+              {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
               <button>Go</button>
             </AgentAction>
             <TestConsumer onContext={(c) => (ctx = c)} />
           </AgentActionProvider>,
         );
+        // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
         const result = await act(() => ctx!.execute('disabled_test'));
         expect(result.error).toBeDefined();
         expect(result.error).toBe(reason);
@@ -315,10 +372,14 @@ describe('param validation', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" registry={[action]}>
-        <AgentAction action={action}><button>Go</button></AgentAction>
+        <AgentAction action={action}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Go</button>
+        </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const result = await act(() => ctx!.execute('validated', {}));
     expect(result.error).toBeDefined();
     expect(result.error).toContain('ids');
@@ -334,10 +395,14 @@ describe('param validation', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" registry={[action]}>
-        <AgentAction action={action}><button onClick={onClick}>Go</button></AgentAction>
+        <AgentAction action={action}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button onClick={onClick}>Go</button>
+        </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const result = await act(() => ctx!.execute('validated', { ids: [1, 2] }));
     expect(result.error).toBeUndefined();
     expect(onClick).toHaveBeenCalled();
@@ -352,19 +417,31 @@ describe('waitFor', () => {
   it('should await ref promise before resolving', async () => {
     const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
     let resolve: () => void;
-    const promiseRef = { current: new Promise<void>((r) => { resolve = r; }) };
+    const promiseRef = {
+      current: new Promise<void>((r) => {
+        resolve = r;
+      }),
+    };
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant">
         <AgentAction action={action} waitFor={promiseRef}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button>Go</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
     let done = false;
-    const exec = act(() => ctx!.execute('wait_ref').then((r) => { done = true; return r; }));
+    const exec = act(() =>
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+      ctx!.execute('wait_ref').then((r) => {
+        done = true;
+        return r;
+      }),
+    );
     expect(done).toBe(false);
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     resolve!();
     const result = await exec;
     expect(result.error).toBeUndefined();
@@ -374,17 +451,24 @@ describe('waitFor', () => {
   it('surfaces the resolved waitFor value as result.outcome', async () => {
     const action = defineAction({ name: 'wait_outcome', description: 'Wait outcome' });
     let resolve: (v: unknown) => void;
-    const promiseRef = { current: new Promise<unknown>((r) => { resolve = r; }) };
+    const promiseRef = {
+      current: new Promise<unknown>((r) => {
+        resolve = r;
+      }),
+    };
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant">
         <AgentAction action={action} waitFor={promiseRef}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button>Go</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const exec = act(() => ctx!.execute('wait_outcome').then((r) => r));
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     resolve!({ applied: true, confirmationShown: false, propertyCount: 1 });
     const result = await exec;
     expect(result.error).toBeUndefined();
@@ -394,11 +478,16 @@ describe('waitFor', () => {
   it('cancels an in-flight waitFor when a new execution starts', async () => {
     const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
     let resolve: () => void;
-    const promiseRef = { current: new Promise<void>((r) => { resolve = r; }) };
+    const promiseRef = {
+      current: new Promise<void>((r) => {
+        resolve = r;
+      }),
+    };
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant">
         <AgentAction action={action} waitFor={promiseRef}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button>Go</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -407,18 +496,21 @@ describe('waitFor', () => {
 
     let first!: Promise<ExecutionResult>;
     await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       first = ctx!.execute('wait_ref');
       await Promise.resolve();
     });
 
     let second!: Promise<ExecutionResult>;
     await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       second = ctx!.execute('wait_ref');
       await Promise.resolve();
     });
 
     await expect(first).resolves.toMatchObject({ error: 'Execution cancelled' });
 
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     resolve!();
     const result = await act(() => second);
     expect(result.error).toBeUndefined();
@@ -427,11 +519,16 @@ describe('waitFor', () => {
   it('keeps isExecuting true when a new execution supersedes an in-flight one', async () => {
     const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
     let resolve: () => void;
-    const promiseRef = { current: new Promise<void>((r) => { resolve = r; }) };
+    const promiseRef = {
+      current: new Promise<void>((r) => {
+        resolve = r;
+      }),
+    };
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant">
         <AgentAction action={action} waitFor={promiseRef}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button>Go</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -440,9 +537,11 @@ describe('waitFor', () => {
 
     let first!: Promise<ExecutionResult>;
     await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       first = ctx!.execute('wait_ref');
       await Promise.resolve();
     });
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.isExecuting).toBe(true);
 
     // The second execution supersedes the first. The first's finally must NOT
@@ -452,25 +551,34 @@ describe('waitFor', () => {
     // true→false→true mid-sequence.
     let second!: Promise<ExecutionResult>;
     await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       second = ctx!.execute('wait_ref');
       await Promise.resolve();
     });
     await expect(first).resolves.toMatchObject({ error: 'Execution cancelled' });
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.isExecuting).toBe(true);
 
     // Completing the live execution returns to idle.
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     resolve!();
     await act(() => second);
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.isExecuting).toBe(false);
   });
 
   it('resets isExecuting when execution is aborted', async () => {
     const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
-    const promiseRef = { current: new Promise<void>(() => { /* never resolves */ }) };
+    const promiseRef = {
+      current: new Promise<void>(() => {
+        /* never resolves */
+      }),
+    };
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant">
         <AgentAction action={action} waitFor={promiseRef}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button>Go</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
@@ -479,15 +587,19 @@ describe('waitFor', () => {
 
     let exec!: Promise<ExecutionResult>;
     await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       exec = ctx!.execute('wait_ref');
       await Promise.resolve();
     });
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.isExecuting).toBe(true);
 
     await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       ctx!.abortExecution();
       await Promise.resolve();
     });
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.isExecuting).toBe(false);
     await expect(exec).resolves.toMatchObject({ error: 'Execution cancelled' });
   });
@@ -505,7 +617,11 @@ describe('resolution diagnostics', () => {
         ...valueAction,
         steps: [{ label: 'type', value: 'x', target: 'input' }],
       });
-      return <AgentTarget name="input"><input data-testid="input" /></AgentTarget>;
+      return (
+        <AgentTarget name="input">
+          <input data-testid="input" />
+        </AgentTarget>
+      );
     }
     render(
       <AgentActionProvider mode="instant">
@@ -513,6 +629,7 @@ describe('resolution diagnostics', () => {
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const result = await act(() => ctx!.execute('value_test', {}));
     const step = result.trace.find((s) => s.targetName === 'input');
     expect(step?.resolve).toBeDefined();
@@ -531,7 +648,12 @@ describe('resolution diagnostics', () => {
         ...valueAction,
         steps: [{ label: 'click', target: 'btn' }],
       });
-      return <AgentTarget name="btn"><button data-testid="btn">Go</button></AgentTarget>;
+      return (
+        <AgentTarget name="btn">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button data-testid="btn">Go</button>
+        </AgentTarget>
+      );
     }
     render(
       <AgentActionProvider mode="instant" debug>
@@ -539,6 +661,7 @@ describe('resolution diagnostics', () => {
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     await act(() => ctx!.execute('value_test', {}));
     const events = spy.mock.calls.map((c) => c[0]);
     expect(events).toContain('[polter] execute:start');
@@ -555,11 +678,19 @@ describe('execution callbacks', () => {
     const onComplete = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
-      <AgentActionProvider mode="instant" onExecutionStart={onStart} onExecutionComplete={onComplete}>
-        <AgentAction action={action}><button>Go</button></AgentAction>
+      <AgentActionProvider
+        mode="instant"
+        onExecutionStart={onStart}
+        onExecutionComplete={onComplete}
+      >
+        <AgentAction action={action}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Go</button>
+        </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     await act(() => ctx!.execute('tracked'));
     expect(onStart).toHaveBeenCalledWith('tracked');
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ actionName: 'tracked' }));
@@ -592,10 +723,14 @@ describe('cross-page navigation handoff', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider mode="instant" mountTimeout={50} registry={REGISTRY}>
-        <AgentTarget name="dash-nav"><button>Dashboard</button></AgentTarget>
+        <AgentTarget name="dash-nav">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Dashboard</button>
+        </AgentTarget>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const result = await act(() => ctx!.execute('open_panel'));
     // Navigation itself happened…
     expect(result.trace.some((s) => s.targetName === 'dash-nav')).toBe(true);
@@ -607,11 +742,19 @@ describe('cross-page navigation handoff', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     function Late() {
       useAgentAction({ ...crossPage, steps: [{ label: 'open', target: 'panel-btn' }] });
-      return <AgentTarget name="panel-btn"><button data-testid="panel-btn">Open</button></AgentTarget>;
+      return (
+        <AgentTarget name="panel-btn">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button data-testid="panel-btn">Open</button>
+        </AgentTarget>
+      );
     }
     const Tree = ({ mounted }: { mounted: boolean }) => (
       <AgentActionProvider mode="instant" mountTimeout={2000} registry={REGISTRY}>
-        <AgentTarget name="dash-nav"><button>Dashboard</button></AgentTarget>
+        <AgentTarget name="dash-nav">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Dashboard</button>
+        </AgentTarget>
         {mounted ? <Late /> : null}
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>
@@ -620,14 +763,16 @@ describe('cross-page navigation handoff', () => {
 
     let resultP: Promise<ExecutionResult> | null = null;
     await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       resultP = ctx!.execute('open_panel'); // phase 1 navigates, then waits for mount
       rerender(<Tree mounted />); // destination component mounts during the wait
     });
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const result = await act(() => resultP!);
 
     expect(result.error).toBeUndefined();
-    expect(
-      result.trace.some((s) => s.targetName === 'panel-btn' && s.status === 'completed'),
-    ).toBe(true);
+    expect(result.trace.some((s) => s.targetName === 'panel-btn' && s.status === 'completed')).toBe(
+      true,
+    );
   });
 });

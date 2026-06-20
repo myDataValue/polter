@@ -1,7 +1,6 @@
+import { fc, it } from '@fast-check/vitest';
 import { describe, expect } from 'vitest';
-import { it, fc } from '@fast-check/vitest';
-import { defineAction } from '../core/helpers';
-import { fromParam } from '../core/helpers';
+import { defineAction, fromParam } from '../core/helpers';
 
 describe('defineAction', () => {
   it.prop([fc.string({ minLength: 1 }), fc.string()])(

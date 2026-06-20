@@ -42,6 +42,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsc --noEmit",
+    "lint": "biome check --error-on-warnings .",
+    "lint:fix": "biome check --write .",
     "clean": "rm -rf dist",
     "prepare": "tsup"
   },
@@ -51,6 +53,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.0",
     "@fast-check/vitest": "^0.4.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

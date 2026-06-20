@@ -15,11 +15,7 @@
  * A primitive attribute a target can be described by. Arrays model multi-valued
  * attributes such as a grouped type row's accommodation ids (`["201", "219"]`).
  */
-export type TargetAttrValue =
-  | string
-  | number
-  | boolean
-  | ReadonlyArray<string | number>;
+export type TargetAttrValue = string | number | boolean | ReadonlyArray<string | number>;
 
 /** A target's (or an intent's) structured description: `{ label, ids, level, ... }`. */
 export type TargetAttrs = Readonly<Record<string, TargetAttrValue>>;

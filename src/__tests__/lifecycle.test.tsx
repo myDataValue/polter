@@ -1,14 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
-import { it as fcIt, fc } from '@fast-check/vitest';
-import React from 'react';
+import { fc, it as fcIt } from '@fast-check/vitest';
 import { render, screen } from '@testing-library/react';
-import { AgentActionProvider } from '../components/AgentActionProvider';
-import { AgentAction } from '../components/AgentAction';
-import { AgentTarget } from '../components/AgentTarget';
-import { useAgentActions } from '../hooks/useAgentActions';
-import { useAgentAction } from '../hooks/useAgentAction';
-import { defineAction } from '../core/helpers';
+// biome-ignore lint/correctness/noUnusedImports: grandfathered at Biome adoption — fix and remove over time
+import React from 'react';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { AgentAction } from '../components/AgentAction';
+import { AgentActionProvider } from '../components/AgentActionProvider';
+import { AgentTarget } from '../components/AgentTarget';
+import { defineAction } from '../core/helpers';
+import { useAgentAction } from '../hooks/useAgentAction';
+import { useAgentActions } from '../hooks/useAgentActions';
 import { TestConsumer } from './testUtils';
 
 // ---------------------------------------------------------------------------
@@ -20,14 +21,20 @@ describe('context boundaries', () => {
     {
       name: 'useAgentActions',
       render: () => {
-        function Bad() { useAgentActions(); return null; }
+        function Bad() {
+          useAgentActions();
+          return null;
+        }
         return <Bad />;
       },
     },
     {
       name: 'useAgentAction',
       render: () => {
-        function Bad() { useAgentAction(defineAction({ name: 'x', description: 'x' })); return null; }
+        function Bad() {
+          useAgentAction(defineAction({ name: 'x', description: 'x' }));
+          return null;
+        }
         return <Bad />;
       },
     },
@@ -37,7 +44,11 @@ describe('context boundaries', () => {
     },
     {
       name: 'AgentTarget',
-      render: () => <AgentTarget name="x"><div /></AgentTarget>,
+      render: () => (
+        <AgentTarget name="x">
+          <div />
+        </AgentTarget>
+      ),
     },
   ])('$name should throw when used outside AgentActionProvider', ({ render: renderEl }) => {
     expect(() => render(renderEl())).toThrow();
@@ -53,7 +64,8 @@ describe('context boundaries', () => {
 
 function loggedStepsInBoth(spy: ReturnType<typeof vi.spyOn>): boolean {
   return spy.mock.calls.some(
-    (args: unknown[]) => typeof args[0] === 'string' && (args[0] as string).includes('steps in both'),
+    (args: unknown[]) =>
+      typeof args[0] === 'string' && (args[0] as string).includes('steps in both'),
   );
 }
 
@@ -74,8 +86,14 @@ describe('critical misconfiguration guards', () => {
       return null;
     }
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { rerender } = render(<AgentActionProvider registry={REGISTRY}>{null}</AgentActionProvider>);
-    rerender(<AgentActionProvider registry={REGISTRY}><Comp /></AgentActionProvider>);
+    const { rerender } = render(
+      <AgentActionProvider registry={REGISTRY}>{null}</AgentActionProvider>,
+    );
+    rerender(
+      <AgentActionProvider registry={REGISTRY}>
+        <Comp />
+      </AgentActionProvider>,
+    );
     const flagged = loggedStepsInBoth(errSpy);
     errSpy.mockRestore();
     expect(flagged).toBe(true);
@@ -89,8 +107,14 @@ describe('critical misconfiguration guards', () => {
       return null;
     }
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { rerender } = render(<AgentActionProvider registry={REGISTRY}>{null}</AgentActionProvider>);
-    rerender(<AgentActionProvider registry={REGISTRY}><Comp /></AgentActionProvider>);
+    const { rerender } = render(
+      <AgentActionProvider registry={REGISTRY}>{null}</AgentActionProvider>,
+    );
+    rerender(
+      <AgentActionProvider registry={REGISTRY}>
+        <Comp />
+      </AgentActionProvider>,
+    );
     const flagged = loggedStepsInBoth(errSpy);
     errSpy.mockRestore();
     expect(flagged).toBe(false);
@@ -111,18 +135,16 @@ describe('AgentActionProvider', () => {
     expect(screen.getByTestId('child')).toHaveTextContent('Hello');
   });
 
-  it.each(['guided', 'instant'] as const)(
-    'should expose mode=%s through context',
-    (mode) => {
-      let ctx: ReturnType<typeof useAgentActions> | null = null;
-      render(
-        <AgentActionProvider mode={mode}>
-          <TestConsumer onContext={(c) => (ctx = c)} />
-        </AgentActionProvider>,
-      );
-      expect(ctx!.mode).toBe(mode);
-    },
-  );
+  it.each(['guided', 'instant'] as const)('should expose mode=%s through context', (mode) => {
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode={mode}>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+    expect(ctx!.mode).toBe(mode);
+  });
 
   it('should start with empty actions and schemas', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
@@ -131,8 +153,11 @@ describe('AgentActionProvider', () => {
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions).toEqual([]);
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.schemas).toEqual([]);
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.isExecuting).toBe(false);
   });
 });
@@ -149,12 +174,18 @@ describe('AgentAction registration', () => {
       let ctx: ReturnType<typeof useAgentActions> | null = null;
       const { unmount } = render(
         <AgentActionProvider>
-          <AgentAction action={action}><button>Go</button></AgentAction>
+          <AgentAction action={action}>
+            {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+            <button>Go</button>
+          </AgentAction>
           <TestConsumer onContext={(c) => (ctx = c)} />
         </AgentActionProvider>,
       );
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       expect(ctx!.availableActions).toHaveLength(1);
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       expect(ctx!.availableActions[0].name).toBe(name);
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
       expect(ctx!.availableActions[0].description).toBe(description);
       unmount();
     },
@@ -165,10 +196,14 @@ describe('AgentAction registration', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     const { rerender } = render(
       <AgentActionProvider>
-        <AgentAction action={action}><button>Go</button></AgentAction>
+        <AgentAction action={action}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Go</button>
+        </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions).toHaveLength(1);
 
     rerender(
@@ -176,22 +211,31 @@ describe('AgentAction registration', () => {
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions).toHaveLength(0);
   });
 
   it('should exclude disabled actions from schemas but include in availableActions', () => {
-    const action = defineAction({ name: 'locked', description: 'Locked', parameters: z.object({ x: z.string() }) });
+    const action = defineAction({
+      name: 'locked',
+      description: 'Locked',
+      parameters: z.object({ x: z.string() }),
+    });
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     render(
       <AgentActionProvider>
         <AgentAction action={action} disabledReason="Not ready">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button>Go</button>
         </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions).toHaveLength(1);
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions[0].disabledReason).toBe('Not ready');
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.schemas).toHaveLength(0);
   });
 
@@ -214,13 +258,17 @@ describe('useAgentAction registration', () => {
   it('should register a single action', () => {
     const solo = defineAction({ name: 'solo', description: 'Solo' });
     let ctx: ReturnType<typeof useAgentActions> | null = null;
-    function Harness() { useAgentAction(solo); return null; }
+    function Harness() {
+      useAgentAction(solo);
+      return null;
+    }
     render(
       <AgentActionProvider>
         <Harness />
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions.map((a) => a.name)).toEqual(['solo']);
   });
 
@@ -228,32 +276,41 @@ describe('useAgentAction registration', () => {
     const alpha = defineAction({ name: 'alpha', description: 'Alpha' });
     const beta = defineAction({ name: 'beta', description: 'Beta' });
     let ctx: ReturnType<typeof useAgentActions> | null = null;
-    function Harness() { useAgentAction(alpha, beta); return null; }
+    function Harness() {
+      useAgentAction(alpha, beta);
+      return null;
+    }
     render(
       <AgentActionProvider>
         <Harness />
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions.map((a) => a.name).sort()).toEqual(['alpha', 'beta']);
   });
 
   it('should unregister on unmount', () => {
     const tempDef = defineAction({ name: 'temp', description: 'Temp' });
     let ctx: ReturnType<typeof useAgentActions> | null = null;
-    function Harness() { useAgentAction(tempDef); return null; }
+    function Harness() {
+      useAgentAction(tempDef);
+      return null;
+    }
     const { rerender } = render(
       <AgentActionProvider>
         <Harness />
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions).toHaveLength(1);
     rerender(
       <AgentActionProvider>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions).toHaveLength(0);
   });
 });
@@ -262,7 +319,11 @@ describe('useAgentAction registration', () => {
 // Registry lifecycle
 // ---------------------------------------------------------------------------
 
-const exportCsv = defineAction({ name: 'export_csv', description: 'Export CSV', navigateTo: 'export-tab' });
+const exportCsv = defineAction({
+  name: 'export_csv',
+  description: 'Export CSV',
+  navigateTo: 'export-tab',
+});
 const grantAccess = defineAction({
   name: 'grant_access',
   description: 'Grant access',
@@ -278,7 +339,9 @@ describe('registry', () => {
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions).toHaveLength(2);
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.schemas).toHaveLength(2);
   });
 
@@ -286,10 +349,14 @@ describe('registry', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
     const { rerender } = render(
       <AgentActionProvider registry={[exportCsv]}>
-        <AgentAction action={exportCsv}><button>Export</button></AgentAction>
+        <AgentAction action={exportCsv}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Export</button>
+        </AgentAction>
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions).toHaveLength(1);
 
     rerender(
@@ -297,7 +364,9 @@ describe('registry', () => {
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions).toHaveLength(1);
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     expect(ctx!.availableActions[0].name).toBe('export_csv');
   });
 });

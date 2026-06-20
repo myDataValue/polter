@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   resolveStepElement,
@@ -167,7 +167,12 @@ describe('resolveStepElement', () => {
       scrollTo: { dispatchEvent: 'mdv-scroll', detail: (p: Record<string, unknown>) => p.id },
     };
 
-    await resolveStepElement(step as unknown as StepArg, 'a', { id: 42 }, {} as unknown as ConfigArg);
+    await resolveStepElement(
+      step as unknown as StepArg,
+      'a',
+      { id: 42 },
+      {} as unknown as ConfigArg,
+    );
 
     window.removeEventListener('mdv-scroll', handler);
     expect(seen).toHaveLength(1);

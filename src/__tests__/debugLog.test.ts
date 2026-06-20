@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { findCandidateTargetNames, createDebugLogger } from '../core/debugLog';
+import { describe, expect, it, vi } from 'vitest';
+import { createDebugLogger, findCandidateTargetNames } from '../core/debugLog';
 
 describe('findCandidateTargetNames', () => {
   it('returns mounted names sharing the wanted name prefix', () => {

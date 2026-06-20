@@ -1,7 +1,7 @@
+import { fc, it } from '@fast-check/vitest';
 import { describe, expect } from 'vitest';
-import { it, fc } from '@fast-check/vitest';
 import { z } from 'zod';
-import { zodToJsonSchema, generateToolSchemas } from '../core/schemaGenerator';
+import { generateToolSchemas, zodToJsonSchema } from '../core/schemaGenerator';
 import type { RegisteredAction } from '../core/types';
 
 // ---------------------------------------------------------------------------
@@ -81,26 +81,25 @@ describe('zodToJsonSchema', () => {
     },
   );
 
-  it.prop([fc.nat(), fc.nat()])(
-    'should convert ZodString min/max constraints',
-    (min, rawMax) => {
-      const max = min + rawMax;
-      const result = zodToJsonSchema(z.string().min(min).max(max));
-      expect(result.type).toBe('string');
-      expect(result.minLength).toBe(min);
-      expect(result.maxLength).toBe(max);
-    },
-  );
+  it.prop([fc.nat(), fc.nat()])('should convert ZodString min/max constraints', (min, rawMax) => {
+    const max = min + rawMax;
+    const result = zodToJsonSchema(z.string().min(min).max(max));
+    expect(result.type).toBe('string');
+    expect(result.minLength).toBe(min);
+    expect(result.maxLength).toBe(max);
+  });
 
-  const safeKey = fc.string({ minLength: 1 }).filter((s) =>
-    !Object.prototype.hasOwnProperty.call(Object.prototype, s),
-  );
+  const safeKey = fc
+    .string({ minLength: 1 })
+    .filter((s) => !Object.prototype.hasOwnProperty.call(Object.prototype, s));
 
   it.prop([
-    fc.record({
-      required: safeKey,
-      optional: safeKey,
-    }).filter((r) => r.required !== r.optional),
+    fc
+      .record({
+        required: safeKey,
+        optional: safeKey,
+      })
+      .filter((r) => r.required !== r.optional),
   ])(
     'should mark required fields and omit optional from required array',
     ({ required, optional }) => {
@@ -135,18 +134,20 @@ describe('zodToJsonSchema', () => {
 // generateToolSchemas
 // ---------------------------------------------------------------------------
 
-const actionArb = fc.record({
-  name: fc.string({ minLength: 1 }),
-  description: fc.string(),
-  disabledReason: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
-}).map(
-  ({ name, description, disabledReason }): RegisteredAction => ({
-    name,
-    description,
-    disabledReason,
-    resolveSteps: () => [],
-  }),
-);
+const actionArb = fc
+  .record({
+    name: fc.string({ minLength: 1 }),
+    description: fc.string(),
+    disabledReason: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
+  })
+  .map(
+    ({ name, description, disabledReason }): RegisteredAction => ({
+      name,
+      description,
+      disabledReason,
+      resolveSteps: () => [],
+    }),
+  );
 
 describe('generateToolSchemas', () => {
   it.prop([fc.uniqueArray(actionArb, { selector: (a) => a.name, minLength: 1 })])(

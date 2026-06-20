@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { act, render } from '@testing-library/react';
+// biome-ignore lint/correctness/noUnusedImports: grandfathered at Biome adoption — fix and remove over time
 import React from 'react';
-import { render, act } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { AgentTarget } from '../components/AgentTarget';
-import { useAgentAction } from '../hooks/useAgentAction';
-import { useAgentActions } from '../hooks/useAgentActions';
 import { defineAction } from '../core/helpers';
+import { useAgentAction } from '../hooks/useAgentAction';
+import type { useAgentActions } from '../hooks/useAgentActions';
 import { TestConsumer } from './testUtils';
 
 // End-to-end proof that a step's `intent` flows AgentTarget(meta) -> registry ->
@@ -14,18 +15,22 @@ describe('flexible intent resolution (integration)', () => {
   function TypeRows({ onApartments }: { onApartments: () => void }) {
     return (
       <>
+        {/** biome-ignore lint/a11y/useValidAriaRole: grandfathered at Biome adoption — fix and remove over time */}
         <AgentTarget
           name="type-row:201|219"
           role="type"
           attrs={{ label: 'Apartments', ids: ['201', '219'], level: 'CITY' }}
         >
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button onClick={onApartments}>Apartments</button>
         </AgentTarget>
+        {/** biome-ignore lint/a11y/useValidAriaRole: grandfathered at Biome adoption — fix and remove over time */}
         <AgentTarget
           name="type-row:213"
           role="type"
           attrs={{ label: 'Villas', ids: ['213'], level: 'CITY' }}
         >
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
           <button>Villas</button>
         </AgentTarget>
       </>
@@ -52,6 +57,7 @@ describe('flexible intent resolution (integration)', () => {
       </AgentActionProvider>,
     );
 
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const result = await act(() => ctx!.execute('pick_type'));
     expect(result.error).toBeUndefined();
     // ['201'] is a subset of the Apartments row's ['201','219'] — Villas is disjoint.
@@ -79,6 +85,7 @@ describe('flexible intent resolution (integration)', () => {
       </AgentActionProvider>,
     );
 
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const result = await act(() => ctx!.execute('pick_villas'));
     expect(result.error).toBeUndefined();
     expect(onApartments).not.toHaveBeenCalled(); // matched Villas, not Apartments
@@ -95,15 +102,31 @@ describe('flexible intent resolution (integration)', () => {
       useAgentAction({
         ...action,
         steps: [
-          { label: 'select op', timeout: 1200, intent: { role: 'operator', attrs: { id: '405776' } } },
+          {
+            label: 'select op',
+            timeout: 1200,
+            intent: { role: 'operator', attrs: { id: '405776' } },
+          },
         ],
       });
       return (
         <>
-          <AgentTarget name="op:405776" role="operator" attrs={{ id: '405776', label: 'COORIE HOME STAYS LTD' }}>
+          {/** biome-ignore lint/a11y/useValidAriaRole: grandfathered at Biome adoption — fix and remove over time */}
+          <AgentTarget
+            name="op:405776"
+            role="operator"
+            attrs={{ id: '405776', label: 'COORIE HOME STAYS LTD' }}
+          >
+            {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
             <button onClick={onCoorie}>COORIE HOME STAYS LTD</button>
           </AgentTarget>
-          <AgentTarget name="op:15357642" role="operator" attrs={{ id: '15357642', label: 'GuestReady' }}>
+          {/** biome-ignore lint/a11y/useValidAriaRole: grandfathered at Biome adoption — fix and remove over time */}
+          <AgentTarget
+            name="op:15357642"
+            role="operator"
+            attrs={{ id: '15357642', label: 'GuestReady' }}
+          >
+            {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
             <button>GuestReady</button>
           </AgentTarget>
         </>
@@ -117,6 +140,7 @@ describe('flexible intent resolution (integration)', () => {
       </AgentActionProvider>,
     );
 
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
     const result = await act(() => ctx!.execute('pick_op'));
     expect(result.error).toBeUndefined();
     expect(onCoorie).toHaveBeenCalledTimes(1); // clicked the visible row by id, no search
