@@ -20,12 +20,15 @@ import type { TargetIntent } from '../resolvers/types';
 
 export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
 
-// biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
+// `def` comes from the heterogeneous `registry` list, where each action carries its
+// own param schema, so it must be param-erased. `any` is load-bearing: the default
+// `z.ZodType<Record<string, unknown>>` would reject a concrete action schema because
+// `StepDefinition`'s callbacks are contravariant under `strictFunctionTypes`.
+// biome-ignore lint/suspicious/noExplicitAny: load-bearing param erasure for a heterogeneous action collection — see comment above
 function schemaToRegisteredAction(def: ActionSchema<any>): RegisteredAction {
   return {
     ...def,
-    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-    resolveSteps: () => (def.steps as any[]) ?? [],
+    resolveSteps: () => def.steps ?? [],
   };
 }
 /**
@@ -409,21 +412,18 @@ export function AgentActionProvider({
           resolveTarget,
         };
 
-        // Validate params against the Zod schema before executing.
-        // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-        const schema = action.parameters as any;
-        if (schema?.safeParse) {
+        // Validate params against the Zod schema before executing. Guard
+        // safeParse at runtime too: an untyped JS caller can register an action
+        // whose `parameters` isn't actually a Zod schema, and we must not throw.
+        const schema = action.parameters;
+        if (typeof schema?.safeParse === 'function') {
           const validation = schema.safeParse(params ?? {});
           if (!validation.success) {
-            const missing = validation.error.issues
-              // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-              .map((i: any) => i.path.join('.'))
-              .filter(Boolean);
+            const missing = validation.error.issues.map((i) => i.path.join('.')).filter(Boolean);
             const error =
               missing.length > 0
                 ? `Required parameters missing: ${missing.join(', ')}`
-                : // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-                  validation.error.issues.map((i: any) => i.message).join('; ');
+                : validation.error.issues.map((i) => i.message).join('; ');
             return { actionName, error, trace: [], durationMs: performance.now() - start };
           }
         }

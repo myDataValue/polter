@@ -2,7 +2,12 @@ import { useCallback, useContext, useEffect, useRef } from 'react';
 import { AgentActionContext } from '../components/AgentActionProvider';
 import type { ActionDefinition, StepDefinition } from '../core/types';
 
-// biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
+// Callers pass a heterogeneous list of actions, each with its own param schema, so
+// the element type must be param-erased. `any` is load-bearing: `StepDefinition`'s
+// callbacks are contravariant under `strictFunctionTypes`, and only `any` keeps a
+// concrete `ActionDefinition<{ id: number }>` assignable (`unknown` /
+// `Record<string, unknown>` / `z.ZodTypeAny` all reject it).
+// biome-ignore lint/suspicious/noExplicitAny: load-bearing param erasure for a heterogeneous action collection — see comment above
 export function useAgentAction(...configs: ActionDefinition<any>[]): void {
   const context = useContext(AgentActionContext);
   if (!context) {

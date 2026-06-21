@@ -10,6 +10,7 @@ afterEach(() => {
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { AgentTarget } from '../components/AgentTarget';
 import { defineAction } from '../core/helpers';
+import type { ExecutionResult } from '../core/types';
 import { useAgentAction } from '../hooks/useAgentAction';
 import type { useAgentActions } from '../hooks/useAgentActions';
 import { TestConsumer } from './testUtils';
@@ -158,12 +159,10 @@ function Harness({
     steps: [
       {
         label: 'Click edit price',
-        // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-        target: (p: any) => `edit-${p.property_id}`,
+        target: (p) => `edit-${String(p.property_id)}`,
         scrollTo: {
           dispatchEvent: 'agent:scroll-to',
-          // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-          detail: (p: any) => ({ property_id: p.property_id }),
+          detail: (p) => ({ property_id: p.property_id }),
         },
       },
       { label: 'Set markup value', target: 'acc-markup-input', value: '25' },
@@ -222,6 +221,17 @@ function race<T>(p: Promise<T>, ms: number): Promise<T | { __timedOut: true }> {
   });
 }
 
+/** True when a `race()` result is the timeout sentinel rather than a real outcome. */
+function timedOut(result: ExecutionResult | { __timedOut: true }): result is { __timedOut: true } {
+  return '__timedOut' in result;
+}
+
+/** Assert a `race()` result is a real ExecutionResult (not the timeout sentinel) and return it. */
+function executionResult(result: ExecutionResult | { __timedOut: true }): ExecutionResult {
+  if (timedOut(result)) throw new Error('execution timed out before producing a result');
+  return result;
+}
+
 const TARGET_PROPERTY = 4215213;
 const PROPERTIES = Array.from({ length: 50 }, (_, i) => ({ id: 4215200 + i }));
 
@@ -250,8 +260,7 @@ describe('PRO-184 — virtualized table + InlineEditableCell with LOCAL state', 
       );
     }, 50);
 
-    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-    let result: any;
+    let result: ExecutionResult | { __timedOut: true };
     try {
       result = await act(async () =>
         // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
@@ -262,12 +271,9 @@ describe('PRO-184 — virtualized table + InlineEditableCell with LOCAL state', 
     }
 
     // Polter now fails cleanly with a diagnostic error (a fix from this PR).
-    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-    expect((result as any).__timedOut).toBeUndefined();
-    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-    expect((result as any).error).toMatch(/Target "acc-markup-input"/);
-    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-    expect((result as any).error).toMatch(/edit_markup/);
+    expect(timedOut(result)).toBe(false);
+    expect(executionResult(result).error).toMatch(/Target "acc-markup-input"/);
+    expect(executionResult(result).error).toMatch(/edit_markup/);
 
     // The input was never on screen while polter was looking.
     // biome-ignore lint/complexity/useIndexOf: grandfathered at Biome adoption — fix and remove over time
@@ -295,10 +301,8 @@ describe('PRO-184 — same scenario, editing state lifted to shared map', () => 
       race(ctx!.execute('edit_markup', { property_id: TARGET_PROPERTY }), 5000),
     );
 
-    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-    expect((result as any).__timedOut).toBeUndefined();
-    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-    expect((result as any).error).toBeUndefined();
+    expect(timedOut(result)).toBe(false);
+    expect(executionResult(result).error).toBeUndefined();
     expect((screen.getByTestId(`input-${TARGET_PROPERTY}`) as HTMLInputElement).value).toBe('25');
   }, 15000);
 });
@@ -376,10 +380,8 @@ describe('PRO-184 — control: no recycle, local state works fine', () => {
       race(ctx!.execute('edit_markup', { property_id: TARGET_PROPERTY }), 5000),
     );
 
-    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-    expect((result as any).__timedOut).toBeUndefined();
-    // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-    expect((result as any).error).toBeUndefined();
+    expect(timedOut(result)).toBe(false);
+    expect(executionResult(result).error).toBeUndefined();
     expect((screen.getByTestId(`input-${TARGET_PROPERTY}`) as HTMLInputElement).value).toBe('25');
   }, 15000);
 });
