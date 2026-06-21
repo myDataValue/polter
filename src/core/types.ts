@@ -123,8 +123,7 @@ export interface AgentTargetEntry extends TargetDefinition {
   readonly element: HTMLElement;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
-export interface RegisteredAction<TSchema extends z.ZodType = any>
+export interface RegisteredAction<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>>
   extends Pick<
     ActionDefinition<TSchema>,
     'name' | 'description' | 'parameters' | 'navigateTo' | 'disabledReason'
@@ -257,8 +256,16 @@ export interface AgentActionProviderProps {
   children: React.ReactNode;
   onExecutionStart?: (actionName: string) => void;
   onExecutionComplete?: (result: ExecutionResult) => void;
-  /** Pre-defined actions whose schemas are available before their components mount. */
-  // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
+  /**
+   * Pre-defined actions whose schemas are available before their components mount.
+   * This is a heterogeneous list — each action carries its own param schema — so the
+   * element type must be param-erased. `any` is load-bearing here: `StepDefinition`'s
+   * callbacks are function-valued props checked contravariantly under
+   * `strictFunctionTypes`, and only an `any` param keeps a concrete
+   * `ActionSchema<{ id: number }>` assignable. `unknown`, `Record<string, unknown>`,
+   * and `z.ZodTypeAny` (= `ZodType<unknown>` in Zod 4) all reject it.
+   */
+  // biome-ignore lint/suspicious/noExplicitAny: load-bearing param erasure for a heterogeneous action collection — see doc above
   registry?: ActionSchema<any>[];
   /**
    * When true, emit verbose `[polter]` console logs during target resolution

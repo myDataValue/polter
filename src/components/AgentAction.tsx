@@ -4,7 +4,10 @@ import { useAgentAction } from '../hooks/useAgentAction';
 import { AgentTarget } from './AgentTarget';
 
 interface AgentActionProps extends Pick<ActionDefinition, 'disabledReason' | 'waitFor'> {
-  // biome-ignore lint/suspicious/noExplicitAny: grandfathered at Biome adoption — fix and remove over time
+  // Param-erased so any concrete action schema is accepted. `any` is load-bearing:
+  // the default `z.ZodType<Record<string, unknown>>` would reject a typed schema
+  // because `StepDefinition`'s callbacks are contravariant under `strictFunctionTypes`.
+  // biome-ignore lint/suspicious/noExplicitAny: load-bearing param erasure — accepts any concrete action schema; see comment above
   action: ActionSchema<any>;
   children?: React.ReactNode;
 }
