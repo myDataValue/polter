@@ -10,8 +10,8 @@ A minimal example showing polter driving a fake CRM dashboard. Click a suggestio
 ## Run locally
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ## What it shows
