@@ -31,10 +31,10 @@ To test your local changes against the example app:
 # 1. From the polter root, build the package
 pnpm build
 
-# 2. From the example directory, link to your local build
+# 2. From the example directory, link to your local build (link before install)
 cd examples/basic
-pnpm install
 pnpm link ../..
+pnpm install
 
 # 3. Start the example dev server
 pnpm dev

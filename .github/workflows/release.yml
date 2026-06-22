@@ -63,9 +63,9 @@ jobs:
             require('fs').writeFileSync('./examples/basic/package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
-          # Sync root pnpm-lock.yaml so its version field matches the
-          # bumped package.json — no registry lookup needed since polter
-          # isn't a dependency of itself.
+          # Refresh the root pnpm-lock.yaml after the bump. Unlike npm, pnpm's
+          # lockfile doesn't record the package's own version, so this is
+          # usually a no-op — it just guards against incidental drift.
           pnpm install --lockfile-only
 
           echo "Bumped version to $NEW_VERSION"

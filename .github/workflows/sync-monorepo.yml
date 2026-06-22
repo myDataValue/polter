@@ -72,6 +72,7 @@ jobs:
             --exclude=".git" \
             --exclude=".github" \
             --exclude="/pnpm-lock.yaml" \
+            --exclude="pnpm-workspace.yaml" \
             polter-public/ \
             mydata/libs/polter/
 

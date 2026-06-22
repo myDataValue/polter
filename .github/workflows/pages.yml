@@ -35,11 +35,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
 
-      # Build the example against the local build
-      - working-directory: examples/basic
-        run: pnpm install --frozen-lockfile
+      # Build the example against the local build (link before install so the
+      # frozen install resolves @mydatavalue/polter to the local build, not npm)
       - working-directory: examples/basic
         run: pnpm link ../..
+      - working-directory: examples/basic
+        run: pnpm install --frozen-lockfile
       - working-directory: examples/basic
         run: pnpm exec vite build --base=/polter/demo/
 
