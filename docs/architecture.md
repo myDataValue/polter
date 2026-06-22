@@ -438,5 +438,5 @@ The framework-agnostic core path quietly happens as a side effect of step 1. Whe
 ## Verification (when we start moving)
 
 - Existing tests in `src/__tests__/` are black-box against the public API; they should pass through Phase 1 unchanged. Any failing test signals an unintended public-API change.
-- `examples/basic` is the integration test: run `npm run dev` from there and confirm `find_and_email` and `filter_and_export` still work end-to-end.
+- `examples/basic` is the integration test: run `pnpm dev` from there and confirm `find_and_email` and `filter_and_export` still work end-to-end.
 - For Q1, port `find_and_email` to `state()` form in a branch and verify both paths produce identical execution traces (`StepTrace[]`).
