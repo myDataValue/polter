@@ -22,23 +22,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
 
       # Build polter (the example imports from it)
-      - run: npm ci
-      - run: npm run build
-      - run: npm link
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
 
-      # Build the example against the local build
+      # Build the example against the local build (link before install so the
+      # frozen install resolves @mydatavalue/polter to the local build, not npm)
       - working-directory: examples/basic
-        run: npm ci
+        run: pnpm link ../..
       - working-directory: examples/basic
-        run: npm link @mydatavalue/polter
+        run: pnpm install --frozen-lockfile
       - working-directory: examples/basic
-        run: npx vite build --base=/polter/demo/
+        run: pnpm exec vite build --base=/polter/demo/
 
       # Assemble: docs/ as root, example build as /demo/
       - run: |
