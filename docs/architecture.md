@@ -55,7 +55,7 @@ flowchart TB
   Provider -->|navigate before mount| DOM
 ```
 
-**What this surfaces:** the React-coupled surface is *only* the boxes in the top subgraph (Provider + 3 components + 3 hooks). Everything below — `core/`, the registry data structures, the executor — is already pure TS today. The cyan/blue line is roughly the same line as `src/components/` + `src/hooks/` vs. `src/core/` + `src/executor/`. The pure side contains all the *behavior*; the React side is mostly lifecycle wiring.
+**What this surfaces:** the React-coupled surface is _only_ the boxes in the top subgraph (Provider + 3 components + 3 hooks). Everything below — `core/`, the registry data structures, the executor — is already pure TS today. The cyan/blue line is roughly the same line as `src/components/` + `src/hooks/` vs. `src/core/` + `src/executor/`. The pure side contains all the _behavior_; the React side is mostly lifecycle wiring.
 
 A subtlety worth flagging: the Provider keeps **two** action maps. `registryRef` holds the schema-only entries from the `registry` prop, so the LLM sees tool schemas before any component mounts. `actionsRef` holds the active version — when a component mounts, its richer entry (with steps) overrides the registry version; on unmount the registry version is restored. This is what lets a registry action click navigation targets, wait for the destination component to mount, then run the mounted component's steps.
 
@@ -99,7 +99,7 @@ flowchart LR
   CreatePolter --> GoalTree
 ```
 
-**What this surfaces:** the adapter surface is small (7 thin shells) and homogeneous (all just call `polter.register*` in lifecycle hooks). A `@polter/vue` or `@polter/vanilla` would mirror this same shape. `AgentDevTools` is the lone fat React-only component; it stays in the adapter because it *is* a UI.
+**What this surfaces:** the adapter surface is small (7 thin shells) and homogeneous (all just call `polter.register*` in lifecycle hooks). A `@polter/vue` or `@polter/vanilla` would mirror this same shape. `AgentDevTools` is the lone fat React-only component; it stays in the adapter because it _is_ a UI.
 
 ### 1c. Attribute-based target resolution (shipped)
 
@@ -166,6 +166,7 @@ classDiagram
 ```
 
 Things to notice:
+
 - `StepDefinition` is generic on `TParams` (inferred from the action's Zod schema). `skipIf`, `value` (when a function), `target` (when a function), and `scrollTo` all receive the typed params.
 - `target` is unified: a string for static names, or `(params) => string` for dynamic names like `find_and_email/customer:${p.name}`. There is no separate `fromParam`/`fromTarget` field anymore.
 - `value` likewise: a string for literals (e.g. `''` to clear an input), or `(params) => string | undefined`. Returning `undefined` from the function falls through to a click instead of typing. The exported `fromParam('name')` helper is just sugar for `(p) => String(p.name)`.
@@ -278,7 +279,7 @@ sequenceDiagram
 Two execution-flow features that aren't immediately visible from the type diagrams:
 
 - **Registry-driven navigation.** A registry-only action with `navigateTo` set clicks the named AgentTarget(s), then polls `actionsRef` until the matching component mounts (`waitForActionMount`, using `mountTimeout`). This is how you ship an LLM-callable schema before the component for that screen has rendered.
-- **Two-phase execution.** When a registry-only action runs and succeeds without an upgrade happening *during* execution, the Provider gives the component another chance to mount and runs the mounted version's steps too. The traces concatenate. This makes "navigate then act" composable without writing it as a goal tree by hand.
+- **Two-phase execution.** When a registry-only action runs and succeeds without an upgrade happening _during_ execution, the Provider gives the component another chance to mount and runs the mounted version's steps too. The traces concatenate. This makes "navigate then act" composable without writing it as a goal tree by hand.
 - **Re-checking `skipIf` during target polling.** `resolveTarget` is given a `skipCheck` closure; if a prior step's click triggered a state update that makes the current step unnecessary, the executor bails the wait early instead of timing out. This is a partial workaround for the same problem Q1 wants to solve at the design level.
 
 ### 5. The pain visualised — current `find_and_email` as a goal tree
@@ -317,7 +318,7 @@ Today the user authors this tree as a flat list of 5 steps, each carrying a hand
 { label: "Click 'Send email'",  target: 'find_and_email/send-email-btn' },
 ```
 
-The `skipIf` on step 2 has to OR together three conditions because *any* of them mean step 2 is unnecessary. Each step's predicate has to anticipate every state the prior steps might leave the world in. This is a flattened tree.
+The `skipIf` on step 2 has to OR together three conditions because _any_ of them mean step 2 is unnecessary. Each step's predicate has to anticipate every state the prior steps might leave the world in. This is a flattened tree.
 
 ---
 
@@ -345,7 +346,7 @@ Each item: current state, leaning, what diagram or design move it implies. Numbe
 
 **Today:** Only `availableActions` (which actions are enabled, plus `disabledReason`) is exposed. State is opaque.
 
-**Leaning:** Lightweight middle path — let actions/steps optionally surface their *current value* (e.g., `find_and_email` schema includes `currentSelection: 'Sarah Chen'`). Falls out for free if Q1 lands: every `state({ test, ... })` node is queryable.
+**Leaning:** Lightweight middle path — let actions/steps optionally surface their _current value_ (e.g., `find_and_email` schema includes `currentSelection: 'Sarah Chen'`). Falls out for free if Q1 lands: every `state({ test, ... })` node is queryable.
 
 Out of scope (for now): full DOM/AX-tree dump, à la WebArena/Mind2Web. High token cost, requires opt-in declaration of what's surface-worthy.
 
@@ -353,7 +354,7 @@ Out of scope (for now): full DOM/AX-tree dump, à la WebArena/Mind2Web. High tok
 
 ### Q4. Should actions return values, not just on failure?
 
-**Today (partial):** `ExecutionResult { actionName, error?, trace, durationMs, outcome? }`. Error presence is the signal — the `success` boolean was removed in v2 in favor of error-as-narrowing. `outcome` already carries the value the action's `waitFor` promise resolved to, so an action can report a structured result (e.g. applied-immediately vs. confirmation-card-shown). What's still missing is a *declared* return type: no `returns: ZodSchema` on `defineAction` and no generic `ExecutionResult<T>`, so the LLM can't see the shape up front.
+**Today (partial):** `ExecutionResult { actionName, error?, trace, durationMs, outcome? }`. Error presence is the signal — the `success` boolean was removed in v2 in favor of error-as-narrowing. `outcome` already carries the value the action's `waitFor` promise resolved to, so an action can report a structured result (e.g. applied-immediately vs. confirmation-card-shown). What's still missing is a _declared_ return type: no `returns: ZodSchema` on `defineAction` and no generic `ExecutionResult<T>`, so the LLM can't see the shape up front.
 
 **Leaning:** Yes. Add `returns: ZodSchema` to `defineAction` and a component-side `getResult: () => T` callback. Most natural for actions like `find_customer` (returns the record), `count_active` (returns the number). Doesn't conflict with anything.
 
@@ -397,7 +398,7 @@ Out of scope (for now): full DOM/AX-tree dump, à la WebArena/Mind2Web. High tok
 
 **Leaning:** Lift the registry into a framework-neutral `createPolter()` factory (Phase 1 from the earlier discussion). The Provider becomes a thin shell. This isn't a public-API change. Whether we ever publish `@polter/vanilla` or `@polter/vue` is a separate marketing call — the architectural boundary is worth having either way.
 
-Hooking *deeper* into React (fiber traversal, react-reconciler hooks, displayName-based auto-detection) was considered and dropped: React internals aren't a stable API, the wins (auto-target detection) are better delivered via a build-time codemod, and the things we actually want (idempotent steps, structured state) come from Q1, not from fiber visibility.
+Hooking _deeper_ into React (fiber traversal, react-reconciler hooks, displayName-based auto-detection) was considered and dropped: React internals aren't a stable API, the wins (auto-target detection) are better delivered via a build-time codemod, and the things we actually want (idempotent steps, structured state) come from Q1, not from fiber visibility.
 
 **Implications:** Lift `AgentActionProvider:45-587` (the function body — registry refs, registry-prop sync, register/unregister, resolveTarget, waitForActionMount, navigateTo target preparation, execute) into `core/createPolter.ts`. Provider becomes ~50 LOC. `useSyncExternalStore` for subscriptions. Tests pass unchanged (black-box against public API). See Diagram 1b for the moves/stays split.
 
@@ -419,20 +420,20 @@ The framework-agnostic core path quietly happens as a side effect of step 1. Whe
 
 ## Critical files
 
-| File | LOC | Role |
-|---|---:|---|
-| `src/components/AgentActionProvider.tsx` | 587 | Two action maps + targets map + execute orchestration — Phase 1 lift target |
-| `src/executor/visualExecutor.ts` | 729 | Step loop, element resolution, click/type/spotlight effects — Q1 target |
-| `src/core/types.ts` | 277 | All shared types — Q4/Q6 target |
-| `src/core/helpers.ts` | 55 | `defineAction` + `fromParam` helper — Q4/Q6/Q8 target |
-| `src/core/schemaGenerator.ts` | 29 | Zod v4 → JSON Schema |
-| `src/components/AgentAction.tsx` | 26 | Convenience wrapper over `useAgentAction` + `<AgentTarget>` |
-| `src/components/AgentTarget.tsx` | 99 | Target registration + `MutationObserver` for nested mounts |
-| `src/hooks/useAgentAction.ts` | 46 | Hook-based registration; latest-config ref pattern |
-| `src/resolvers/scoring.ts` | 141 | Attribute-based target matching — `matchTargets`, scoring, thresholds (see 1c) |
-| `src/resolvers/types.ts` | 71 | `TargetIntent` / `TargetAttrs` / match-result types |
-| `src/components/AgentDevTools.tsx` | 602 | In-app dev UI for inspecting and running actions (React-only; stays in the adapter) |
-| `examples/basic/src/App.tsx:99-125` | — | The `skipIf` pile — best case study for Q1 |
+| File                                     | LOC | Role                                                                                |
+| ---------------------------------------- | --: | ----------------------------------------------------------------------------------- |
+| `src/components/AgentActionProvider.tsx` | 587 | Two action maps + targets map + execute orchestration — Phase 1 lift target         |
+| `src/executor/visualExecutor.ts`         | 729 | Step loop, element resolution, click/type/spotlight effects — Q1 target             |
+| `src/core/types.ts`                      | 277 | All shared types — Q4/Q6 target                                                     |
+| `src/core/helpers.ts`                    |  55 | `defineAction` + `fromParam` helper — Q4/Q6/Q8 target                               |
+| `src/core/schemaGenerator.ts`            |  29 | Zod v4 → JSON Schema                                                                |
+| `src/components/AgentAction.tsx`         |  26 | Convenience wrapper over `useAgentAction` + `<AgentTarget>`                         |
+| `src/components/AgentTarget.tsx`         |  99 | Target registration + `MutationObserver` for nested mounts                          |
+| `src/hooks/useAgentAction.ts`            |  46 | Hook-based registration; latest-config ref pattern                                  |
+| `src/resolvers/scoring.ts`               | 141 | Attribute-based target matching — `matchTargets`, scoring, thresholds (see 1c)      |
+| `src/resolvers/types.ts`                 |  71 | `TargetIntent` / `TargetAttrs` / match-result types                                 |
+| `src/components/AgentDevTools.tsx`       | 602 | In-app dev UI for inspecting and running actions (React-only; stays in the adapter) |
+| `examples/basic/src/App.tsx:99-125`      |   — | The `skipIf` pile — best case study for Q1                                          |
 
 ## Verification (when we start moving)
 
