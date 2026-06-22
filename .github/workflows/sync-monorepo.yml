@@ -47,20 +47,6 @@ jobs:
           ref: main
           path: mydata
 
-      - name: Setup pnpm
-        if: steps.export-check.outputs.skip != 'true'
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
-      - name: Setup Node
-        if: steps.export-check.outputs.skip != 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: mydata/pnpm-lock.yaml
-
       - name: Copy public Polter into monorepo
         if: steps.export-check.outputs.skip != 'true'
         run: |
@@ -76,11 +62,6 @@ jobs:
             polter-public/ \
             mydata/libs/polter/
 
-      - name: Regenerate monorepo pnpm lockfile
-        if: steps.export-check.outputs.skip != 'true'
-        working-directory: mydata
-        run: pnpm install --lockfile-only --ignore-scripts
-
       - name: Commit and push monorepo sync branch
         if: steps.export-check.outputs.skip != 'true'
         id: monorepo-sync-commit
@@ -91,7 +72,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git switch -C "$SYNC_BRANCH"
-          git add -A libs/polter pnpm-lock.yaml
+          git add -A libs/polter
 
           if git diff --quiet --cached; then
             echo "Monorepo Polter package is already in sync."
