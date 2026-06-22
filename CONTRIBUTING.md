@@ -48,6 +48,6 @@ To unlink when you're done:
 
 ```bash
 cd examples/basic
-pnpm unlink --global @mydatavalue/polter
+pnpm unlink @mydatavalue/polter
 pnpm install
 ```
