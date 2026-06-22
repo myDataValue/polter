@@ -47,13 +47,19 @@ jobs:
           ref: main
           path: mydata
 
+      - name: Setup pnpm
+        if: steps.export-check.outputs.skip != 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
       - name: Setup Node
         if: steps.export-check.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: mydata/package-lock.json
+          cache: pnpm
+          cache-dependency-path: mydata/pnpm-lock.yaml
 
       - name: Copy public Polter into monorepo
         if: steps.export-check.outputs.skip != 'true'
@@ -65,14 +71,14 @@ jobs:
           rsync -a \
             --exclude=".git" \
             --exclude=".github" \
-            --exclude="/package-lock.json" \
+            --exclude="/pnpm-lock.yaml" \
             polter-public/ \
             mydata/libs/polter/
 
-      - name: Regenerate monorepo npm lockfile
+      - name: Regenerate monorepo pnpm lockfile
         if: steps.export-check.outputs.skip != 'true'
         working-directory: mydata
-        run: npm install --package-lock-only --ignore-scripts
+        run: pnpm install --lockfile-only --ignore-scripts
 
       - name: Commit and push monorepo sync branch
         if: steps.export-check.outputs.skip != 'true'
@@ -84,7 +90,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git switch -C "$SYNC_BRANCH"
-          git add -A libs/polter package-lock.json
+          git add -A libs/polter pnpm-lock.yaml
 
           if git diff --quiet --cached; then
             echo "Monorepo Polter package is already in sync."
@@ -130,7 +136,7 @@ jobs:
               '',
               'This PR was created after changes landed in the public open-source',
               'Polter repository. Public-only files such as `.github/**` and the',
-              'public root `package-lock.json` are not copied into the monorepo.',
+              'public root `pnpm-lock.yaml` are not copied into the monorepo.',
             ].join('\n');
 
             try {
