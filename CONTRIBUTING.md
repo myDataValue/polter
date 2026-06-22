@@ -23,19 +23,18 @@ pnpm test         # run tests
 pnpm test:watch   # run tests in watch mode
 ```
 
-## Running the basic example with a global link
+## Running the basic example
 
 To test your local changes against the example app:
 
 ```bash
-# 1. From the polter root, build and register the package globally
+# 1. From the polter root, build the package
 pnpm build
-pnpm link --global
 
 # 2. From the example directory, link to your local build
 cd examples/basic
 pnpm install
-pnpm link --global @mydatavalue/polter
+pnpm link ../..
 
 # 3. Start the example dev server
 pnpm dev

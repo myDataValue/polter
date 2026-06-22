@@ -34,13 +34,12 @@ jobs:
       # Build polter (the example imports from it)
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      - run: pnpm link --global
 
       # Build the example against the local build
       - working-directory: examples/basic
         run: pnpm install --frozen-lockfile
       - working-directory: examples/basic
-        run: pnpm link --global @mydatavalue/polter
+        run: pnpm link ../..
       - working-directory: examples/basic
         run: pnpm exec vite build --base=/polter/demo/
 
