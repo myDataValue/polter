@@ -20,17 +20,21 @@ The agent drives the UI by clicking through steps — the same way a human user 
 ```tsx
 useAgentAction(
   defineAction({
-    name: 'edit_markup',
-    description: 'Edit markup for a property',
+    name: "edit_markup",
+    description: "Edit markup for a property",
     parameters: z.object({
       property_id: z.number(),
       markup: z.number(),
     }),
     steps: [
-      { label: 'Click edit', target: (p) => `edit:${p.property_id}` },
-      { label: 'Set value', target: 'markup-input', value: fromParam('markup') },
-      { label: 'Save', target: 'save-btn' },
-      { label: 'Confirm', target: 'confirm-btn' },
+      { label: "Click edit", target: (p) => `edit:${p.property_id}` },
+      {
+        label: "Set value",
+        target: "markup-input",
+        value: fromParam("markup"),
+      },
+      { label: "Save", target: "save-btn" },
+      { label: "Confirm", target: "confirm-btn" },
     ],
   }),
 );
@@ -48,15 +52,17 @@ When the last step click triggers async work (a mutation, a streaming response),
 const pushRef = useRef<Promise<void>>();
 
 // Button's onClick sets the ref
-<Button onClick={() => { pushRef.current = pushMutation(); }} />
+<Button
+  onClick={() => {
+    pushRef.current = pushMutation();
+  }}
+/>;
 
 useAgentAction(
   defineAction({
-    name: 'push_changes',
-    description: 'Push pending changes to the server',
-    steps: [
-      { label: 'Click Push', target: 'push-btn' },
-    ],
+    name: "push_changes",
+    description: "Push pending changes to the server",
+    steps: [{ label: "Click Push", target: "push-btn" }],
     waitFor: pushRef,
   }),
 );
@@ -78,8 +84,8 @@ onClick={() => {
 `navigateTo` clicks one or more AgentTargets before steps run — a shortcut for "first land on the right page." Pass a name to click one, or an array to click a sequence (e.g. open a dropdown, then click an item inside).
 
 ```ts
-navigateTo: 'navigate_to_dashboard'
-navigateTo: ['profile-menu', 'settings-tab']
+navigateTo: "navigate_to_dashboard";
+navigateTo: ["profile-menu", "settings-tab"];
 ```
 
 If a route has no UI entry point, add a clickable `<AgentTarget>` somewhere visible — even a hidden-but-mounted element with a Link inside is fine, as long as the click is a real DOM interaction.
@@ -88,12 +94,16 @@ For dynamic per-entity routes (e.g. property detail pages), use steps to search 
 
 ```ts
 export const navigateToProperty = defineAction({
-  name: 'navigate_to_property',
+  name: "navigate_to_property",
   parameters: z.object({ property_id: z.number() }),
-  navigateTo: 'navigate_to_dashboard',
+  navigateTo: "navigate_to_dashboard",
   steps: [
-    { label: 'Filter to property', target: 'search-input', value: fromParam('property_id') },
-    { label: 'Open property',      target: (p) => `property_id:${p.property_id}` },
+    {
+      label: "Filter to property",
+      target: "search-input",
+      value: fromParam("property_id"),
+    },
+    { label: "Open property", target: (p) => `property_id:${p.property_id}` },
   ],
 });
 ```
@@ -158,11 +168,11 @@ Define these steps on `defineAction` since they're static and don't need React c
 
 ```ts
 export const grantAccess = defineAction({
-  name: 'grant_access',
-  description: 'Grant bot access',
+  name: "grant_access",
+  description: "Grant bot access",
   steps: [
-    { label: 'Click Settings', target: 'settings-tab' },
-    { label: 'Click Grant Access', target: 'grant-link' },
+    { label: "Click Settings", target: "settings-tab" },
+    { label: "Click Grant Access", target: "grant-link" },
   ],
 });
 ```
@@ -217,18 +227,18 @@ If a component also provides steps via `useAgentAction`, those override the `def
 
 ## Design actions around outcomes, not interactions
 
-Actions should describe *what the user wants to achieve* — not the mechanical
+Actions should describe _what the user wants to achieve_ — not the mechanical
 steps to get there.
 
 ```tsx
 // Bad — imperative, one action per UI interaction
-name: 'toggle_dropdown'
-name: 'click_option'
-name: 'click_download'
+name: "toggle_dropdown";
+name: "click_option";
+name: "click_download";
 
 // Good — declarative, describes the desired outcome
-name: 'filter_and_export'
-parameters: z.object({ status: z.enum(['all', 'active', 'archived']) })
+name: "filter_and_export";
+parameters: z.object({ status: z.enum(["all", "active", "archived"]) });
 ```
 
 The agent says "filter to active items and export" — a single action with the
@@ -238,19 +248,29 @@ checks whether its interaction is still needed to reach that state:
 ```tsx
 useAgentAction(
   defineAction({
-    name: 'filter_and_export',
-    description: 'Filter items by status and export',
+    name: "filter_and_export",
+    description: "Filter items by status and export",
     parameters: z.object({
-      status: z.enum(['all', 'active', 'archived']),
+      status: z.enum(["all", "active", "archived"]),
     }),
     steps: [
-      { label: 'Clear search', value: '', target: 'search',
-        skipIf: () => query === '' },
-      { label: 'Open filter', target: 'status-toggle',
-        skipIf: ({ status }) => statusFilter === status || dropdownOpen },
-      { label: 'Pick status', target: (p) => `status:${p.status}`,
-        skipIf: ({ status }) => statusFilter === status },
-      { label: 'Click export', target: 'export-btn' },
+      {
+        label: "Clear search",
+        value: "",
+        target: "search",
+        skipIf: () => query === "",
+      },
+      {
+        label: "Open filter",
+        target: "status-toggle",
+        skipIf: ({ status }) => statusFilter === status || dropdownOpen,
+      },
+      {
+        label: "Pick status",
+        target: (p) => `status:${p.status}`,
+        skipIf: ({ status }) => statusFilter === status,
+      },
+      { label: "Click export", target: "export-btn" },
     ],
   }),
 );
@@ -270,17 +290,17 @@ components mark the DOM elements the agent interacts with:
 // Action definition — lives in the component that owns the state
 useAgentAction(
   defineAction({
-    name: 'delete_item',
-    description: 'Delete an item',
+    name: "delete_item",
+    description: "Delete an item",
     parameters: z.object({ item_id: z.string() }),
-    steps: [{ label: 'Click Delete', target: (p) => `delete:${p.item_id}` }],
+    steps: [{ label: "Click Delete", target: (p) => `delete:${p.item_id}` }],
   }),
 );
 
 // DOM ownership — AgentTargets live where the elements are rendered
 <AgentTarget name={`delete:${id}`}>
   <DeleteButton />
-</AgentTarget>
+</AgentTarget>;
 ```
 
 Batch-register multiple actions in one call:
@@ -288,22 +308,22 @@ Batch-register multiple actions in one call:
 ```tsx
 useAgentAction(
   defineAction({
-    name: 'view_item',
-    description: 'View item details',
+    name: "view_item",
+    description: "View item details",
     parameters: z.object({ item_id: z.string() }),
-    steps: [{ label: 'Click View', target: (p) => `view:${p.item_id}` }],
+    steps: [{ label: "Click View", target: (p) => `view:${p.item_id}` }],
   }),
   defineAction({
-    name: 'delete_item',
-    description: 'Delete an item',
+    name: "delete_item",
+    description: "Delete an item",
     parameters: z.object({ item_id: z.string() }),
-    steps: [{ label: 'Click Delete', target: (p) => `delete:${p.item_id}` }],
+    steps: [{ label: "Click Delete", target: (p) => `delete:${p.item_id}` }],
   }),
   defineAction({
-    name: 'edit_item',
-    description: 'Edit an item',
+    name: "edit_item",
+    description: "Edit an item",
     parameters: z.object({ item_id: z.string() }),
-    steps: [{ label: 'Click Edit', target: (p) => `edit:${p.item_id}` }],
+    steps: [{ label: "Click Edit", target: (p) => `edit:${p.item_id}` }],
   }),
 );
 ```
@@ -317,15 +337,22 @@ always see the latest component state:
 ```tsx
 steps: [
   // Skip if the correct filter is already applied or the dropdown is already open
-  { label: 'Open filter', target: 'filter-toggle',
-    skipIf: ({ status }) => statusFilter === status || dropdownOpen },
+  {
+    label: "Open filter",
+    target: "filter-toggle",
+    skipIf: ({ status }) => statusFilter === status || dropdownOpen,
+  },
   // Skip if already on the right status
-  { label: 'Pick status', target: (p) => `status:${p.status}`,
-    skipIf: ({ status }) => statusFilter === status },
-]
+  {
+    label: "Pick status",
+    target: (p) => `status:${p.status}`,
+    skipIf: ({ status }) => statusFilter === status,
+  },
+];
 ```
 
 Common patterns:
+
 - **Already applied**: `skipIf: ({ status }) => currentFilter === status`
 - **Already open**: `skipIf: () => dropdownOpen`
 - **Already selected**: `skipIf: ({ id }) => selectedId === id`
@@ -378,18 +405,21 @@ action's full shape in one place and matches how cross-page steps in
 
 ```tsx
 // Bad — conditionally rendering the AgentAction itself, action disappears when button is hidden
-{isReady && (
-  <AgentAction action={grantAccess}>
-    <Button onClick={handleGrant}>Grant Access</Button>
-  </AgentAction>
-)}
+{
+  isReady && (
+    <AgentAction action={grantAccess}>
+      <Button onClick={handleGrant}>Grant Access</Button>
+    </AgentAction>
+  );
+}
 
 // Good — AgentAction always registered, button conditionally rendered inside
-<AgentAction action={grantAccess} disabledReason={!isReady ? "Not ready" : undefined}>
-  {isReady && (
-    <Button onClick={handleGrant}>Grant Access</Button>
-  )}
-</AgentAction>
+<AgentAction
+  action={grantAccess}
+  disabledReason={!isReady ? "Not ready" : undefined}
+>
+  {isReady && <Button onClick={handleGrant}>Grant Access</Button>}
+</AgentAction>;
 ```
 
 ## Use `useAgentAction` hook for per-row and programmatic actions
@@ -400,10 +430,10 @@ When N rows each have their own button (sync, edit, navigate), you can't wrap ea
 // Hook registers the action once
 useAgentAction(
   defineAction({
-    name: 'sync_property',
-    description: 'Sync a property with external source',
+    name: "sync_property",
+    description: "Sync a property with external source",
     parameters: z.object({ property_id: z.number() }),
-    steps: [{ label: 'Click Sync', target: (p) => `sync:${p.property_id}` }],
+    steps: [{ label: "Click Sync", target: (p) => `sync:${p.property_id}` }],
   }),
 );
 
@@ -411,7 +441,7 @@ useAgentAction(
 // row identity into the name so the step's target function can find it.
 <AgentTarget name={`sync:${propertyId}`}>
   <SyncButton />
-</AgentTarget>
+</AgentTarget>;
 ```
 
 The hook also accepts rest params to batch-register multiple actions in one call:
@@ -419,22 +449,24 @@ The hook also accepts rest params to batch-register multiple actions in one call
 ```tsx
 useAgentAction(
   defineAction({
-    name: 'navigate_to_property',
-    description: 'Navigate to a property page',
+    name: "navigate_to_property",
+    description: "Navigate to a property page",
     parameters: z.object({ property_id: z.number() }),
-    steps: [{ label: 'Click Property', target: (p) => `property:${p.property_id}` }],
+    steps: [
+      { label: "Click Property", target: (p) => `property:${p.property_id}` },
+    ],
   }),
   defineAction({
-    name: 'sync_property',
-    description: 'Sync a property with external source',
+    name: "sync_property",
+    description: "Sync a property with external source",
     parameters: z.object({ property_id: z.number() }),
-    steps: [{ label: 'Click Sync', target: (p) => `sync:${p.property_id}` }],
+    steps: [{ label: "Click Sync", target: (p) => `sync:${p.property_id}` }],
   }),
   defineAction({
-    name: 'edit_markup',
-    description: 'Edit markup for a property',
+    name: "edit_markup",
+    description: "Edit markup for a property",
     parameters: z.object({ property_id: z.number(), markup: z.number() }),
-    steps: [{ label: 'Click Edit', target: (p) => `edit:${p.property_id}` }],
+    steps: [{ label: "Click Edit", target: (p) => `edit:${p.property_id}` }],
   }),
 );
 ```
@@ -512,34 +544,48 @@ then edit one — the save callback applies to the full selection.
 ```tsx
 useAgentAction(
   defineAction({
-    name: 'edit_markup',
-    description: 'Edit markup for one or more properties',
+    name: "edit_markup",
+    description: "Edit markup for one or more properties",
     parameters: z.object({
       property_ids: z.array(z.number()),
       markup: z.number(),
     }),
     steps: [
       // 1. Type IDs into the search box — String([1,2,3]) produces "1,2,3"
-      { label: 'Filter to target properties', target: 'search-input',
-        value: fromParam('property_ids'),
-        skipIf: (p) => (p.property_ids as number[]).length <= 1 },
+      {
+        label: "Filter to target properties",
+        target: "search-input",
+        value: fromParam("property_ids"),
+        skipIf: (p) => (p.property_ids as number[]).length <= 1,
+      },
 
       // 2. Select all filtered rows
-      { label: 'Select all filtered', target: 'select-all-checkbox',
-        skipIf: (p) => (p.property_ids as number[]).length <= 1 },
+      {
+        label: "Select all filtered",
+        target: "select-all-checkbox",
+        skipIf: (p) => (p.property_ids as number[]).length <= 1,
+      },
 
       // 3. Click edit on the first property — `target` as a function builds the
       //    AgentTarget name from params.
-      { label: 'Click edit', target: (p) => `edit:${(p.property_ids as number[])[0]}` },
+      {
+        label: "Click edit",
+        target: (p) => `edit:${(p.property_ids as number[])[0]}`,
+      },
 
       // 4. Type the value — save callback sees the selection and applies to all
-      { label: 'Set value', target: 'markup-input', value: fromParam('markup') },
+      {
+        label: "Set value",
+        target: "markup-input",
+        value: fromParam("markup"),
+      },
     ],
   }),
 );
 ```
 
 Key ingredients:
+
 - **Targets are resolved by name** — `search-input` and `select-all-checkbox`
   are matched by their `name` prop on `<AgentTarget>`
 - **`target` as a function** — for per-row targets, the step builds the name
@@ -572,24 +618,24 @@ give the target a name that both actions can reference:
       <ArchiveButton />
     </AgentTarget>
   </OverflowMenuPopover>
-</AgentTarget>
+</AgentTarget>;
 
 // Both actions find the same trigger
 useAgentAction(
   defineAction({
-    name: 'export_csv',
-    description: 'Export the current view to CSV',
+    name: "export_csv",
+    description: "Export the current view to CSV",
     steps: [
-      { label: 'Open menu', target: 'overflow-menu-btn' },
-      { label: 'Click Export', target: 'export-btn' },
+      { label: "Open menu", target: "overflow-menu-btn" },
+      { label: "Click Export", target: "export-btn" },
     ],
   }),
   defineAction({
-    name: 'archive_selected',
-    description: 'Archive the selected items',
+    name: "archive_selected",
+    description: "Archive the selected items",
     steps: [
-      { label: 'Open menu', target: 'overflow-menu-btn' },
-      { label: 'Click Archive', target: 'archive-btn' },
+      { label: "Open menu", target: "overflow-menu-btn" },
+      { label: "Click Archive", target: "archive-btn" },
     ],
   }),
 );
@@ -606,14 +652,18 @@ data makes the action's shape obvious in one place.
 // 4-step flow: open modal → select mode → type value → confirm
 useAgentAction(
   defineAction({
-    name: 'run_discount',
-    description: 'Apply a custom discount percentage',
+    name: "run_discount",
+    description: "Apply a custom discount percentage",
     parameters: z.object({ pct: z.number() }),
     steps: [
-      { label: 'Open settings', target: 'open-settings-btn' },
-      { label: 'Select custom mode', target: 'custom-mode-radio' },
-      { label: 'Set discount', target: 'discount-input', value: fromParam('pct') },
-      { label: 'Confirm', target: 'done-btn' },
+      { label: "Open settings", target: "open-settings-btn" },
+      { label: "Select custom mode", target: "custom-mode-radio" },
+      {
+        label: "Set discount",
+        target: "discount-input",
+        value: fromParam("pct"),
+      },
+      { label: "Confirm", target: "done-btn" },
     ],
   }),
 );
@@ -621,7 +671,7 @@ useAgentAction(
 // Trigger button — just a target
 <AgentTarget name="open-settings-btn">
   <OpenButton />
-</AgentTarget>
+</AgentTarget>;
 
 // Child component (dialog) — targets wrap interactive elements
 function SettingsDialog({ onSave }) {
@@ -635,7 +685,11 @@ function SettingsDialog({ onSave }) {
       </AgentTarget>
 
       <AgentTarget name="discount-input">
-        <Input value={value} onChange={e => setValue(+e.target.value)} disabled={mode !== "custom"} />
+        <Input
+          value={value}
+          onChange={(e) => setValue(+e.target.value)}
+          disabled={mode !== "custom"}
+        />
       </AgentTarget>
 
       <AgentTarget name="done-btn">
@@ -654,22 +708,22 @@ Polter clicks every step in sequence. If your action has only one step wrapping 
 // Bad — single step, dropdown opens but nothing is selected
 useAgentAction(
   defineAction({
-    name: 'filter_by_status',
-    description: 'Filter items by status',
+    name: "filter_by_status",
+    description: "Filter items by status",
     parameters: z.object({ status: z.string() }),
-    steps: [{ label: 'Open filter', target: 'filter-trigger' }],
+    steps: [{ label: "Open filter", target: "filter-trigger" }],
   }),
 );
 
 // Good — two steps: click to open, then select option
 useAgentAction(
   defineAction({
-    name: 'filter_by_status',
-    description: 'Filter items by status',
+    name: "filter_by_status",
+    description: "Filter items by status",
     parameters: z.object({ status: z.string() }),
     steps: [
-      { label: 'Open filter', target: 'filter-trigger' },
-      { label: 'Select option', target: (p) => `status:${p.status}` },
+      { label: "Open filter", target: "filter-trigger" },
+      { label: "Select option", target: (p) => `status:${p.status}` },
     ],
   }),
 );
@@ -688,8 +742,9 @@ from ignoring it — it's guidance, not enforcement.
 
 ```ts
 export const importData = defineAction({
-  name: 'import_data',
-  description: 'Import data from external source. Requires an active API connection.',
+  name: "import_data",
+  description:
+    "Import data from external source. Requires an active API connection.",
 });
 ```
 
@@ -724,9 +779,12 @@ satisfied.
 
 ```tsx
 steps: [
-  { label: 'Open dropdown', target: 'toggle',
-    skipIf: ({ status }) => statusFilter === status || dropdownOpen },
-]
+  {
+    label: "Open dropdown",
+    target: "toggle",
+    skipIf: ({ status }) => statusFilter === status || dropdownOpen,
+  },
+];
 ```
 
 Good for: multi-step actions where some steps are conditional on current state
@@ -745,7 +803,7 @@ const { schemas } = useAgentActions();
 useEffect(() => {
   sendToBackend({
     available_tools: schemas,
-    current_page: 'dashboard',
+    current_page: "dashboard",
     search_query: searchTerm,
     selected_count: selectedIds.size,
   });

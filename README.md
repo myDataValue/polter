@@ -18,7 +18,7 @@
   <a href="https://mydatavalue.github.io/polter/">Website</a>
 </p>
 
-Your UI *is* the agent's interface. Same buttons, same dropdowns, same forms
+Your UI _is_ the agent's interface. Same buttons, same dropdowns, same forms
 your users already click — single source of truth, zero duplicate tool layer. As
 a side effect, users watch the agent work and graduate off it for tasks they've
 seen once or twice.
@@ -42,7 +42,7 @@ bulk-edit modal, the per-row actions. Now the agent needs to do the same things
 that re-implement your UI in JSON. Every feature ships twice, and the two layers
 drift apart.
 
-**Polter's approach: your UI *is* the agent's interface.** The agent scrolls to
+**Polter's approach: your UI _is_ the agent's interface.** The agent scrolls to
 the real button, opens the real dropdown, clicks the real row. One mount, one
 schema, one click path — zero agent-specific tools to build.
 
@@ -61,8 +61,14 @@ npm install react react-dom zod
 ## Quick Start
 
 ```tsx
-import { AgentActionProvider, AgentAction, AgentTarget, useAgentAction, useAgentActions } from '@mydatavalue/polter';
-import { z } from 'zod';
+import {
+  AgentActionProvider,
+  AgentAction,
+  AgentTarget,
+  useAgentAction,
+  useAgentActions,
+} from "@mydatavalue/polter";
+import { z } from "zod";
 ```
 
 ### 1. Wrap your app
@@ -80,14 +86,14 @@ import { z } from 'zod';
 ```tsx
 // actions.ts
 const exportData = defineAction({
-  name: 'export_data',
-  description: 'Export the current view to CSV',
+  name: "export_data",
+  description: "Export the current view to CSV",
 });
 
 // Component
 <AgentAction action={exportData}>
   <ExportButton />
-</AgentAction>
+</AgentAction>;
 ```
 
 **Multi-step and parameterized actions** — use the `useAgentAction` hook with a
@@ -99,17 +105,23 @@ actually fire:
 // Component
 useAgentAction(
   defineAction({
-    name: 'filter_and_export',
-    description: 'Filter items by status and export',
+    name: "filter_and_export",
+    description: "Filter items by status and export",
     parameters: z.object({
-      status: z.enum(['all', 'active', 'archived']),
+      status: z.enum(["all", "active", "archived"]),
     }),
     steps: [
-      { label: 'Open filter', target: 'status-toggle',
-        skipIf: ({ status }) => statusFilter === status || dropdownOpen },
-      { label: 'Pick status', target: (p) => `status:${p.status}`,
-        skipIf: ({ status }) => statusFilter === status },
-      { label: 'Click export', target: 'export-btn' },
+      {
+        label: "Open filter",
+        target: "status-toggle",
+        skipIf: ({ status }) => statusFilter === status || dropdownOpen,
+      },
+      {
+        label: "Pick status",
+        target: (p) => `status:${p.status}`,
+        skipIf: ({ status }) => statusFilter === status,
+      },
+      { label: "Click export", target: "export-btn" },
     ],
   }),
 );
@@ -130,11 +142,14 @@ const { schemas, execute, availableActions, isExecuting } = useAgentActions();
 ### 4. Integrate with existing handlers
 
 ```tsx
-import { useAgentCommandRouter } from '@mydatavalue/polter';
+import { useAgentCommandRouter } from "@mydatavalue/polter";
 
 // Wraps any existing command handler — registered actions get visual execution,
 // unregistered ones fall through to your original handler.
-const handleCommand = useAgentCommandRouter(existingHandler, (cmd) => cmd.action);
+const handleCommand = useAgentCommandRouter(
+  existingHandler,
+  (cmd) => cmd.action,
+);
 ```
 
 ## How it works
@@ -165,19 +180,19 @@ knowledge of every action upfront (single LLM roundtrip).
 
 ```tsx
 // features/items/actions.ts
-import { defineAction } from '@mydatavalue/polter';
-import { z } from 'zod';
+import { defineAction } from "@mydatavalue/polter";
+import { z } from "zod";
 
 export const editItem = defineAction({
-  name: 'edit_item',
-  description: 'Edit an item',
+  name: "edit_item",
+  description: "Edit an item",
   parameters: z.object({
     item_id: z.string(),
   }),
-  navigateTo: 'items-nav',
+  navigateTo: "items-nav",
   steps: [
-    { label: 'Find item', target: 'item-search', value: (p) => p.item_id },
-    { label: 'Open item', target: (p) => `item:${p.item_id}` },
+    { label: "Find item", target: "item-search", value: (p) => p.item_id },
+    { label: "Open item", target: (p) => `item:${p.item_id}` },
   ],
 });
 ```
@@ -186,8 +201,8 @@ export const editItem = defineAction({
 
 ```tsx
 // registry.ts
-import { editItem } from './features/items/actions';
-import { exportData } from './features/reports/actions';
+import { editItem } from "./features/items/actions";
+import { exportData } from "./features/reports/actions";
 
 export const agentRegistry = [editItem, exportData];
 ```
@@ -195,22 +210,22 @@ export const agentRegistry = [editItem, exportData];
 ### 3. Pass the registry to the provider
 
 ```tsx
-import { agentRegistry } from './registry';
+import { agentRegistry } from "./registry";
 
 <AgentActionProvider registry={agentRegistry}>
   <App />
-</AgentActionProvider>
+</AgentActionProvider>;
 ```
 
 ### 4. Components reference the definition
 
 ```tsx
 // features/items/EditPage.tsx
-import { editItem } from './actions';
+import { editItem } from "./actions";
 
 <AgentAction action={editItem}>
   <EditButton />
-</AgentAction>
+</AgentAction>;
 ```
 
 ### How it works
@@ -235,30 +250,31 @@ patterns are covered in depth in
 
 ### Execution modes
 
-| Mode | Behavior | Use case |
-|------|----------|----------|
-| `"guided"` | Scroll → spotlight → pause → click | Teaching users, first-time flows |
-| `"instant"` | Execute immediately, no visual[^wip] | Power users, repeat actions |
+| Mode        | Behavior                             | Use case                         |
+| ----------- | ------------------------------------ | -------------------------------- |
+| `"guided"`  | Scroll → spotlight → pause → click   | Teaching users, first-time flows |
+| `"instant"` | Execute immediately, no visual[^wip] | Power users, repeat actions      |
 
-[^wip]: `instant` mode is a work in progress — it currently clicks elements but
+[^wip]:
+    `instant` mode is a work in progress — it currently clicks elements but
     does not yet support all interaction types (e.g. typing simulation,
     programmatic value setting).
 
 ### Provider props
 
-| Prop | Type | Default |
-|------|------|---------|
-| `mode` | `"guided" \| "instant"` | `"guided"` |
-| `stepDelay` | `number` | `600` |
-| `overlayOpacity` | `number` | `0.5` |
-| `spotlightPadding` | `number` | `8` |
-| `tooltipEnabled` | `boolean` | `true` |
-| `cursorEnabled` | `boolean` | `true` |
-| `mountTimeout` | `number` | `15000` |
-| `onExecutionStart` | `(name: string) => void` | — |
-| `onExecutionComplete` | `(result: ExecutionResult) => void` | — |
-| `registry` | `ActionSchema[]` | — |
-| `debug` | `boolean` | `false` |
+| Prop                  | Type                                | Default    |
+| --------------------- | ----------------------------------- | ---------- |
+| `mode`                | `"guided" \| "instant"`             | `"guided"` |
+| `stepDelay`           | `number`                            | `600`      |
+| `overlayOpacity`      | `number`                            | `0.5`      |
+| `spotlightPadding`    | `number`                            | `8`        |
+| `tooltipEnabled`      | `boolean`                           | `true`     |
+| `cursorEnabled`       | `boolean`                           | `true`     |
+| `mountTimeout`        | `number`                            | `15000`    |
+| `onExecutionStart`    | `(name: string) => void`            | —          |
+| `onExecutionComplete` | `(result: ExecutionResult) => void` | —          |
+| `registry`            | `ActionSchema[]`                    | —          |
+| `debug`               | `boolean`                           | `false`    |
 
 ### Disabled actions
 
@@ -283,9 +299,15 @@ failure.
 All overlay elements have class names:
 
 ```css
-.polter-spotlight { /* box-shadow overlay with cutout */ }
-.polter-ring { /* pulsing border around target */ }
-.polter-tooltip { /* label tooltip */ }
+.polter-spotlight {
+  /* box-shadow overlay with cutout */
+}
+.polter-ring {
+  /* pulsing border around target */
+}
+.polter-tooltip {
+  /* label tooltip */
+}
 ```
 
 ## Best practices
