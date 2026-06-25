@@ -281,8 +281,7 @@ patterns are covered in depth in
 ```tsx
 <AgentAction
   action={saveChanges}
-  disabled={!hasUnsavedChanges}
-  disabledReason="No unsaved changes"
+  disabledReason={!hasUnsavedChanges ? "No unsaved changes" : undefined}
 >
   <SaveButton />
 </AgentAction>
@@ -296,7 +295,7 @@ failure.
 
 ### CSS customization
 
-All overlay elements have class names:
+The overlay elements expose stable class names you can target:
 
 ```css
 .polter-spotlight {
@@ -307,6 +306,15 @@ All overlay elements have class names:
 }
 .polter-tooltip {
   /* label tooltip */
+}
+.polter-cursor {
+  /* simulated cursor (with .polter-cursor-label and .polter-cursor-click) */
+}
+.polter-spotlight-container {
+  /* wrapper holding the spotlight cutout */
+}
+.polter-blocking-overlay {
+  /* full-screen input blocker shown while a step runs */
 }
 ```
 
