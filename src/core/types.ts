@@ -250,7 +250,7 @@ export interface AgentActionProviderProps {
    * component to mount and supply a cross-page action's real steps. A heavy
    * page can take several seconds to render; too short a wait silently drops
    * those steps (the action then reports a bare-navigation "success"). Defaults
-   * to 15000, matching the in-step mounted-grace in `resolveTarget`.
+   * to 15000.
    */
   mountTimeout?: number;
   children: React.ReactNode;
