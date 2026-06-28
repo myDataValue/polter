@@ -2,7 +2,7 @@
 
 A living architecture review of Polter. Maps the system as it stands, surfaces where the seams want to be, and tracks the open design questions (results from actions, async/abort, structured UI state, type safety, non-UI tools, navigation auto-gen, and whether the React coupling should change) as a substrate for triage.
 
-The biggest current pain point is authoring `skipIf` chains for multi-step actions (see `examples/basic/src/App.tsx:99-125`); it's a symptom of the steps model being shaped wrong, and it shows up below as Q1 and Diagram 5.
+The biggest current pain point is authoring `skipIf` chains for multi-step actions (see `examples/basic/src/App.tsx:162-186`); it's a symptom of the steps model being shaped wrong, and it shows up below as Q1 and Diagram 5.
 
 ---
 
@@ -304,7 +304,7 @@ flowchart TD
   ClickRow -.selected==name.-> Click
 ```
 
-Today the user authors this tree as a flat list of 5 steps, each carrying a hand-written `skipIf` that tests every prefix that might already be satisfied. Reading directly from `examples/basic/src/App.tsx:104-110`:
+Today the user authors this tree as a flat list of 5 steps, each carrying a hand-written `skipIf` that tests every prefix that might already be satisfied. Reading directly from `examples/basic/src/App.tsx:163-185`:
 
 ```ts
 { label: 'Type the name',       value: fromParam('name'), target: 'search',
@@ -433,7 +433,7 @@ The framework-agnostic core path quietly happens as a side effect of step 1. Whe
 | `src/resolvers/scoring.ts`               | 141 | Attribute-based target matching — `matchTargets`, scoring, thresholds (see 1c)      |
 | `src/resolvers/types.ts`                 |  71 | `TargetIntent` / `TargetAttrs` / match-result types                                 |
 | `src/components/AgentDevTools.tsx`       | 602 | In-app dev UI for inspecting and running actions (React-only; stays in the adapter) |
-| `examples/basic/src/App.tsx:99-125`      |   — | The `skipIf` pile — best case study for Q1                                          |
+| `examples/basic/src/App.tsx:162-186`     |   — | The `skipIf` pile — best case study for Q1                                          |
 
 ## Verification (when we start moving)
 
