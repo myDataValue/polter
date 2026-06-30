@@ -1,3 +1,4 @@
+import { fc, it as itProp } from '@fast-check/vitest';
 import { describe, expect, it } from 'vitest';
 import { isDegenerateRect } from '../executor/visualExecutor';
 
@@ -19,4 +20,14 @@ describe('isDegenerateRect', () => {
     expect(isDegenerateRect({ width: 200, height: 0 })).toBe(false);
     expect(isDegenerateRect({ width: 0, height: 18 })).toBe(false);
   });
+
+  // Property form of the AND-not-OR rule: over the whole width×height plane the
+  // predicate is true iff BOTH dimensions are exactly zero — the example cases
+  // are just three points of this invariant.
+  itProp.prop([fc.nat({ max: 4000 }), fc.nat({ max: 4000 })])(
+    'is true iff both dimensions are exactly zero',
+    (width, height) => {
+      expect(isDegenerateRect({ width, height })).toBe(width === 0 && height === 0);
+    },
+  );
 });
