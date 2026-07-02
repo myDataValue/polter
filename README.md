@@ -65,6 +65,7 @@ import {
   AgentActionProvider,
   AgentAction,
   AgentTarget,
+  defineAction,
   useAgentAction,
   useAgentActions,
 } from "@mydatavalue/polter";
