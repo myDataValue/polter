@@ -622,54 +622,46 @@ export async function executeAction(
           });
           continue;
         }
-        if (targets.length > 1) {
-          fx.cleanup();
-          const reason = targetName
-            ? `Target "${targetName}" for action "${action.name}" not found for step "${step.label}"`
-            : `target not found for step "${step.label}"`;
-          log('step:fail', {
-            index: i,
-            label: step.label,
-            targetName,
-            error: reason,
-            ...resolveDiag,
-          });
-          stepTraces.push({
-            index: i,
-            label: step.label,
-            status: 'failed',
-            targetType,
-            targetName,
-            targetFound: !!element,
-            interactionType: 'none',
-            error: reason,
-            resolve: resolveDiag,
-            durationMs: performance.now() - stepStart,
-          });
-          log('execute:complete', {
-            action: action.name,
-            error: reason,
-            durationMs: performance.now() - executionStart,
-          });
-          return {
-            actionName: action.name,
-            error: reason,
-            trace: stepTraces,
-            durationMs: performance.now() - executionStart,
-          };
-        }
+        // A missing target without a sanctioned skipIf is a hard failure
+        // regardless of step count. Single-step actions used to "skip" here and
+        // report success — so a no-op run of a conditionally-mounted control
+        // (e.g. push_changes' `push-btn`, only rendered while changes are
+        // pending) returned the previous run's waitFor outcome as if it were
+        // fresh (PRO-475).
+        fx.cleanup();
+        const reason = targetName
+          ? `Target "${targetName}" for action "${action.name}" not found for step "${step.label}"`
+          : `target not found for step "${step.label}"`;
+        log('step:fail', {
+          index: i,
+          label: step.label,
+          targetName,
+          error: reason,
+          ...resolveDiag,
+        });
         stepTraces.push({
           index: i,
           label: step.label,
-          status: 'skipped',
+          status: 'failed',
           targetType,
           targetName,
           targetFound: false,
           interactionType: 'none',
+          error: reason,
           resolve: resolveDiag,
           durationMs: performance.now() - stepStart,
         });
-        continue;
+        log('execute:complete', {
+          action: action.name,
+          error: reason,
+          durationMs: performance.now() - executionStart,
+        });
+        return {
+          actionName: action.name,
+          error: reason,
+          trace: stepTraces,
+          durationMs: performance.now() - executionStart,
+        };
       }
       const ensureConnected = async (): Promise<HTMLElement> => {
         // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time

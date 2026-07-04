@@ -359,6 +359,99 @@ describe('error handling', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Missing step targets (PRO-475) — a step whose target never mounts must fail
+// the action, never silently "skip" it. push_changes is a single-step action
+// (target `push-btn`, mounted only while changes are pending); the old
+// single-step leniency reported success plus the PREVIOUS push's waitFor
+// outcome, so the agent believed a no-op retry had re-run and re-failed.
+// ---------------------------------------------------------------------------
+
+describe('missing step target', () => {
+  it('fails a single-step action whose target never mounts', async () => {
+    const action = defineAction({ name: 'single_missing', description: 'Single missing' });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        ...action,
+        steps: [{ label: 'Push changes', target: 'push-btn', timeout: 100 }],
+      });
+      return null;
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    // biome-ignore lint/style/noNonNullAssertion: matches the file's established harness pattern
+    const result = await act(() => ctx!.execute('single_missing'));
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('push-btn');
+    expect(result.trace?.[0]?.status).toBe('failed');
+  });
+
+  it('does not surface a stale waitFor outcome when the only step target is missing', async () => {
+    // The retry-push case: the waitFor ref still holds the PREVIOUS push's
+    // resolved promise. With the button unmounted nothing ran, so the stale
+    // summary must not come back as this run's outcome.
+    const action = defineAction({ name: 'stale_outcome', description: 'Stale outcome' });
+    const staleSummary = { totalFailures: 4, totalSuccesses: 474 };
+    const promiseRef = { current: Promise.resolve<unknown>(staleSummary) };
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        ...action,
+        steps: [{ label: 'Push changes', target: 'push-btn', timeout: 100 }],
+        waitFor: promiseRef,
+      });
+      return null;
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    // biome-ignore lint/style/noNonNullAssertion: matches the file's established harness pattern
+    const result = await act(() => ctx!.execute('stale_outcome'));
+    expect(result.error).toBeDefined();
+    expect(result.outcome).toBeUndefined();
+  });
+
+  it('runs completed steps but fails when a later step target is missing', async () => {
+    const action = defineAction({ name: 'second_missing', description: 'Second missing' });
+    const onClick = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        ...action,
+        steps: [
+          { label: 'first', target: 'exists-btn', timeout: 100 },
+          { label: 'second', target: 'never-mounted', timeout: 100 },
+        ],
+      });
+      return (
+        <AgentTarget name="exists-btn">
+          {/** biome-ignore lint/a11y/useButtonType: matches the file's established harness pattern */}
+          <button onClick={onClick}>Go</button>
+        </AgentTarget>
+      );
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    // biome-ignore lint/style/noNonNullAssertion: matches the file's established harness pattern
+    const result = await act(() => ctx!.execute('second_missing'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('never-mounted');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Zod param validation
 // ---------------------------------------------------------------------------
 
