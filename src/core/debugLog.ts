@@ -4,8 +4,8 @@
  * Every important step emits `[polter] <event> {…}` so a developer can filter
  * the console on `[polter]`, copy the lot, and paste it into an LLM to get an
  * immediate read on what happened. Gated by the provider's `debug` prop, so it
- * is silent unless explicitly enabled (on in dev, opt-in via localStorage in
- * prod — see AgentActionProvider usage).
+ * is silent unless explicitly enabled (on in dev, off in prod by default — see
+ * AgentActionProvider usage).
  *
  * The structured `ResolveDiagnostics` carried on each step trace is the durable
  * record ("Copy debug" exports it); these console events are the live-watch
