@@ -257,9 +257,9 @@ patterns are covered in depth in
 | `"instant"` | Execute immediately, no visual[^wip] | Power users, repeat actions      |
 
 [^wip]:
-    `instant` mode is a work in progress — it currently clicks elements but
-    does not yet support all interaction types (e.g. typing simulation,
-    programmatic value setting).
+    `instant` mode is a work in progress — it clicks and sets input values
+    immediately, but skips the guided visuals (no spotlight, cursor, or
+    character-by-character typing animation).
 
 ### Provider props
 
