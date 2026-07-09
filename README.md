@@ -315,7 +315,7 @@ The overlay elements expose stable class names you can target:
   /* wrapper holding the spotlight cutout */
 }
 .polter-blocking-overlay {
-  /* full-screen input blocker shown while a step runs */
+  /* full-screen non-blocking overlay (pointer-events:none) shown while a step runs */
 }
 ```
 
