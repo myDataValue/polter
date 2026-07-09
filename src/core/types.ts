@@ -95,6 +95,16 @@ export interface StepDefinition<TParams = Record<string, unknown>> {
   /** Skip this step at execution time when the predicate returns true. */
   readonly skipIf?: (params: TParams) => boolean;
   /**
+   * Best-effort step: when its target can't be resolved, record it as `skipped`
+   * and continue instead of failing the whole action. Use ONLY for enhancement
+   * steps whose control is conditionally mounted (e.g. a "jump to date" input
+   * that only renders when the timeline has bookable dates) — the earlier,
+   * required steps must have done the real work. Do NOT mark a required
+   * interaction optional, or a no-op run would falsely report success (a missing
+   * non-optional target stays a hard failure — PRO-475).
+   */
+  readonly optional?: boolean;
+  /**
    * Per-step resolve timeout in ms (default 5000). Use a short value for a "try the
    * already-visible target" probe so it fails fast when the target isn't rendered and the
    * caller can fall back (e.g. to a search-then-click path) without a long stall.

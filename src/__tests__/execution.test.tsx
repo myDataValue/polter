@@ -449,6 +449,42 @@ describe('missing step target', () => {
     expect(result.error).toBeDefined();
     expect(result.error).toContain('never-mounted');
   });
+
+  it('skips an optional later step whose target is missing and still succeeds', async () => {
+    // show_booking_pricing_breakdown case: earlier required steps do the real
+    // work (open the breakdown), and the trailing best-effort "jump to date"
+    // step targets a control that only mounts when the timeline has bookable
+    // dates. On an example-mode property it's absent — skip, don't fail.
+    const action = defineAction({ name: 'optional_second', description: 'Optional second' });
+    const onClick = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        ...action,
+        steps: [
+          { label: 'first', target: 'exists-btn', timeout: 100 },
+          { label: 'second', target: 'never-mounted', timeout: 100, optional: true },
+        ],
+      });
+      return (
+        <AgentTarget name="exists-btn">
+          {/** biome-ignore lint/a11y/useButtonType: matches the file's established harness pattern */}
+          <button onClick={onClick}>Go</button>
+        </AgentTarget>
+      );
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    // biome-ignore lint/style/noNonNullAssertion: matches the file's established harness pattern
+    const result = await act(() => ctx!.execute('optional_second'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(result.error).toBeUndefined();
+    expect(result.trace?.[1]?.status).toBe('skipped');
+  });
 });
 
 // ---------------------------------------------------------------------------
