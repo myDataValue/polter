@@ -595,8 +595,12 @@ export async function executeAction(
         // A prior step may have triggered a state change that makes this step
         // unnecessary (e.g. clicking "Opt In" updates pendingOptimizations,
         // so the second preferredTransitionStep should skip). Re-evaluate
-        // skipIf — if it now passes, skip gracefully instead of failing.
-        if (step.skipIf?.(params)) {
+        // skipIf — if it now passes, skip gracefully instead of failing. An
+        // `optional` step whose target can't be resolved also skips (best-effort).
+        if (step.skipIf?.(params) || step.optional) {
+          if (step.optional && !step.skipIf?.(params)) {
+            log('step:skip-optional', { index: i, label: step.label, targetName });
+          }
           stepTraces.push({
             index: i,
             label: step.label,
@@ -610,8 +614,14 @@ export async function executeAction(
         throw err;
       }
       if (!element) {
-        // Re-check skipIf — state may have caught up during polling.
-        if (step.skipIf?.(params)) {
+        // Re-check skipIf — state may have caught up during polling. An
+        // `optional` step whose target isn't mounted skips gracefully (e.g. the
+        // "jump to date" input that only renders when the timeline has bookable
+        // dates); it never reaches the hard failure below.
+        if (step.skipIf?.(params) || step.optional) {
+          if (step.optional && !step.skipIf?.(params)) {
+            log('step:skip-optional', { index: i, label: step.label, targetName });
+          }
           stepTraces.push({
             index: i,
             label: step.label,
