@@ -423,7 +423,7 @@ The framework-agnostic core path quietly happens as a side effect of step 1. Whe
 | File                                     | LOC | Role                                                                                |
 | ---------------------------------------- | --: | ----------------------------------------------------------------------------------- |
 | `src/components/AgentActionProvider.tsx` | 632 | Two action maps + targets map + execute orchestration — Phase 1 lift target         |
-| `src/executor/visualExecutor.ts`         | 796 | Step loop, element resolution, click/type/spotlight effects — Q1 target             |
+| `src/executor/visualExecutor.ts`         | 806 | Step loop, element resolution, click/type/spotlight effects — Q1 target             |
 | `src/core/types.ts`                      | 290 | All shared types — Q4/Q6 target                                                     |
 | `src/core/helpers.ts`                    |  55 | `defineAction` + `fromParam` helper — Q4/Q6/Q8 target                               |
 | `src/core/schemaGenerator.ts`            |  29 | Zod v4 → JSON Schema                                                                |
