@@ -12,8 +12,10 @@ export { generateToolSchemas, zodToJsonSchema } from './core/schemaGenerator';
 export type {
   ActionDefinition,
   ActionSchema,
+  AgentActionApi,
   AgentActionContextValue,
   AgentActionProviderProps,
+  AgentActionState,
   AgentTargetEntry,
   AvailableAction,
   ExecutionMode,

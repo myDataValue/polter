@@ -285,7 +285,14 @@ export interface AgentActionProviderProps {
   debug?: boolean;
 }
 
-export interface AgentActionContextValue {
+/**
+ * Stable half of the provider's split context: registration + execution
+ * callbacks whose identities never change while actions run. `AgentTarget`
+ * and `useAgentAction` subscribe ONLY to this, so the hundreds of targets a
+ * virtualized table mounts don't re-render when `isExecuting` flips or the
+ * action registry version bumps.
+ */
+export interface AgentActionApi {
   registerAction: (action: RegisteredAction) => void;
   unregisterAction: (name: string) => void;
   registerTarget: (id: string, entry: AgentTargetEntry) => void;
@@ -293,8 +300,15 @@ export interface AgentActionContextValue {
   execute: (actionName: string, params?: Record<string, unknown>) => Promise<ExecutionResult>;
   /** Abort the currently running guided execution, cleaning up overlays and cursors. */
   abortExecution: () => void;
+  mode: ExecutionMode;
+}
+
+/** Volatile half: live registry/execution state — consumers re-render on change. */
+export interface AgentActionState {
   availableActions: AvailableAction[];
   schemas: ToolSchema[];
   isExecuting: boolean;
-  mode: ExecutionMode;
 }
+
+/** Merged view returned by `useAgentActions()` — subscribes to both halves. */
+export type AgentActionContextValue = AgentActionApi & AgentActionState;
