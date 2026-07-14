@@ -4,8 +4,9 @@ import { createDebugLogger, findCandidateTargetNames } from '../core/debugLog';
 import { generateToolSchemas } from '../core/schemaGenerator';
 import type {
   ActionSchema,
-  AgentActionContextValue,
+  AgentActionApi,
   AgentActionProviderProps,
+  AgentActionState,
   AgentTargetEntry,
   AvailableAction,
   ExecutionResult,
@@ -18,7 +19,12 @@ import { executeAction } from '../executor/visualExecutor';
 import { matchTargets } from '../resolvers';
 import type { TargetIntent } from '../resolvers/types';
 
-export const AgentActionContext = createContext<AgentActionContextValue | null>(null);
+// Split context: the API half is identity-stable for the provider's lifetime,
+// the state half changes per registry bump / execution flip. Registration-only
+// consumers (AgentTarget, useAgentAction) read the API half exclusively so a
+// table full of targets doesn't re-render twice per executed action.
+export const AgentActionApiContext = createContext<AgentActionApi | null>(null);
+export const AgentActionStateContext = createContext<AgentActionState | null>(null);
 
 // `def` comes from the heterogeneous `registry` list, where each action carries its
 // own param schema, so it must be param-erased. `any` is load-bearing: the default
@@ -601,7 +607,7 @@ export function AgentActionProvider({
     setIsExecuting(false);
   }, []);
 
-  const contextValue = useMemo<AgentActionContextValue>(
+  const apiValue = useMemo<AgentActionApi>(
     () => ({
       registerAction,
       unregisterAction,
@@ -609,9 +615,6 @@ export function AgentActionProvider({
       unregisterTarget,
       execute,
       abortExecution,
-      availableActions,
-      schemas,
-      isExecuting,
       mode,
     }),
     [
@@ -621,12 +624,20 @@ export function AgentActionProvider({
       unregisterTarget,
       execute,
       abortExecution,
-      availableActions,
-      schemas,
-      isExecuting,
       mode,
     ],
   );
 
-  return <AgentActionContext.Provider value={contextValue}>{children}</AgentActionContext.Provider>;
+  const stateValue = useMemo<AgentActionState>(
+    () => ({ availableActions, schemas, isExecuting }),
+    [availableActions, schemas, isExecuting],
+  );
+
+  return (
+    <AgentActionApiContext.Provider value={apiValue}>
+      <AgentActionStateContext.Provider value={stateValue}>
+        {children}
+      </AgentActionStateContext.Provider>
+    </AgentActionApiContext.Provider>
+  );
 }

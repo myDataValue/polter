@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef } from 'react';
-import { AgentActionContext } from '../components/AgentActionProvider';
+import { AgentActionApiContext } from '../components/AgentActionProvider';
 import type { ActionDefinition, StepDefinition } from '../core/types';
 
 // Callers pass a heterogeneous list of actions, each with its own param schema, so
@@ -9,7 +9,9 @@ import type { ActionDefinition, StepDefinition } from '../core/types';
 // `Record<string, unknown>` / `z.ZodTypeAny` all reject it).
 // biome-ignore lint/suspicious/noExplicitAny: load-bearing param erasure for a heterogeneous action collection — see comment above
 export function useAgentAction(...configs: ActionDefinition<any>[]): void {
-  const context = useContext(AgentActionContext);
+  // Deliberately the STABLE api context: a component registering actions must
+  // not re-render on execution/registry churn just because it registers.
+  const context = useContext(AgentActionApiContext);
   if (!context) {
     throw new Error('useAgentAction must be used within an AgentActionProvider');
   }

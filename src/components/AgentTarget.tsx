@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useContext, useEffect, useId, useRef } from 'react';
 import type { TargetDefinition } from '../core/types';
-import { AgentActionContext } from './AgentActionProvider';
+import { AgentActionApiContext } from './AgentActionProvider';
 
 interface AgentTargetProps extends TargetDefinition {
   children: React.ReactNode;
@@ -34,7 +34,10 @@ interface AgentTargetProps extends TargetDefinition {
 export function AgentTarget({ name, role, attrs, children }: AgentTargetProps) {
   const id = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const context = useContext(AgentActionContext);
+  // Deliberately the STABLE api context: targets render by the hundreds inside
+  // virtualized tables, and must not re-render when isExecuting flips or the
+  // action registry version bumps.
+  const context = useContext(AgentActionApiContext);
 
   if (!context) {
     throw new Error('AgentTarget must be used within an AgentActionProvider');
