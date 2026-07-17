@@ -12,9 +12,9 @@ import type { ActionSchema } from './types';
  * Same-page actions (target component is always mounted) can define
  * steps in the component instead.
  *
- * `navigateTo` only accepts AgentTarget name(s) — URL-based navigation is
- * not supported. If a page isn't reachable by a visible click, it isn't
- * reachable by ADUI either.
+ * `navigateTo` accepts AgentTarget names or registered navigation actions with
+ * static steps. URL-based navigation is not supported. If a page isn't
+ * reachable by visible clicks, it isn't reachable by ADUI either.
  *
  * @example
  * ```ts

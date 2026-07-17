@@ -286,6 +286,10 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
                 {log.map((entry) => (
                   <div
                     key={entry.id}
+                    data-agent-action={entry.action}
+                    data-execution-status={
+                      !entry.result ? 'pending' : entry.result.error ? 'failed' : 'succeeded'
+                    }
                     style={{ padding: '10px 20px', borderBottom: '1px solid #1e293b' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -301,7 +305,10 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
                       <pre style={logParamsStyle}>{JSON.stringify(entry.params, null, 2)}</pre>
                     )}
                     {entry.result?.error && (
-                      <div style={{ marginTop: 4, fontSize: 12, color: '#f87171' }}>
+                      <div
+                        data-agent-error=""
+                        style={{ marginTop: 4, fontSize: 12, color: '#f87171' }}
+                      >
                         {entry.result.error}
                       </div>
                     )}

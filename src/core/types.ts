@@ -29,8 +29,10 @@ export interface ActionSchema<TSchema extends z.ZodType = z.ZodType<Record<strin
   /** Zod schema for action parameters. */
   readonly parameters?: TSchema;
   /**
-   * AgentTarget name(s) to click before executing steps. The agent visibly
-   * clicks each named target in sequence — same as a human would.
+   * AgentTarget or registered navigation-action name(s) to run before
+   * executing steps. A referenced navigation action must have static steps;
+   * those steps are expanded so the agent visibly follows the same responsive
+   * menu choreography as a human.
    *
    * URL-based navigation is intentionally not supported. Pages that aren't
    * reachable by clicking a visible link aren't reachable by ADUI either —

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 const DOM_PROPERTY_OPTS = { numRuns: 20 };
 const DOM_TIMEOUT = 30_000;
 
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import React from 'react';
 import { z } from 'zod';
 import { AgentAction } from '../components/AgentAction';
@@ -903,5 +903,538 @@ describe('cross-page navigation handoff', () => {
     expect(result.trace.some((s) => s.targetName === 'panel-btn' && s.status === 'completed')).toBe(
       true,
     );
+    expect(result.trace.map((step) => step.index)).toEqual([0, 1]);
+  });
+
+  it('waits for destination runtime state after running static steps exactly once', async () => {
+    const staticCrossPage = defineAction({
+      name: 'save_from_other_page',
+      description: 'Save through a static destination step',
+      navigateTo: 'dash-nav',
+      steps: [{ label: 'save', target: 'save-btn' }],
+    });
+    const registry = [staticCrossPage];
+    const onSave = vi.fn();
+    let resolveSave: (value: unknown) => void;
+    const savePromise = new Promise<unknown>((resolve) => {
+      resolveSave = resolve;
+    });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Destination() {
+      const waitFor = React.useRef<Promise<unknown> | undefined>(savePromise);
+      useAgentAction({ ...staticCrossPage, steps: undefined, waitFor });
+      return (
+        <AgentTarget name="save-btn">
+          <button type="button" onClick={onSave}>
+            Save
+          </button>
+        </AgentTarget>
+      );
+    }
+
+    const Tree = ({ mounted }: { mounted: boolean }) => (
+      <AgentActionProvider mode="instant" mountTimeout={2000} registry={registry}>
+        <AgentTarget name="dash-nav">
+          <button type="button">Dashboard</button>
+        </AgentTarget>
+        {mounted ? <Destination /> : null}
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>
+    );
+    const { rerender } = render(<Tree mounted={false} />);
+
+    let resultPromise!: Promise<ExecutionResult>;
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+      resultPromise = ctx!.execute('save_from_other_page');
+      rerender(<Tree mounted />);
+    });
+
+    let settled = false;
+    resultPromise.then(() => {
+      settled = true;
+    });
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(settled).toBe(false);
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned by the Promise constructor
+    resolveSave!('saved');
+    const result = await act(() => resultPromise);
+
+    expect(result.error).toBeUndefined();
+    expect(result.outcome).toBe('saved');
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(result.trace.filter((step) => step.targetName === 'save-btn')).toHaveLength(1);
+  });
+
+  it('uses the destination disabled reason for a static cross-page action', async () => {
+    const staticCrossPage = defineAction({
+      name: 'disabled_from_other_page',
+      description: 'Run a static destination step',
+      navigateTo: 'dash-nav',
+      steps: [{ label: 'run', target: 'run-btn' }],
+    });
+    const onRun = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Destination() {
+      useAgentAction({
+        ...staticCrossPage,
+        steps: undefined,
+        disabledReason: 'Destination action is unavailable',
+      });
+      return (
+        <AgentTarget name="run-btn">
+          <button type="button" onClick={onRun}>
+            Run
+          </button>
+        </AgentTarget>
+      );
+    }
+
+    const Tree = ({ mounted }: { mounted: boolean }) => (
+      <AgentActionProvider mode="instant" mountTimeout={2000} registry={[staticCrossPage]}>
+        <AgentTarget name="dash-nav">
+          <button type="button">Dashboard</button>
+        </AgentTarget>
+        {mounted ? <Destination /> : null}
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>
+    );
+    const { rerender } = render(<Tree mounted={false} />);
+
+    let resultPromise!: Promise<ExecutionResult>;
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+      resultPromise = ctx!.execute('disabled_from_other_page');
+      rerender(<Tree mounted />);
+    });
+    const result = await act(() => resultPromise);
+
+    expect(result.error).toBe('Destination action is unavailable');
+    expect(onRun).not.toHaveBeenCalled();
+  });
+
+  it('reports an unavailable stepless registry action instead of a false success', async () => {
+    const unavailable = defineAction({
+      name: 'unavailable_action',
+      description: 'An action whose UI is not mounted',
+    });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    render(
+      <AgentActionProvider mode="instant" mountTimeout={10} registry={[unavailable]}>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('unavailable_action'));
+    expect(result.error).toContain('not available');
+    expect(result.trace).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Composable navigation actions
+//
+// A feature action can navigate through a registered navigation action rather
+// than duplicating that action's responsive menu choreography. This keeps one
+// visible recipe for desktop, mobile, and replacement sidebars.
+// ---------------------------------------------------------------------------
+
+describe('composable navigation actions', () => {
+  const navigateToOverview = defineAction({
+    name: 'navigate_to_overview',
+    description: 'Navigate to Overview',
+    steps: [
+      { label: 'Open mobile menu', target: 'mobile-nav-menu', optional: true, timeout: 10 },
+      { label: 'Open Overview', target: 'overview-tab' },
+    ],
+  });
+  const editFromOverview = defineAction({
+    name: 'edit_from_overview',
+    description: 'Edit from the Overview page',
+    navigateTo: 'navigate_to_overview',
+  });
+  const REGISTRY = [navigateToOverview, editFromOverview];
+
+  it('expands a registered navigation action before component steps', async () => {
+    const onOverview = vi.fn();
+    const onEdit = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Harness() {
+      useAgentAction({
+        ...editFromOverview,
+        steps: [{ label: 'Edit', target: 'edit-button' }],
+      });
+      return (
+        <>
+          <AgentTarget name="overview-tab">
+            <button type="button" onClick={onOverview}>
+              Overview
+            </button>
+          </AgentTarget>
+          <AgentTarget name="edit-button">
+            <button type="button" onClick={onEdit}>
+              Edit
+            </button>
+          </AgentTarget>
+        </>
+      );
+    }
+
+    render(
+      <AgentActionProvider mode="instant" registry={REGISTRY}>
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('edit_from_overview'));
+
+    expect(result.error).toBeUndefined();
+    expect(onOverview).toHaveBeenCalledOnce();
+    expect(onEdit).toHaveBeenCalledOnce();
+    expect(result.trace.map((step) => step.label)).toEqual([
+      'Open mobile menu',
+      'Open Overview',
+      'Edit',
+    ]);
+    expect(result.trace.slice(1).map((step) => step.targetName)).toEqual([
+      'overview-tab',
+      'edit-button',
+    ]);
+    expect(result.trace[0]?.status).toBe('skipped');
+  });
+
+  it('expands a chain of navigation actions in order, each hop exactly once', async () => {
+    // edit_nested -> navigate_to_section -> navigate_to_overview. Each stepful
+    // hop must contribute its own targets, deepest-destination first, so the
+    // cursor walks overview -> section -> the component's own edit step.
+    const navigateToSection = defineAction({
+      name: 'navigate_to_section',
+      description: 'Navigate to a section',
+      navigateTo: 'navigate_to_overview',
+      steps: [{ label: 'Open Section', target: 'section-tab' }],
+    });
+    const editNested = defineAction({
+      name: 'edit_nested',
+      description: 'Edit from a nested section',
+      navigateTo: 'navigate_to_section',
+    });
+    const onOverview = vi.fn();
+    const onSection = vi.fn();
+    const onEdit = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Harness() {
+      useAgentAction({ ...editNested, steps: [{ label: 'Edit', target: 'edit-button' }] });
+      return (
+        <>
+          <AgentTarget name="overview-tab">
+            <button type="button" onClick={onOverview}>
+              Overview
+            </button>
+          </AgentTarget>
+          <AgentTarget name="section-tab">
+            <button type="button" onClick={onSection}>
+              Section
+            </button>
+          </AgentTarget>
+          <AgentTarget name="edit-button">
+            <button type="button" onClick={onEdit}>
+              Edit
+            </button>
+          </AgentTarget>
+        </>
+      );
+    }
+
+    render(
+      <AgentActionProvider
+        mode="instant"
+        registry={[navigateToOverview, navigateToSection, editNested]}
+      >
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('edit_nested'));
+
+    expect(result.error).toBeUndefined();
+    expect(onOverview).toHaveBeenCalledOnce();
+    expect(onSection).toHaveBeenCalledOnce();
+    expect(onEdit).toHaveBeenCalledOnce();
+    expect(result.trace.map((step) => step.label)).toEqual([
+      'Open mobile menu',
+      'Open Overview',
+      'Open Section',
+      'Edit',
+    ]);
+    // The optional mobile-menu hop has no mounted target and is skipped; the
+    // three real hops run in destination-first order, each exactly once.
+    expect(result.trace[0]?.status).toBe('skipped');
+    expect(result.trace.slice(1).map((step) => step.targetName)).toEqual([
+      'overview-tab',
+      'section-tab',
+      'edit-button',
+    ]);
+  });
+
+  it('throws on a cyclic navigateTo chain instead of looping forever', async () => {
+    const navA = defineAction({
+      name: 'nav_a',
+      description: 'Nav A',
+      navigateTo: 'nav_b',
+      steps: [{ label: 'Open A', target: 'a-tab' }],
+    });
+    const navB = defineAction({
+      name: 'nav_b',
+      description: 'Nav B',
+      navigateTo: 'nav_a',
+      steps: [{ label: 'Open B', target: 'b-tab' }],
+    });
+    const editCyclic = defineAction({
+      name: 'edit_cyclic',
+      description: 'Edit through a cyclic navigation chain',
+      navigateTo: 'nav_a',
+    });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Harness() {
+      useAgentAction({ ...editCyclic, steps: [{ label: 'Edit', target: 'edit-button' }] });
+      return (
+        <AgentTarget name="edit-button">
+          <button type="button">Edit</button>
+        </AgentTarget>
+      );
+    }
+
+    render(
+      <AgentActionProvider mode="instant" registry={[navA, navB, editCyclic]}>
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('edit_cyclic'));
+
+    expect(result.error).toContain('Cyclic navigateTo action reference');
+    expect(result.error).toContain('nav_a -> nav_b -> nav_a');
+  });
+
+  it('skips a navigation hop whose destination is already the current page', async () => {
+    // navigate_to_overview's destination (overview-tab) is aria-current="page",
+    // so the whole hop expands to nothing and only the component step runs — no
+    // pointless re-click of the page you are already on.
+    const onOverview = vi.fn();
+    const onEdit = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Harness() {
+      useAgentAction({
+        ...editFromOverview,
+        steps: [{ label: 'Edit', target: 'edit-button' }],
+      });
+      return (
+        <>
+          <AgentTarget name="overview-tab">
+            <button type="button" aria-current="page" onClick={onOverview}>
+              Overview
+            </button>
+          </AgentTarget>
+          <AgentTarget name="edit-button">
+            <button type="button" onClick={onEdit}>
+              Edit
+            </button>
+          </AgentTarget>
+        </>
+      );
+    }
+
+    render(
+      <AgentActionProvider mode="instant" registry={REGISTRY}>
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('edit_from_overview'));
+
+    expect(result.error).toBeUndefined();
+    expect(onOverview).not.toHaveBeenCalled();
+    expect(onEdit).toHaveBeenCalledOnce();
+    expect(result.trace.map((step) => step.targetName)).toEqual(['edit-button']);
+  });
+});
+
+describe('registry steps with component runtime state', () => {
+  const staticAction = defineAction({
+    name: 'static_with_runtime',
+    description: 'Run a static step with component state',
+    steps: [{ label: 'Run', target: 'static-button' }],
+  });
+  const REGISTRY = [staticAction];
+
+  it('keeps registry steps when the mounted component only supplies runtime state', async () => {
+    const onClick = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Harness() {
+      useAgentAction({ ...staticAction, steps: undefined });
+      return (
+        <AgentTarget name="static-button">
+          <button type="button" onClick={onClick}>
+            Run
+          </button>
+        </AgentTarget>
+      );
+    }
+
+    render(
+      <AgentActionProvider mode="instant" registry={REGISTRY}>
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('static_with_runtime'));
+    expect(result.error).toBeUndefined();
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the mounted component disabled state on the initial provider render', async () => {
+    const onClick = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Harness() {
+      useAgentAction({
+        ...staticAction,
+        steps: undefined,
+        disabledReason: 'Static action is unavailable',
+      });
+      return (
+        <AgentTarget name="static-button">
+          <button type="button" onClick={onClick}>
+            Run
+          </button>
+        </AgentTarget>
+      );
+    }
+
+    render(
+      <AgentActionProvider mode="instant" registry={REGISTRY}>
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    expect(ctx!.availableActions).toContainEqual(
+      expect.objectContaining({
+        name: 'static_with_runtime',
+        disabledReason: 'Static action is unavailable',
+      }),
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('static_with_runtime'));
+    expect(result.error).toBe('Static action is unavailable');
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('keeps the mounted component waitFor on the initial provider render', async () => {
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Harness() {
+      const waitFor = React.useRef<Promise<unknown> | undefined>(Promise.resolve('finished'));
+      useAgentAction({ ...staticAction, steps: undefined, waitFor });
+      return (
+        <AgentTarget name="static-button">
+          <button type="button">Run</button>
+        </AgentTarget>
+      );
+    }
+
+    render(
+      <AgentActionProvider mode="instant" registry={REGISTRY}>
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('static_with_runtime'));
+    expect(result.error).toBeUndefined();
+    expect(result.outcome).toBe('finished');
+  });
+
+  it('replaces static registry steps while a component override stays mounted', async () => {
+    const onFirst = vi.fn();
+    const onSecond = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    const secondStaticAction = defineAction({
+      ...staticAction,
+      steps: [{ label: 'Run second', target: 'second-button' }],
+    });
+
+    function Harness() {
+      useAgentAction({ ...staticAction, steps: undefined });
+      return (
+        <>
+          <AgentTarget name="static-button">
+            <button type="button" onClick={onFirst}>
+              Run first
+            </button>
+          </AgentTarget>
+          <AgentTarget name="second-button">
+            <button type="button" onClick={onSecond}>
+              Run second
+            </button>
+          </AgentTarget>
+        </>
+      );
+    }
+
+    const tree = (registry: typeof REGISTRY) => (
+      <AgentActionProvider mode="instant" registry={registry}>
+        <Harness />
+        <TestConsumer onContext={(value) => (ctx = value)} />
+      </AgentActionProvider>
+    );
+    const { rerender } = render(tree(REGISTRY));
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    await act(() => ctx!.execute('static_with_runtime'));
+    expect(onFirst).toHaveBeenCalledOnce();
+
+    rerender(tree([secondStaticAction]));
+    await waitFor(() => expect(ctx?.availableActions).toHaveLength(1));
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    await act(() => ctx!.execute('static_with_runtime'));
+    expect(onSecond).toHaveBeenCalledOnce();
+  });
+
+  it('removes a static-step action when it leaves the registry', async () => {
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    const tree = (registry: typeof REGISTRY) => (
+      <AgentActionProvider mode="instant" registry={registry}>
+        <TestConsumer onContext={(value) => (ctx = value)} />
+      </AgentActionProvider>
+    );
+    const { rerender } = render(tree(REGISTRY));
+
+    await waitFor(() => expect(ctx?.availableActions).toHaveLength(1));
+    rerender(tree([]));
+    await waitFor(() => expect(ctx?.availableActions).toEqual([]));
   });
 });
