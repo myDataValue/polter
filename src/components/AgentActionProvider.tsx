@@ -37,6 +37,67 @@ function schemaToRegisteredAction(def: ActionSchema<any>): RegisteredAction {
     resolveSteps: () => def.steps ?? [],
   };
 }
+
+function navigationNames(navigateTo: RegisteredAction['navigateTo']): string[] {
+  if (!navigateTo) return [];
+  return Array.isArray(navigateTo) ? navigateTo : [navigateTo];
+}
+
+function withRegistryDefaults(
+  componentAction: RegisteredAction,
+  registryAction: RegisteredAction,
+): RegisteredAction {
+  const componentSteps = componentAction.resolveSteps();
+  const registrySteps = registryAction.resolveSteps();
+
+  return {
+    ...componentAction,
+    navigateTo: componentAction.navigateTo ?? registryAction.navigateTo,
+    resolveSteps:
+      registrySteps.length > 0 && componentSteps.length === 0
+        ? registryAction.resolveSteps
+        : componentAction.resolveSteps,
+  };
+}
+
+/**
+ * Resolve a navigation hop to visible steps. A hop normally names an
+ * AgentTarget, but it may name a registered navigation action with static
+ * steps. The latter lets responsive navigation own its menu-opening recipe in
+ * one place instead of every feature action duplicating it.
+ */
+function expandNavigationHop(
+  name: string,
+  registry: ReadonlyMap<string, RegisteredAction>,
+  isCurrentTarget: (targetName: string) => boolean,
+  visited: ReadonlySet<string> = new Set(),
+): StepDefinition[] {
+  if (isCurrentTarget(name)) return [];
+
+  const referencedAction = registry.get(name);
+  const referencedSteps = referencedAction?.resolveSteps() ?? [];
+  if (!referencedAction || referencedSteps.length === 0) {
+    return [{ label: name, target: name }];
+  }
+
+  if (visited.has(name)) {
+    throw new Error(`Cyclic navigateTo action reference: ${[...visited, name].join(' -> ')}`);
+  }
+
+  const destinationTarget = [...referencedSteps]
+    .reverse()
+    .find((step) => !step.optional && typeof step.target === 'string')?.target;
+  if (typeof destinationTarget === 'string' && isCurrentTarget(destinationTarget)) return [];
+
+  const nextVisited = new Set(visited);
+  nextVisited.add(name);
+  return [
+    ...navigationNames(referencedAction.navigateTo).flatMap((nestedName) =>
+      expandNavigationHop(nestedName, registry, isCurrentTarget, nextVisited),
+    ),
+    ...referencedSteps,
+  ];
+}
 /**
  * Report a CRITICAL polter misconfiguration — one that silently corrupts
  * behaviour rather than just looking untidy (e.g. a step registered in two
@@ -73,6 +134,7 @@ export function AgentActionProvider({
   const debugRef = useRef(debug);
   debugRef.current = debug;
   const actionsRef = useRef<Map<string, RegisteredAction>>(new Map());
+  const componentActionsRef = useRef<Map<string, RegisteredAction>>(new Map());
   const targetsRef = useRef<Map<string, AgentTargetEntry>>(new Map());
   /** Registry actions stored separately so they can be restored on component unmount. */
   const registryRef = useRef<Map<string, RegisteredAction>>(new Map());
@@ -82,30 +144,25 @@ export function AgentActionProvider({
 
   // Sync registry prop into actionsRef on mount and when registry changes.
   useEffect(() => {
-    const newNames = new Set<string>();
+    const previousNames = new Set(registryRef.current.keys());
+    const nextRegistry = new Map(
+      (registry ?? []).map((definition) => [definition.name, schemaToRegisteredAction(definition)]),
+    );
+    registryRef.current = nextRegistry;
 
-    for (const def of registry ?? []) {
-      newNames.add(def.name);
-      const registryAction = schemaToRegisteredAction(def);
-      registryRef.current.set(def.name, registryAction);
+    for (const name of new Set([...previousNames, ...nextRegistry.keys()])) {
+      const componentAction = componentActionsRef.current.get(name);
+      const registryAction = nextRegistry.get(name);
+      const effectiveAction = componentAction
+        ? registryAction
+          ? withRegistryDefaults(componentAction, registryAction)
+          : componentAction
+        : registryAction;
 
-      // Only set in actionsRef if no component has already registered a richer version
-      // (a component-backed action has DOM targets).
-      const existing = actionsRef.current.get(def.name);
-      if (!existing || existing.resolveSteps().length === 0) {
-        actionsRef.current.set(def.name, registryAction);
-      }
-    }
-
-    // Remove actions that were in the previous registry but not the new one.
-    for (const name of registryRef.current.keys()) {
-      if (!newNames.has(name)) {
-        registryRef.current.delete(name);
-        // Only remove from actionsRef if it's still the registry version (no component override).
-        const current = actionsRef.current.get(name);
-        if (current && current.resolveSteps().length === 0) {
-          actionsRef.current.delete(name);
-        }
+      if (effectiveAction) {
+        actionsRef.current.set(name, effectiveAction);
+      } else {
+        actionsRef.current.delete(name);
       }
     }
 
@@ -117,10 +174,9 @@ export function AgentActionProvider({
     const existing = actionsRef.current.get(incoming.name);
 
     const registryAction = registryRef.current.get(incoming.name);
-    const action =
-      registryAction && !incoming.navigateTo
-        ? { ...incoming, navigateTo: registryAction.navigateTo }
-        : incoming;
+    const incomingSteps = incoming.resolveSteps();
+    const registrySteps = registryAction?.resolveSteps() ?? [];
+    const action = registryAction ? withRegistryDefaults(incoming, registryAction) : incoming;
 
     if (debug && registryRef.current.size > 0 && !registryAction) {
       console.warn(
@@ -136,8 +192,6 @@ export function AgentActionProvider({
     // live in ONE place. Checked unconditionally (not debug-gated) and thrown so
     // it can't silently ship again.
     if (registryAction) {
-      const registrySteps = registryAction.resolveSteps();
-      const incomingSteps = action.resolveSteps();
       if (registrySteps.length > 0 && incomingSteps.length > 0) {
         reportPolterMisconfig(
           `Action "${action.name}" has steps in both defineAction and useAgentAction. ` +
@@ -149,6 +203,7 @@ export function AgentActionProvider({
       }
     }
 
+    componentActionsRef.current.set(action.name, incoming);
     actionsRef.current.set(action.name, action);
 
     // Only bump version if schema-relevant or state-relevant props changed
@@ -162,6 +217,7 @@ export function AgentActionProvider({
   }, []);
 
   const unregisterAction = useCallback((name: string) => {
+    componentActionsRef.current.delete(name);
     // If this action came from the registry, restore the schema-only version
     // instead of deleting so the LLM still sees it in schemas.
     const registryAction = registryRef.current.get(name);
@@ -251,8 +307,7 @@ export function AgentActionProvider({
         if (skipCheck?.()) return miss('skipped');
 
         const currentAction = actionsRef.current.get(actionName);
-        const isComponentBacked =
-          currentAction && currentAction !== registryRef.current.get(actionName);
+        const isComponentBacked = componentActionsRef.current.has(actionName);
 
         // Action became disabled (component determined it can't proceed).
         if (currentAction?.disabledReason) {
@@ -358,9 +413,8 @@ export function AgentActionProvider({
 
       while (Date.now() - start < maxWait) {
         if (signal?.aborted) return null;
-        const current = actionsRef.current.get(name);
-        if (current && current !== registryRef.current.get(name)) {
-          return current;
+        if (componentActionsRef.current.has(name)) {
+          return actionsRef.current.get(name) ?? null;
         }
         await new Promise((r) => setTimeout(r, pollInterval));
       }
@@ -392,6 +446,7 @@ export function AgentActionProvider({
           durationMs: performance.now() - start,
         };
       }
+      const startedRegistryOnly = !componentActionsRef.current.has(actionName);
 
       // Claim execution: supersede any in-flight run and become the owner.
       // Lookup/validation happens first (above) so a bogus or disabled action
@@ -443,24 +498,22 @@ export function AgentActionProvider({
         // Skip any target whose element is already marked as the current page
         // (`aria-current="page"`). Clicking a nav link to the page you're on
         // just animates pointlessly.
-        const nav = action.navigateTo;
-        const rawNavTargets = nav ? (Array.isArray(nav) ? nav : [nav]) : [];
-        const navTargets = rawNavTargets.filter((name) => {
+        const isCurrentTarget = (name: string): boolean => {
           for (const entry of targetsRef.current.values()) {
             if (entry.name === name && entry.element.isConnected) {
-              return entry.element.getAttribute('aria-current') !== 'page';
+              return entry.element.getAttribute('aria-current') === 'page';
             }
           }
-          return true;
-        });
+          return false;
+        };
+        const navigationSteps = navigationNames(action.navigateTo).flatMap((name) =>
+          expandNavigationHop(name, registryRef.current, isCurrentTarget),
+        );
         const actionWithNav: RegisteredAction =
-          navTargets.length > 0
+          navigationSteps.length > 0
             ? {
                 ...action,
-                resolveSteps: () => [
-                  ...navTargets.map((target): StepDefinition => ({ label: target, target })),
-                  ...action.resolveSteps(),
-                ],
+                resolveSteps: () => [...navigationSteps, ...action.resolveSteps()],
               }
             : action;
 
@@ -478,23 +531,23 @@ export function AgentActionProvider({
           }
         }
 
-        // After navigation, the destination page's component may mount and
-        // supply this action's real steps — the registry version is only a
-        // schema stand-in for cross-page actions. Wait for that handoff, then
-        // run phase 2.
-        const isRegistryOnly = action === registryRef.current.get(actionName);
-        if (!result.error && isRegistryOnly) {
-          // Only a navigation mounts a *new* page, so only then is a slow mount
-          // expected — give it the full mountTimeout (a heavy page can take
-          // several seconds). With no navigation nothing new is coming, so keep
-          // the wait short to stay responsive.
-          const navigated = navTargets.length > 0;
-          const upgraded = await waitForActionMount(
-            actionName,
-            controller.signal,
-            navigated ? mountTimeout : 5000,
-          );
-          if (upgraded && upgraded !== registryRef.current.get(actionName)) {
+        // After navigation, adopt runtime state from the destination component.
+        // Stepless registry actions still need the component's actual steps;
+        // actions with static registry steps have already run those steps and
+        // only need the component's disabledReason / waitFor completion state.
+        const registryAction = registryRef.current.get(actionName);
+        if (!result.error && startedRegistryOnly && registryAction) {
+          const ranStaticSteps = action.resolveSteps().length > 0;
+          const navigated = navigationSteps.length > 0;
+          const upgraded = ranStaticSteps
+            ? actionsRef.current.get(actionName)
+            : await waitForActionMount(
+                actionName,
+                controller.signal,
+                navigated ? mountTimeout : Math.min(mountTimeout, 5000),
+              );
+
+          if (upgraded && upgraded !== registryAction) {
             if (upgraded.disabledReason) {
               result = {
                 actionName,
@@ -502,28 +555,42 @@ export function AgentActionProvider({
                 trace: result.trace,
                 durationMs: performance.now() - start,
               };
-            } else {
+            } else if (ranStaticSteps && upgraded.waitFor) {
+              try {
+                const completion = await executeAction(
+                  { ...upgraded, resolveSteps: () => [] },
+                  params ?? {},
+                  executorConfig,
+                );
+                result = { ...result, error: completion.error, outcome: completion.outcome };
+              } catch (err) {
+                result = {
+                  ...result,
+                  error: controller.signal.aborted ? 'Execution cancelled' : String(err),
+                };
+              }
+            } else if (!ranStaticSteps) {
               const phase2 = await executeAction(upgraded, params ?? {}, executorConfig);
+              const phase2Trace = phase2.trace.map((step, index) => ({
+                ...step,
+                index: result.trace.length + index,
+              }));
               result = {
                 ...phase2,
-                trace: [...result.trace, ...phase2.trace],
+                trace: [...result.trace, ...phase2Trace],
                 durationMs: performance.now() - start,
               };
             }
-          } else if (
-            navigated &&
-            action.resolveSteps().length === 0 &&
-            !controller.signal.aborted
-          ) {
-            // We navigated, but the destination component never mounted in time,
-            // so this cross-page action's real steps never ran. Report the
-            // failure instead of a bare-navigation "success" — otherwise the
-            // agent narrates a result (e.g. an opened panel) that never happened.
+          } else if (!ranStaticSteps && !controller.signal.aborted) {
+            // The component-backed implementation never mounted. Report that
+            // explicitly instead of allowing a stepless registry stand-in to
+            // look like success.
             result = {
               actionName,
-              error:
-                `Navigated for "${actionName}" but the page did not finish loading in time, ` +
-                `so the action did not complete. Ask the user to retry.`,
+              error: navigated
+                ? `Navigated for "${actionName}" but the page did not finish loading in time, ` +
+                  `so the action did not complete. Ask the user to retry.`
+                : `Action "${actionName}" is not available on the current page.`,
               trace: result.trace,
               durationMs: performance.now() - start,
             };
