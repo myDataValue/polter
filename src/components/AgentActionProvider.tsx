@@ -26,6 +26,17 @@ import type { TargetIntent } from '../resolvers/types';
 export const AgentActionApiContext = createContext<AgentActionApi | null>(null);
 export const AgentActionStateContext = createContext<AgentActionState | null>(null);
 
+/**
+ * How long the static-steps handoff waits for a late-registering destination
+ * component. The static steps already clicked through to the destination
+ * target, so its page subtree is mounted; a `steps:undefined` sibling that
+ * supplies only `waitFor`/`disabledReason` registers within a React commit or
+ * two, never hundreds of ms later. Keep this tight — most navigated
+ * static-step actions have no such component (they render only AgentTargets),
+ * so this budget is a flat tax paid on every one of them.
+ */
+const HANDOFF_MOUNT_POLL_MS = 150;
+
 // `def` comes from the heterogeneous `registry` list, where each action carries its
 // own param schema, so it must be param-erased. `any` is load-bearing: the default
 // `z.ZodType<Record<string, unknown>>` would reject a concrete action schema because
@@ -38,9 +49,42 @@ function schemaToRegisteredAction(def: ActionSchema<any>): RegisteredAction {
   };
 }
 
-function navigationNames(navigateTo: RegisteredAction['navigateTo']): string[] {
+/**
+ * Coerce a `navigateTo` value into an array of raw hop entries (each an
+ * AgentTarget name or a StepDefinition), collapsing the bare-string form.
+ */
+function navEntryList(
+  navigateTo: RegisteredAction['navigateTo'],
+): ReadonlyArray<string | StepDefinition> {
   if (!navigateTo) return [];
-  return Array.isArray(navigateTo) ? navigateTo : [navigateTo];
+  return typeof navigateTo === 'string' ? [navigateTo] : navigateTo;
+}
+
+/**
+ * Normalize `navigateTo` into a flat list of navigation steps. A string entry
+ * is shorthand for clicking an AgentTarget of that name (`{ label, target }`);
+ * a StepDefinition entry (which may be `optional`, carry a `timeout`, `value`,
+ * or `skipIf`) is used verbatim. Exported for direct unit testing.
+ */
+export function normalizeNavigateTo(navigateTo: RegisteredAction['navigateTo']): StepDefinition[] {
+  return navEntryList(navigateTo).map((entry) =>
+    typeof entry === 'string' ? { label: entry, target: entry } : entry,
+  );
+}
+
+/**
+ * The navigation destination: the target of the last hop that is a plain string
+ * or a non-optional step with a static string target. When that target's element
+ * is already `aria-current="page"`, the entire navigation prefix is skipped —
+ * you're there, so opening the menus that lead to it is pointless. Function-form
+ * and optional hops can't be a destination. Exported for direct unit testing.
+ */
+export function navigationDestinationTarget(steps: readonly StepDefinition[]): string | undefined {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const step = steps[i];
+    if (!step.optional && typeof step.target === 'string') return step.target;
+  }
+  return undefined;
 }
 
 function withRegistryDefaults(
@@ -60,44 +104,6 @@ function withRegistryDefaults(
   };
 }
 
-/**
- * Resolve a navigation hop to visible steps. A hop normally names an
- * AgentTarget, but it may name a registered navigation action with static
- * steps. The latter lets responsive navigation own its menu-opening recipe in
- * one place instead of every feature action duplicating it.
- */
-function expandNavigationHop(
-  name: string,
-  registry: ReadonlyMap<string, RegisteredAction>,
-  isCurrentTarget: (targetName: string) => boolean,
-  visited: ReadonlySet<string> = new Set(),
-): StepDefinition[] {
-  if (isCurrentTarget(name)) return [];
-
-  const referencedAction = registry.get(name);
-  const referencedSteps = referencedAction?.resolveSteps() ?? [];
-  if (!referencedAction || referencedSteps.length === 0) {
-    return [{ label: name, target: name }];
-  }
-
-  if (visited.has(name)) {
-    throw new Error(`Cyclic navigateTo action reference: ${[...visited, name].join(' -> ')}`);
-  }
-
-  const destinationTarget = [...referencedSteps]
-    .reverse()
-    .find((step) => !step.optional && typeof step.target === 'string')?.target;
-  if (typeof destinationTarget === 'string' && isCurrentTarget(destinationTarget)) return [];
-
-  const nextVisited = new Set(visited);
-  nextVisited.add(name);
-  return [
-    ...navigationNames(referencedAction.navigateTo).flatMap((nestedName) =>
-      expandNavigationHop(nestedName, registry, isCurrentTarget, nextVisited),
-    ),
-    ...referencedSteps,
-  ];
-}
 /**
  * Report a CRITICAL polter misconfiguration — one that silently corrupts
  * behaviour rather than just looking untidy (e.g. a step registered in two
@@ -189,8 +195,8 @@ export function AgentActionProvider({
     // useAgentAction. The executor then runs a racy two-phase pass that clicks
     // the target twice; the first click's side effects can unmount it before the
     // second, surfacing as a bogus "recycled by a virtualizer" error. Steps must
-    // live in ONE place. Checked unconditionally (not debug-gated) and thrown so
-    // it can't silently ship again.
+    // live in ONE place. Checked unconditionally (not debug-gated) and reported
+    // at console.error so it can't silently ship again.
     if (registryAction) {
       if (registrySteps.length > 0 && incomingSteps.length > 0) {
         reportPolterMisconfig(
@@ -247,6 +253,7 @@ export function AgentActionProvider({
       timeout = 5000,
       skipCheck?: () => boolean,
       intent?: TargetIntent,
+      optional = false,
     ): Promise<ResolveResult> => {
       const pollInterval = 50;
       const start = performance.now();
@@ -262,6 +269,7 @@ export function AgentActionProvider({
       const hardCap = timeout + LOADING_EXTENSION_MS;
       let seenDisabled = false;
       let disabledMissingPolls = 0;
+      let optionalMissingPolls = 0;
       let componentMounted = false;
       let polls = 0;
 
@@ -320,18 +328,22 @@ export function AgentActionProvider({
         // unmount. Action and target unregister effects can run in separate
         // ticks, and a still-connected target is usable if it is present.
         let foundTarget = false;
+        let nameExists = false;
         for (const entry of targetsRef.current.values()) {
-          if (entry.name === name && entry.element.isConnected) {
-            foundTarget = true;
-            if ((entry.element as HTMLButtonElement).disabled) {
-              seenDisabled = true;
-            } else {
-              log('resolveTarget:found', {
-                actionName,
-                name,
-                elapsedMs: performance.now() - start,
-              });
-              return { element: entry.element, diagnostics: diag('found') };
+          if (entry.name === name) {
+            nameExists = true;
+            if (entry.element.isConnected) {
+              foundTarget = true;
+              if ((entry.element as HTMLButtonElement).disabled) {
+                seenDisabled = true;
+              } else {
+                log('resolveTarget:found', {
+                  actionName,
+                  name,
+                  elapsedMs: performance.now() - start,
+                });
+                return { element: entry.element, diagnostics: diag('found') };
+              }
             }
           }
         }
@@ -357,6 +369,19 @@ export function AgentActionProvider({
             }
           }
           // 'ambiguous' / 'miss' → keep polling; a clearer/at-all match may still render.
+        }
+
+        // Optional-step fast-skip: an optional step whose target is registered
+        // NOWHERE in the tree shouldn't burn the full timeout. AgentTarget
+        // registers on mount, so if no entry with this name exists (connected or
+        // not) for 2 consecutive ticks, nothing renders it — skip early. A
+        // registered entry (even disabled/disconnected) keeps normal polling so a
+        // still-loading target resolves.
+        if (optional && !nameExists) {
+          optionalMissingPolls++;
+          if (optionalMissingPolls >= 2) return miss('skipped');
+        } else {
+          optionalMissingPolls = 0;
         }
 
         // Action's component was mounted at some point but then unregistered —
@@ -495,9 +520,12 @@ export function AgentActionProvider({
         // page would appear to teleport — defeating ADUI's "every interaction
         // visible" promise.
         //
-        // Skip any target whose element is already marked as the current page
-        // (`aria-current="page"`). Clicking a nav link to the page you're on
-        // just animates pointlessly.
+        // aria-current handling: (a) if the destination hop (the last static
+        // target) is already the current page, skip the ENTIRE prefix — you're
+        // there, so opening the menus that lead to it is pointless; (b) otherwise
+        // drop any individual plain-string hop whose element is the page you're
+        // already on. Explicit StepDefinition hops are never filtered — the
+        // author owns those.
         const isCurrentTarget = (name: string): boolean => {
           for (const entry of targetsRef.current.values()) {
             if (entry.name === name && entry.element.isConnected) {
@@ -506,9 +534,16 @@ export function AgentActionProvider({
           }
           return false;
         };
-        const navigationSteps = navigationNames(action.navigateTo).flatMap((name) =>
-          expandNavigationHop(name, registryRef.current, isCurrentTarget),
-        );
+        const rawNavEntries = navEntryList(action.navigateTo);
+        const navSteps = normalizeNavigateTo(action.navigateTo);
+        const destination = navigationDestinationTarget(navSteps);
+        const navigationSteps: StepDefinition[] =
+          destination !== undefined && isCurrentTarget(destination)
+            ? []
+            : navSteps.filter((_step, i) => {
+                const raw = rawNavEntries[i];
+                return typeof raw !== 'string' || !isCurrentTarget(raw);
+              });
         const actionWithNav: RegisteredAction =
           navigationSteps.length > 0
             ? {
@@ -539,8 +574,18 @@ export function AgentActionProvider({
         if (!result.error && startedRegistryOnly && registryAction) {
           const ranStaticSteps = action.resolveSteps().length > 0;
           const navigated = navigationSteps.length > 0;
+          // The static steps already ran, but after a NAVIGATION the destination
+          // component (which supplies only waitFor/disabledReason via
+          // steps:undefined) may register a React commit or two after its target
+          // rendered — a synchronous read would miss it and skip adoption, so
+          // poll for a short bounded window (waitForActionMount returns the
+          // instant it appears). Without navigation nothing new is mounting: the
+          // component, if any, registered long ago, so the synchronous read is
+          // exact and free.
           const upgraded = ranStaticSteps
-            ? actionsRef.current.get(actionName)
+            ? navigated
+              ? await waitForActionMount(actionName, controller.signal, HANDOFF_MOUNT_POLL_MS)
+              : actionsRef.current.get(actionName)
             : await waitForActionMount(
                 actionName,
                 controller.signal,

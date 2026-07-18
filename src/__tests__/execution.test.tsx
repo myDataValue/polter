@@ -1037,30 +1037,30 @@ describe('cross-page navigation handoff', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Composable navigation actions
+// Composable navigation
 //
-// A feature action can navigate through a registered navigation action rather
-// than duplicating that action's responsive menu choreography. This keeps one
-// visible recipe for desktop, mobile, and replacement sidebars.
+// `navigateTo` accepts explicit step arrays (string entries are AgentTarget
+// names, StepDefinition entries are used as-is). Responsive navigation exports
+// its menu-opening choreography as a shared const; feature actions spread it
+// into their own `navigateTo`. A string is ALWAYS a target name, never an
+// action name — one namespace.
 // ---------------------------------------------------------------------------
 
-describe('composable navigation actions', () => {
-  const navigateToOverview = defineAction({
-    name: 'navigate_to_overview',
-    description: 'Navigate to Overview',
-    steps: [
-      { label: 'Open mobile menu', target: 'mobile-nav-menu', optional: true, timeout: 10 },
-      { label: 'Open Overview', target: 'overview-tab' },
-    ],
-  });
+describe('composable navigation', () => {
+  // Shared responsive-nav choreography: an optional mobile-menu probe (short
+  // timeout so a desktop layout skips it fast) then the Overview tab.
+  const overviewNav = [
+    { label: 'Open mobile menu', target: 'mobile-nav-menu', optional: true, timeout: 10 },
+    { label: 'Open Overview', target: 'overview-tab' },
+  ];
   const editFromOverview = defineAction({
     name: 'edit_from_overview',
     description: 'Edit from the Overview page',
-    navigateTo: 'navigate_to_overview',
+    navigateTo: overviewNav,
   });
-  const REGISTRY = [navigateToOverview, editFromOverview];
+  const REGISTRY = [editFromOverview];
 
-  it('expands a registered navigation action before component steps', async () => {
+  it('runs a navigateTo step array, skipping an absent optional probe', async () => {
     const onOverview = vi.fn();
     const onEdit = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
@@ -1099,32 +1099,29 @@ describe('composable navigation actions', () => {
     expect(result.error).toBeUndefined();
     expect(onOverview).toHaveBeenCalledOnce();
     expect(onEdit).toHaveBeenCalledOnce();
+    // mobile-nav-menu has no mounted target → skipped; the real hop and the
+    // component's own step run in order.
     expect(result.trace.map((step) => step.label)).toEqual([
       'Open mobile menu',
       'Open Overview',
       'Edit',
     ]);
+    expect(result.trace[0]?.status).toBe('skipped');
     expect(result.trace.slice(1).map((step) => step.targetName)).toEqual([
       'overview-tab',
       'edit-button',
     ]);
-    expect(result.trace[0]?.status).toBe('skipped');
+    expect(result.trace.map((step) => step.index)).toEqual([0, 1, 2]);
   });
 
-  it('expands a chain of navigation actions in order, each hop exactly once', async () => {
-    // edit_nested -> navigate_to_section -> navigate_to_overview. Each stepful
-    // hop must contribute its own targets, deepest-destination first, so the
-    // cursor walks overview -> section -> the component's own edit step.
-    const navigateToSection = defineAction({
-      name: 'navigate_to_section',
-      description: 'Navigate to a section',
-      navigateTo: 'navigate_to_overview',
-      steps: [{ label: 'Open Section', target: 'section-tab' }],
-    });
-    const editNested = defineAction({
-      name: 'edit_nested',
+  it('composes a shared nav const with more hops via spread', async () => {
+    // Userland chain composition: another screen's nav is `overviewNav` plus a
+    // section tab. No action-name reference — just spread the array.
+    const sectionNav = [...overviewNav, { label: 'Open Section', target: 'section-tab' }];
+    const editFromSection = defineAction({
+      name: 'edit_from_section',
       description: 'Edit from a nested section',
-      navigateTo: 'navigate_to_section',
+      navigateTo: sectionNav,
     });
     const onOverview = vi.fn();
     const onSection = vi.fn();
@@ -1132,7 +1129,7 @@ describe('composable navigation actions', () => {
     let ctx: ReturnType<typeof useAgentActions> | null = null;
 
     function Harness() {
-      useAgentAction({ ...editNested, steps: [{ label: 'Edit', target: 'edit-button' }] });
+      useAgentAction({ ...editFromSection, steps: [{ label: 'Edit', target: 'edit-button' }] });
       return (
         <>
           <AgentTarget name="overview-tab">
@@ -1155,17 +1152,14 @@ describe('composable navigation actions', () => {
     }
 
     render(
-      <AgentActionProvider
-        mode="instant"
-        registry={[navigateToOverview, navigateToSection, editNested]}
-      >
+      <AgentActionProvider mode="instant" registry={[editFromSection]}>
         <Harness />
         <TestConsumer onContext={(c) => (ctx = c)} />
       </AgentActionProvider>,
     );
 
     // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
-    const result = await act(() => ctx!.execute('edit_nested'));
+    const result = await act(() => ctx!.execute('edit_from_section'));
 
     expect(result.error).toBeUndefined();
     expect(onOverview).toHaveBeenCalledOnce();
@@ -1177,8 +1171,6 @@ describe('composable navigation actions', () => {
       'Open Section',
       'Edit',
     ]);
-    // The optional mobile-menu hop has no mounted target and is skipped; the
-    // three real hops run in destination-first order, each exactly once.
     expect(result.trace[0]?.status).toBe('skipped');
     expect(result.trace.slice(1).map((step) => step.targetName)).toEqual([
       'overview-tab',
@@ -1187,53 +1179,9 @@ describe('composable navigation actions', () => {
     ]);
   });
 
-  it('throws on a cyclic navigateTo chain instead of looping forever', async () => {
-    const navA = defineAction({
-      name: 'nav_a',
-      description: 'Nav A',
-      navigateTo: 'nav_b',
-      steps: [{ label: 'Open A', target: 'a-tab' }],
-    });
-    const navB = defineAction({
-      name: 'nav_b',
-      description: 'Nav B',
-      navigateTo: 'nav_a',
-      steps: [{ label: 'Open B', target: 'b-tab' }],
-    });
-    const editCyclic = defineAction({
-      name: 'edit_cyclic',
-      description: 'Edit through a cyclic navigation chain',
-      navigateTo: 'nav_a',
-    });
-    let ctx: ReturnType<typeof useAgentActions> | null = null;
-
-    function Harness() {
-      useAgentAction({ ...editCyclic, steps: [{ label: 'Edit', target: 'edit-button' }] });
-      return (
-        <AgentTarget name="edit-button">
-          <button type="button">Edit</button>
-        </AgentTarget>
-      );
-    }
-
-    render(
-      <AgentActionProvider mode="instant" registry={[navA, navB, editCyclic]}>
-        <Harness />
-        <TestConsumer onContext={(c) => (ctx = c)} />
-      </AgentActionProvider>,
-    );
-
-    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
-    const result = await act(() => ctx!.execute('edit_cyclic'));
-
-    expect(result.error).toContain('Cyclic navigateTo action reference');
-    expect(result.error).toContain('nav_a -> nav_b -> nav_a');
-  });
-
-  it('skips a navigation hop whose destination is already the current page', async () => {
-    // navigate_to_overview's destination (overview-tab) is aria-current="page",
-    // so the whole hop expands to nothing and only the component step runs — no
-    // pointless re-click of the page you are already on.
+  it('skips the entire nav prefix when the destination is already the current page', async () => {
+    // overview-tab (the destination) is aria-current="page", so the whole prefix
+    // — including the menu-opener — is skipped and only the component step runs.
     const onOverview = vi.fn();
     const onEdit = vi.fn();
     let ctx: ReturnType<typeof useAgentActions> | null = null;
@@ -1273,6 +1221,168 @@ describe('composable navigation actions', () => {
     expect(onOverview).not.toHaveBeenCalled();
     expect(onEdit).toHaveBeenCalledOnce();
     expect(result.trace.map((step) => step.targetName)).toEqual(['edit-button']);
+  });
+
+  it('accepts a mixed array of step objects and string target names', async () => {
+    const onOverview = vi.fn();
+    const onPanel = vi.fn();
+    const onEdit = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    const mixedNav = [
+      { label: 'Open Overview', target: 'overview-tab' },
+      'panel-btn', // string entry → clicked as an AgentTarget
+    ];
+    const editMixed = defineAction({
+      name: 'edit_mixed',
+      description: 'Edit via a mixed nav array',
+      navigateTo: mixedNav,
+    });
+
+    function Harness() {
+      useAgentAction({ ...editMixed, steps: [{ label: 'Edit', target: 'edit-button' }] });
+      return (
+        <>
+          <AgentTarget name="overview-tab">
+            <button type="button" onClick={onOverview}>
+              Overview
+            </button>
+          </AgentTarget>
+          <AgentTarget name="panel-btn">
+            <button type="button" onClick={onPanel}>
+              Panel
+            </button>
+          </AgentTarget>
+          <AgentTarget name="edit-button">
+            <button type="button" onClick={onEdit}>
+              Edit
+            </button>
+          </AgentTarget>
+        </>
+      );
+    }
+
+    render(
+      <AgentActionProvider mode="instant" registry={[editMixed]}>
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('edit_mixed'));
+
+    expect(result.error).toBeUndefined();
+    expect(onOverview).toHaveBeenCalledOnce();
+    expect(onPanel).toHaveBeenCalledOnce();
+    expect(onEdit).toHaveBeenCalledOnce();
+    expect(result.trace.map((step) => step.targetName)).toEqual([
+      'overview-tab',
+      'panel-btn',
+      'edit-button',
+    ]);
+  });
+
+  it('adopts the destination waitFor outcome when its component mounts after the static steps', async () => {
+    // Handoff race: a registry action with static steps + navigateTo runs those
+    // steps, then the destination component (steps: undefined, supplying only a
+    // waitFor) mounts a beat later. The bounded handoff poll
+    // (HANDOFF_MOUNT_POLL_MS) must still catch that mount and adopt its outcome;
+    // a synchronous read would miss it.
+    const raceAction = defineAction({
+      name: 'race_static_then_adopt',
+      description: 'Run static steps then adopt late destination runtime state',
+      navigateTo: 'nav-btn',
+      steps: [{ label: 'Run', target: 'run-btn' }],
+    });
+    const registry = [raceAction];
+    let resolveSave: (value: unknown) => void;
+    const savePromise = new Promise<unknown>((resolve) => {
+      resolveSave = resolve;
+    });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Destination() {
+      const waitFor = React.useRef<Promise<unknown> | undefined>(savePromise);
+      useAgentAction({ ...raceAction, steps: undefined, waitFor });
+      return null;
+    }
+
+    const Tree = ({ mounted }: { mounted: boolean }) => (
+      <AgentActionProvider mode="instant" mountTimeout={2000} registry={registry}>
+        <AgentTarget name="nav-btn">
+          <button type="button">Nav</button>
+        </AgentTarget>
+        <AgentTarget name="run-btn">
+          <button type="button">Run</button>
+        </AgentTarget>
+        {mounted ? <Destination /> : null}
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>
+    );
+    const { rerender } = render(<Tree mounted={false} />);
+
+    let resultPromise!: Promise<ExecutionResult>;
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+      resultPromise = ctx!.execute('race_static_then_adopt');
+      // Let navigate + static steps fully run before the destination mounts, so
+      // the handoff read begins with the component still absent.
+      await new Promise((r) => setTimeout(r, 40));
+    });
+
+    // The destination mounts only now — the HANDOFF_MOUNT_POLL_MS poll must still see it.
+    await act(async () => {
+      rerender(<Tree mounted />);
+      await Promise.resolve();
+    });
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned by the Promise constructor
+    resolveSave!('saved-late');
+    const result = await act(() => resultPromise);
+
+    expect(result.error).toBeUndefined();
+    expect(result.outcome).toBe('saved-late');
+  });
+
+  it('fast-skips an absent optional first step at the default timeout', async () => {
+    // An optional probe whose target is registered nowhere must not burn the
+    // full 5s default timeout — it should skip after a couple of poll ticks.
+    const action = defineAction({ name: 'optional_fast', description: 'Optional fast skip' });
+    const onClick = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Harness() {
+      useAgentAction({
+        ...action,
+        steps: [
+          { label: 'Maybe open menu', target: 'never-mounted', optional: true },
+          { label: 'Real step', target: 'real-btn' },
+        ],
+      });
+      return (
+        <AgentTarget name="real-btn">
+          <button type="button" onClick={onClick}>
+            Go
+          </button>
+        </AgentTarget>
+      );
+    }
+
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+    const result = await act(() => ctx!.execute('optional_fast'));
+
+    expect(result.error).toBeUndefined();
+    expect(result.durationMs).toBeLessThan(2000);
+    expect(result.trace[0]?.status).toBe('skipped');
+    expect(onClick).toHaveBeenCalledOnce();
   });
 });
 

@@ -29,16 +29,25 @@ export interface ActionSchema<TSchema extends z.ZodType = z.ZodType<Record<strin
   /** Zod schema for action parameters. */
   readonly parameters?: TSchema;
   /**
-   * AgentTarget or registered navigation-action name(s) to run before
-   * executing steps. A referenced navigation action must have static steps;
-   * those steps are expanded so the agent visibly follows the same responsive
-   * menu choreography as a human.
+   * Navigation hops to run before this action's own steps — a shortcut for
+   * "first land on the right page." Each entry is one hop:
+   *
+   * - a bare string, or a string entry in the array, names an AgentTarget → the
+   *   executor clicks it (shorthand for `{ label: name, target: name }`).
+   * - a `StepDefinition` entry is used as-is, so a hop can be `optional`, carry a
+   *   short `timeout` probe, a `value`, or a `skipIf` — everything a step can.
+   *
+   * A string is ALWAYS an AgentTarget name, never an action name: `navigateTo`
+   * lives in one namespace. To reuse another action's navigation choreography,
+   * export that step array as a const and spread it here (e.g.
+   * `navigateTo: [...overviewNav, { label: 'Open panel', target: 'panel-tab' }]`)
+   * — do not reference the other action by name.
    *
    * URL-based navigation is intentionally not supported. Pages that aren't
    * reachable by clicking a visible link aren't reachable by ADUI either —
    * either add a clickable entry point, or have the user navigate manually.
    */
-  readonly navigateTo?: string | string[];
+  readonly navigateTo?: string | ReadonlyArray<string | StepDefinition<z.infer<TSchema>>>;
   /** Steps the agent walks through to drive the UI. */
   readonly steps?: StepDefinition<z.infer<TSchema>>[];
 }
@@ -247,6 +256,7 @@ export interface ExecutorConfig {
     timeout?: number,
     skipCheck?: () => boolean,
     intent?: TargetIntent,
+    optional?: boolean,
   ) => Promise<ResolveResult>;
 }
 

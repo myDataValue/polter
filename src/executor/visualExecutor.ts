@@ -389,6 +389,7 @@ export async function resolveStepElement(
       step.timeout ?? 5000,
       skipCheck,
       intent,
+      step.optional,
     );
   }
 

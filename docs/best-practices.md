@@ -79,14 +79,64 @@ onClick={() => {
 }}
 ```
 
-## `navigateTo` clicks targets, in order
+## `navigateTo` runs navigation hops before steps
 
-`navigateTo` clicks one or more AgentTargets before steps run — a shortcut for "first land on the right page." Pass a name to click one, or an array to click a sequence (e.g. open a dropdown, then click an item inside).
+`navigateTo` runs a sequence of navigation hops before the action's own steps — a shortcut for "first land on the right page." Each entry is one hop:
+
+- a **string** (or a string entry in the array) names an `<AgentTarget>` → the executor clicks it. It is shorthand for `{ label: name, target: name }`.
+- a **`StepDefinition`** entry is used as-is, so a hop can be `optional`, carry a short probe `timeout`, type a `value`, or declare a `skipIf` — everything an in-page step can.
 
 ```ts
-navigateTo: "navigate_to_dashboard";
-navigateTo: ["profile-menu", "settings-tab"];
+navigateTo: "dashboard-tab"; // click one target
+navigateTo: ["profile-menu", "settings-tab"]; // open a dropdown, then an item
+navigateTo: [
+  {
+    label: "Open menu",
+    target: "mobile-nav-menu",
+    optional: true,
+    timeout: 300,
+  },
+];
 ```
+
+**A string is ALWAYS an AgentTarget name — never an action name.** `navigateTo` lives in one namespace: one string, one target. To reuse another action's navigation choreography, export that step array as a shared const and spread it. Don't reference an action by name.
+
+### The responsive-nav pattern
+
+Author the menu-opening choreography **once** as a shared step array, use it as the nav action's own `steps`, and spread it into feature actions' `navigateTo`. The `optional` probe (short `timeout`) opens the mobile menu when it's mounted and fails fast on a desktop layout where the hamburger isn't rendered — one recipe covers both breakpoints.
+
+```ts
+// nav.ts — one choreography, authored once.
+export const overviewNav: StepDefinition[] = [
+  {
+    label: "Open menu",
+    target: "mobile-nav-menu",
+    optional: true,
+    timeout: 300,
+  },
+  { label: "Open Overview", target: "overview-tab" },
+];
+
+// The nav action runs it as its own steps…
+export const navigateToOverview = defineAction({
+  name: "navigate_to_overview",
+  description: "Go to the Overview page",
+  steps: overviewNav,
+});
+
+// …and a feature action spreads it into navigateTo, composing more hops.
+export const editOverviewSetting = defineAction({
+  name: "edit_overview_setting",
+  description: "Edit a setting on the Overview page",
+  navigateTo: [
+    ...overviewNav,
+    { label: "Open panel", target: "settings-panel" },
+  ],
+  steps: [{ label: "Save", target: "save-btn" }],
+});
+```
+
+If the **destination** hop (the last plain-string / non-optional string-target hop) is already the current page — its element is `aria-current="page"` — the **entire** `navigateTo` prefix is skipped: you're there, so opening the menus that lead to it is pointless. Individual plain-string hops whose element is the page you're already on are dropped too.
 
 If a route has no UI entry point, add a clickable `<AgentTarget>` somewhere visible — even a hidden-but-mounted element with a Link inside is fine, as long as the click is a real DOM interaction.
 
@@ -96,7 +146,7 @@ For dynamic per-entity routes (e.g. property detail pages), use steps to search 
 export const navigateToProperty = defineAction({
   name: "navigate_to_property",
   parameters: z.object({ property_id: z.number() }),
-  navigateTo: "navigate_to_dashboard",
+  navigateTo: "dashboard-tab",
   steps: [
     {
       label: "Filter to property",
