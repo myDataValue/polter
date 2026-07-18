@@ -144,6 +144,7 @@ describe('resolveStepElement', () => {
       5000, // default step timeout
       undefined, // skipCheck
       undefined, // intent
+      undefined, // optional
     );
   });
 
