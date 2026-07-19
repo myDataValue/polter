@@ -212,11 +212,18 @@ export function AgentActionProvider({
     componentActionsRef.current.set(action.name, incoming);
     actionsRef.current.set(action.name, action);
 
-    // Only bump version if schema-relevant or state-relevant props changed
+    // Only bump version if schema-relevant or state-relevant props changed.
+    // `disabledIsNoop` is state-relevant: `availableActions` is memoised on
+    // `version` and is what `useAgentCommandRouter` reads, so a stale flag would
+    // classify a real block as a benign no-op — telling the agent "nothing
+    // happened, do not retry" about a write that genuinely did not apply. That
+    // is reachable whenever a consumer reuses ONE reason string across both
+    // classifications, which the reason text alone cannot distinguish.
     if (
       !existing ||
       existing.description !== action.description ||
-      existing.disabledReason !== action.disabledReason
+      existing.disabledReason !== action.disabledReason ||
+      existing.disabledIsNoop !== action.disabledIsNoop
     ) {
       setVersion((v) => v + 1);
     }
@@ -604,6 +611,14 @@ export function AgentActionProvider({
               result = {
                 actionName,
                 error: upgraded.disabledReason,
+                // Carry the classification ONLY when nothing but navigation ran.
+                // A stepless registry action (navigateTo, no steps) reaches its
+                // real component for the first time here, so the component that
+                // just mounted is the authority and its verdict is as safe as it
+                // is at the pre-execution short-circuits. When static steps have
+                // already run, a mid-run disable is ambiguous — it could hide a
+                // half-applied change — so it stays a hard failure.
+                noop: ranStaticSteps ? undefined : upgraded.disabledIsNoop || undefined,
                 trace: result.trace,
                 durationMs: performance.now() - start,
               };
