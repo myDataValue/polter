@@ -14,6 +14,7 @@ interface Command {
 
 const syncAction = defineAction({ name: 'sync', description: 'Sync' });
 const lockedAction = defineAction({ name: 'locked', description: 'Locked' });
+const idleAction = defineAction({ name: 'idle', description: 'Idle' });
 
 function RouterConsumer({
   fallback,
@@ -86,6 +87,39 @@ describe('useAgentCommandRouter', () => {
       result = await router!({ action: 'locked' });
     });
     expect(result).toMatchObject({ actionName: 'locked', error: 'Not ready' });
+    // A plain block is a failure — it must NOT be softened into a no-op.
+    expect(result?.noop).toBeUndefined();
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  // A disabled action can mean two different things, and the caller cannot tell
+  // them apart from the reason text alone: "you are blocked" vs "there was nothing
+  // to do". `disabledIsNoop` carries that classification onto the result so a
+  // benign nothing-to-do dispatch isn't reported as a failed change (PRO-920: a
+  // push with nothing staged was announced to the user as "FAILED — those changes
+  // did NOT apply", right after the real push had committed them).
+  it('flags a benign nothing-to-do disabled action as a no-op', async () => {
+    const fallback = vi.fn();
+    let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
+
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={idleAction} disabledReason="Nothing to do" disabledIsNoop>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Idle</button>
+        </AgentAction>
+        <RouterConsumer fallback={fallback} onRouter={(r) => (router = r)} />
+      </AgentActionProvider>,
+    );
+
+    let result: ExecutionResult | undefined;
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+      result = await router!({ action: 'idle' });
+    });
+    // The reason still rides along as `error` for context, but `noop` is what the
+    // caller keys the "nothing happened" report off.
+    expect(result).toMatchObject({ actionName: 'idle', error: 'Nothing to do', noop: true });
     expect(fallback).not.toHaveBeenCalled();
   });
 

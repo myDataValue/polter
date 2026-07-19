@@ -61,6 +61,22 @@ export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<s
   /** When set, the action is disabled and this string is the reason. */
   readonly disabledReason?: string;
   /**
+   * Marks `disabledReason` as a benign **nothing-to-do** state rather than a
+   * block. Both shapes disable the action, but they mean opposite things to an
+   * agent that dispatches it anyway:
+   *
+   * - `false`/absent (default) — a real block ("pushing is paused", "log in
+   *   first"). The dispatch FAILED: the requested change did not apply.
+   * - `true` — there was simply nothing to do (e.g. no staged changes to push).
+   *   Nothing was attempted, so nothing failed *and* nothing happened.
+   *
+   * Set it and the pre-execution disabled short-circuits (`execute()` and
+   * `useAgentCommandRouter`) flag their result `noop: true`, so a caller can
+   * report "nothing to do" instead of inventing a failure. Structural by
+   * design — callers must never infer this by matching on the reason text.
+   */
+  readonly disabledIsNoop?: boolean;
+  /**
    * Awaited after all steps complete. Holds the action open until async work
    * triggered by a step click finishes.
    *
@@ -147,7 +163,7 @@ export interface AgentTargetEntry extends TargetDefinition {
 export interface RegisteredAction<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>>
   extends Pick<
     ActionDefinition<TSchema>,
-    'name' | 'description' | 'parameters' | 'navigateTo' | 'disabledReason'
+    'name' | 'description' | 'parameters' | 'navigateTo' | 'disabledReason' | 'disabledIsNoop'
   > {
   /** Returns the current steps with fresh closures (via useEffectEvent). */
   readonly resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
@@ -217,6 +233,14 @@ export interface ExecutionResult {
   readonly actionName: string;
   /** Present when execution failed — absence means success. */
   readonly error?: string;
+  /**
+   * The action was disabled for a benign nothing-to-do reason
+   * (`ActionDefinition.disabledIsNoop`), so it never ran: nothing was attempted
+   * and nothing changed. `error` still carries the reason for context, but a
+   * caller must report this as "nothing to do" — NOT as a failure (nothing
+   * broke) and NOT as a success (nothing happened).
+   */
+  readonly noop?: boolean;
   readonly trace: readonly StepTrace[];
   readonly durationMs: number;
   /** Value the action's `waitFor` promise resolved to, if any. Lets an action
@@ -229,6 +253,8 @@ export interface AvailableAction {
   readonly name: string;
   readonly description: string;
   readonly disabledReason?: string;
+  /** `disabledReason` is a benign nothing-to-do state — see `ActionDefinition.disabledIsNoop`. */
+  readonly disabledIsNoop?: boolean;
   readonly hasParameters: boolean;
 }
 

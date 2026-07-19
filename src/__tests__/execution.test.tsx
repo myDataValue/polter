@@ -351,10 +351,37 @@ describe('error handling', () => {
         const result = await act(() => ctx!.execute('disabled_test'));
         expect(result.error).toBeDefined();
         expect(result.error).toBe(reason);
+        // Blocked by default, whatever the wording — only an explicit
+        // `disabledIsNoop` downgrades a disabled action to a no-op.
+        expect(result.noop).toBeUndefined();
         cleanup();
       }),
       DOM_PROPERTY_OPTS,
     );
+  });
+
+  // Execution-layer twin of the router test in routing.test.tsx: whichever entry
+  // point dispatches a benign nothing-to-do action, the result must say "nothing
+  // happened" rather than "this failed" (PRO-920).
+  it('flags a nothing-to-do disabled action as a no-op', { timeout: DOM_TIMEOUT }, async () => {
+    const action = defineAction({ name: 'noop_test', description: 'Nothing to do' });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={action} disabledReason="Nothing to push" disabledIsNoop>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Go</button>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+    const result = await act(() => ctx!.execute('noop_test'));
+    expect(result.noop).toBe(true);
+    expect(result.error).toBe('Nothing to push');
+    // Nothing ran, so no step ever executed.
+    expect(result.trace).toEqual([]);
   });
 });
 
