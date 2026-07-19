@@ -35,7 +35,16 @@ export function useAgentCommandRouter<T>(
       const match = availableActions.find((a) => a.name === actionName);
 
       if (match?.disabledReason) {
-        return { actionName, error: match.disabledReason, trace: [], durationMs: 0 };
+        // A disabled action never runs, but "blocked" and "nothing to do" are
+        // different outcomes — carry the action's own classification through so
+        // the caller doesn't have to guess (or string-match) which one it got.
+        return {
+          actionName,
+          error: match.disabledReason,
+          noop: match.disabledIsNoop || undefined,
+          trace: [],
+          durationMs: 0,
+        };
       }
 
       if (match) {

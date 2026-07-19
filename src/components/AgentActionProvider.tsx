@@ -464,9 +464,16 @@ export function AgentActionProvider({
         };
       }
       if (action.disabledReason) {
+        // Disabled BEFORE anything ran, so the action's own classification is
+        // authoritative: `disabledIsNoop` means there was nothing to do, not that
+        // the caller was blocked. The post-execution disabledReason adoptions
+        // further down deliberately do NOT set this — once steps have started,
+        // "it became disabled mid-run" is an ambiguous outcome, and reporting it
+        // as a benign no-op could hide a half-applied change.
         return {
           actionName,
           error: action.disabledReason,
+          noop: action.disabledIsNoop || undefined,
           trace: [],
           durationMs: performance.now() - start,
         };
@@ -696,6 +703,7 @@ export function AgentActionProvider({
         name: a.name,
         description: a.description,
         disabledReason: a.disabledReason,
+        disabledIsNoop: a.disabledIsNoop,
         hasParameters: !!a.parameters,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
