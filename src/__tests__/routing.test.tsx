@@ -5,6 +5,7 @@ import { AgentAction } from '../components/AgentAction';
 import { AgentActionProvider } from '../components/AgentActionProvider';
 import { defineAction } from '../core/helpers';
 import type { ExecutionResult } from '../core/types';
+import { useAgentAction } from '../hooks/useAgentAction';
 import { useAgentCommandRouter } from '../hooks/useAgentCommandRouter';
 
 interface Command {
@@ -121,6 +122,46 @@ describe('useAgentCommandRouter', () => {
     // caller keys the "nothing happened" report off.
     expect(result).toMatchObject({ actionName: 'idle', error: 'Nothing to do', noop: true });
     expect(fallback).not.toHaveBeenCalled();
+  });
+
+  // `availableActions` (what this router reads) is memoised on the registry
+  // version, so re-registration has to bump it when the CLASSIFICATION changes —
+  // not just when the reason text does. A consumer that reuses one reason string
+  // for both a benign and a blocking state would otherwise keep the previous
+  // flag, and a real block would come back `noop: true`: the agent gets told
+  // "nothing happened, do not retry" about a write that genuinely did not apply.
+  it('re-registers when only disabledIsNoop flips, keeping one reason string', async () => {
+    const sameReason = 'Push unavailable';
+    let router: ((cmd: Command) => Promise<ExecutionResult | undefined>) | null = null;
+
+    function Flipping({ isNoop }: { isNoop: boolean }) {
+      useAgentAction({ ...idleAction, disabledReason: sameReason, disabledIsNoop: isNoop });
+      return null;
+    }
+    const Tree = ({ isNoop }: { isNoop: boolean }) => (
+      <AgentActionProvider mode="instant">
+        <Flipping isNoop={isNoop} />
+        <RouterConsumer fallback={null} onRouter={(r) => (router = r)} />
+      </AgentActionProvider>
+    );
+
+    const { rerender } = render(<Tree isNoop />);
+    let first: ExecutionResult | undefined;
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: published by RouterConsumer
+      first = await router!({ action: 'idle' });
+    });
+    expect(first?.noop).toBe(true);
+
+    // Same reason text, now a REAL block.
+    rerender(<Tree isNoop={false} />);
+    let second: ExecutionResult | undefined;
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: published by RouterConsumer
+      second = await router!({ action: 'idle' });
+    });
+    expect(second?.error).toBe(sameReason);
+    expect(second?.noop).toBeUndefined();
   });
 
   it('should handle null fallback gracefully', async () => {

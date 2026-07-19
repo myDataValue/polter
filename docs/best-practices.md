@@ -810,7 +810,8 @@ LLM cannot call it.
 ```tsx
 <AgentAction
   action={pushChanges}
-  disabledReason={!hasPendingChanges ? "No pending changes to push" : undefined}
+  disabledReason={disabled?.reason}
+  disabledIsNoop={disabled?.isNoop}
 >
   <SaveButton />
 </AgentAction>
@@ -819,6 +820,39 @@ LLM cannot call it.
 Good for: conditions that change during a session (pending changes, selection
 state, loading). Only works for mounted actions — registry-only actions can't be
 dynamically disabled.
+
+**`disabledIsNoop` — is this block a refusal, or just nothing to do?**
+
+An agent that dispatches a disabled action gets a result back, and the two kinds
+of "disabled" mean opposite things to it:
+
+- **A block** (default): the work was refused and did NOT happen. The caller
+  should report a failure.
+- **A no-op** (`disabledIsNoop`): there was nothing to do, so nothing was
+  attempted and nothing changed. Reporting that as a failure alarms the user
+  about work that was never needed; reporting it as a success invents work that
+  never happened. Both pre-execution short-circuits flag it as
+  `ExecutionResult.noop` so the caller can say "nothing to do" instead.
+
+Derive the flag from the underlying state, never from the reason text — and be
+careful **which** state. Classify off the real "is there anything to do" value,
+not off whatever flag happens to gate the button, or a transient busy/not-ready
+state will be misreported as "nothing to do" while real work sits pending:
+
+```tsx
+// The button is masked off while a recalculation is in flight — but the work is
+// still there, so that is a block, not a no-op.
+const disabled =
+  stagedCount === 0
+    ? { reason: "Nothing to push — nothing is staged.", isNoop: true }
+    : !canPushNow
+      ? {
+          reason:
+            "Still recalculating — your changes are staged and NOT yet pushed.",
+          isNoop: false,
+        }
+      : undefined;
+```
 
 **`skipIf` — step-level preconditions (enforced)**
 

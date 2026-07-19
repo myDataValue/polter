@@ -1043,6 +1043,113 @@ describe('cross-page navigation handoff', () => {
     expect(onRun).not.toHaveBeenCalled();
   });
 
+  // A stepless registry action (navigateTo, no steps of its own) reaches its real
+  // component for the FIRST time after navigating — nothing but navigation has
+  // run — so the component that just mounted is the authority and its no-op
+  // classification must survive. Without this, the original PRO-920 incident is
+  // still reachable: the agent pushes from another view, the router finds only
+  // the registry stand-in (no disabledReason, so neither pre-execution
+  // short-circuit fires), and the adopted reason comes back as a bare error —
+  // reproducing the "1 of 1 command(s) FAILED" text this work exists to remove.
+  it('carries the destination no-op flag for a STEPLESS cross-page action', async () => {
+    const steplessCrossPage = defineAction({
+      name: 'noop_from_other_page',
+      description: 'Stepless registry action whose destination has nothing to do',
+      navigateTo: 'dash-nav',
+    });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Destination() {
+      useAgentAction({
+        ...steplessCrossPage,
+        steps: [],
+        disabledReason: 'Nothing to push',
+        disabledIsNoop: true,
+      });
+      return null;
+    }
+
+    const Tree = ({ mounted }: { mounted: boolean }) => (
+      <AgentActionProvider mode="instant" mountTimeout={2000} registry={[steplessCrossPage]}>
+        <AgentTarget name="dash-nav">
+          <button type="button">Dashboard</button>
+        </AgentTarget>
+        {mounted ? <Destination /> : null}
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>
+    );
+    const { rerender } = render(<Tree mounted={false} />);
+
+    let resultPromise!: Promise<ExecutionResult>;
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+      resultPromise = ctx!.execute('noop_from_other_page');
+      rerender(<Tree mounted />);
+    });
+    const result = await act(() => resultPromise);
+
+    expect(result.error).toBe('Nothing to push');
+    expect(result.noop).toBe(true);
+  });
+
+  // WEAKENING-VISIBLE INVARIANT (critical safety area). Once an action's own
+  // steps have run, a disable adopted afterwards is ambiguous: the run may have
+  // half-applied something. Reporting that as a no-op would tell the agent
+  // "nothing happened, do not retry" about a partially-applied write — the exact
+  // inverse of the bug this feature fixes, and it would pass silently. So the
+  // post-execution adoptions must NEVER set `noop`, however the action is
+  // classified. (The other two adoption sites — the in-page mid-run preference
+  // and the catch block — cannot set it by construction: one spreads the prior
+  // executor result, which has no `noop`, and the other builds a fresh object
+  // without one. Keep it that way.)
+  it('does NOT carry the no-op flag once the action already ran its own steps', async () => {
+    const staticCrossPage = defineAction({
+      name: 'ran_then_disabled',
+      description: 'Static steps run, then the destination reports a no-op reason',
+      navigateTo: 'dash-nav',
+      steps: [{ label: 'run', target: 'run-btn' }],
+    });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+
+    function Destination() {
+      useAgentAction({
+        ...staticCrossPage,
+        steps: undefined,
+        disabledReason: 'Nothing to push',
+        // Even though the destination calls it benign, steps already ran here.
+        disabledIsNoop: true,
+      });
+      return (
+        <AgentTarget name="run-btn">
+          <button type="button">Run</button>
+        </AgentTarget>
+      );
+    }
+
+    const Tree = ({ mounted }: { mounted: boolean }) => (
+      <AgentActionProvider mode="instant" mountTimeout={2000} registry={[staticCrossPage]}>
+        <AgentTarget name="dash-nav">
+          <button type="button">Dashboard</button>
+        </AgentTarget>
+        {mounted ? <Destination /> : null}
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>
+    );
+    const { rerender } = render(<Tree mounted={false} />);
+
+    let resultPromise!: Promise<ExecutionResult>;
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: assigned synchronously by TestConsumer
+      resultPromise = ctx!.execute('ran_then_disabled');
+      rerender(<Tree mounted />);
+    });
+    const result = await act(() => resultPromise);
+
+    expect(result.error).toBe('Nothing to push');
+    // The whole point: a post-run disable stays a hard failure.
+    expect(result.noop).toBeUndefined();
+  });
+
   it('reports an unavailable stepless registry action instead of a false success', async () => {
     const unavailable = defineAction({
       name: 'unavailable_action',
