@@ -424,14 +424,14 @@ The framework-agnostic core path quietly happens as a side effect of step 1. Whe
 
 | File                                     | LOC | Role                                                                                |
 | ---------------------------------------- | --: | ----------------------------------------------------------------------------------- |
-| `src/components/AgentActionProvider.tsx` | 740 | Three action maps + targets map + execute orchestration — Phase 1 lift target       |
+| `src/components/AgentActionProvider.tsx` | 778 | Three action maps + targets map + execute orchestration — Phase 1 lift target       |
 | `src/executor/visualExecutor.ts`         | 807 | Step loop, element resolution, click/type/spotlight effects — Q1 target             |
-| `src/core/types.ts`                      | 326 | All shared types — Q4/Q6 target                                                     |
+| `src/core/types.ts`                      | 352 | All shared types — Q4/Q6 target                                                     |
 | `src/core/helpers.ts`                    |  59 | `defineAction` + `fromParam` helper — Q4/Q6/Q8 target                               |
 | `src/core/schemaGenerator.ts`            |  29 | Zod v4 → JSON Schema                                                                |
-| `src/components/AgentAction.tsx`         |  26 | Convenience wrapper over `useAgentAction` + `<AgentTarget>`                         |
-| `src/components/AgentTarget.tsx`         | 102 | Target registration + `MutationObserver` for nested mounts                          |
-| `src/hooks/useAgentAction.ts`            |  53 | Hook-based registration; latest-config ref pattern                                  |
+| `src/components/AgentAction.tsx`         |  34 | Convenience wrapper over `useAgentAction` + `<AgentTarget>`                         |
+| `src/components/AgentTarget.tsx`         | 105 | Target registration + `MutationObserver` for nested mounts                          |
+| `src/hooks/useAgentAction.ts`            |  60 | Hook-based registration; latest-config ref pattern                                  |
 | `src/resolvers/scoring.ts`               | 135 | Attribute-based target matching — `matchTargets`, scoring, thresholds (see 1c)      |
 | `src/resolvers/types.ts`                 |  67 | `TargetIntent` / `TargetAttrs` / match-result types                                 |
 | `src/components/AgentDevTools.tsx`       | 686 | In-app dev UI for inspecting and running actions (React-only; stays in the adapter) |
