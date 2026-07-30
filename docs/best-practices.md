@@ -178,6 +178,17 @@ const scrollToFirstProperty: ScrollDispatch = {
 
 Arbitrary code is intentionally not supported. If you find yourself wanting `setSelectedIds`, `dispatch`, a mutation, or any other side effect — that's a step the agent should click, not a "scroll" that pretends to be passive.
 
+## Targets inside virtualized table cells
+
+`scrollTo` covers the vertical case — a row outside the window isn't mounted until the host scrolls it into view. Wide tables add a second, horizontal axis: the host may keep every `<td>` mounted for layout but only materialize cell **content** (editors, switches, `AgentTarget`s) for frozen + near-viewport columns. In that mode a target in a far-off-screen column doesn't exist in the DOM at all, and no `scrollTo` step will conjure it.
+
+The host-side contract that makes actions work anyway:
+
+- **While an action executes, render everything.** Pass polter's `isExecuting` (from `useAgentActions()`) into the table's full-render prop (`renderAllBodyCellContent` on the shared `VirtualizedTableView`). Targets then mount for the execution window and the resolver's normal polling finds them; when execution ends the table drops back to the bounded window. The channel table wires exactly this, and `bodyCellVirtualizationAgentSmoke.test.tsx` locks the round-trip (offscreen target mounts for execution, bounded window restored after).
+- **Humans get an escape hatch too.** The same table renders an sr-only "Load all table controls for assistive technology" toggle so keyboard and screen-reader users (and E2E assertions — see `e2e/support/agentDevtools.ts` `loadAllTableControls`) can materialize the full grid on demand.
+
+What an action author must NOT rely on: cell content in far-off-screen columns being mounted **outside** an active execution. Anything that reads the table between actions — a `disabledReason` probe, a devtools check, a test assertion — sees only the bounded window unless one of the two hatches above is active.
+
 ## Put cross-page steps in `defineAction`
 
 When a step click causes a page navigation, the next step's target doesn't exist yet — it's on the new page. The executor polls up to 5s for each step's target to appear, so cross-page actions work automatically. For targets that take longer to load (API calls), render them with `disabled` during loading — polter polls past disabled elements and clicks when they become enabled.
