@@ -129,7 +129,7 @@ classDiagram
     +target? string | (params) ⇒ string
     +intent? TargetIntent | (params) ⇒ TargetIntent
     +value? string | (params) ⇒ string | undefined
-    +scrollTo? (params) ⇒ void | Promise
+    +scrollTo? ScrollDispatch (dispatchEvent + detail)
     +skipIf? (params) ⇒ bool
     +timeout? number
   }
