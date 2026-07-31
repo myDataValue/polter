@@ -309,7 +309,8 @@ The overlay elements expose stable class names you can target:
   /* label tooltip */
 }
 .polter-cursor {
-  /* simulated cursor (with .polter-cursor-label and .polter-cursor-click) */
+  /* simulated cursor (with .polter-cursor-label; the click pulse is the
+     polter-cursor-click keyframes animation, not a class) */
 }
 .polter-spotlight-container {
   /* wrapper holding the spotlight cutout */
