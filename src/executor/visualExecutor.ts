@@ -756,9 +756,16 @@ export async function executeAction(
       log('waitFor:done', { action: action.name });
     }
 
+    // Every declared step skipped means the action resolved zero interactions:
+    // nothing was clicked, typed, or changed. Nothing FAILED either, so this
+    // used to come back as a plain success — the enabling condition for an
+    // agent narrating an empty run as work it had done. Say so explicitly
+    // instead and let the caller decide (see `ExecutionResult.outcomeKind`).
+    const everyStepSkipped = stepTraces.every((step) => step.status === 'skipped');
     log('execute:complete', {
       action: action.name,
       steps: stepTraces.length,
+      skippedAll: everyStepSkipped,
       durationMs: performance.now() - executionStart,
     });
     return {
@@ -766,6 +773,7 @@ export async function executeAction(
       trace: stepTraces,
       durationMs: performance.now() - executionStart,
       outcome,
+      outcomeKind: everyStepSkipped ? 'noop' : undefined,
     };
   } catch (err) {
     fx.cleanup();
