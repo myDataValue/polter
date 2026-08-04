@@ -241,6 +241,18 @@ export interface ExecutionResult {
    * broke) and NOT as a success (nothing happened).
    */
   readonly noop?: boolean;
+  /**
+   * How the action ended, when "it ran and nothing went wrong" is not the whole
+   * story. `"noop"` means the action ran but every one of its steps was skipped,
+   * so it resolved zero interactions: nothing was clicked, typed, or changed.
+   *
+   * Distinct from `noop` above, which is the action never STARTING because it
+   * was disabled for a benign reason it could name. This one has no reason to
+   * give — the steps' preconditions were already satisfied, or their controls
+   * were not on screen — so a caller must treat it as "no matching targets;
+   * nothing was executed" and re-check state, never as a completed action.
+   */
+  readonly outcomeKind?: 'noop';
   readonly trace: readonly StepTrace[];
   readonly durationMs: number;
   /** Value the action's `waitFor` promise resolved to, if any. Lets an action

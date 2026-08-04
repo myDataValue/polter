@@ -419,6 +419,36 @@ Common patterns:
 - **Already selected**: `skipIf: ({ id }) => selectedId === id`
 - **Combined**: `skipIf: ({ id }) => selectedId === id || query === name`
 
+### When every step skips: `outcomeKind: "noop"`
+
+An action whose steps ALL skip has run without touching anything — it clicked
+nothing, typed nothing, changed nothing. Nothing failed, so the result carries
+no `error` and is otherwise indistinguishable from a completed run. That gap is
+how an agent comes to report changes it never made.
+
+So the executor says it outright: when every declared step was skipped, the
+result carries `outcomeKind: "noop"`.
+
+```ts
+const result = await execute("add_tag", { tag: "beach" });
+if (result.outcomeKind === "noop") {
+  // Ran, matched no targets, changed nothing — do NOT report it as done.
+}
+```
+
+Two fields, two different "nothing happened":
+
+| Field                 | Meaning                                                              |
+| --------------------- | -------------------------------------------------------------------- |
+| `noop`                | The action never STARTED — disabled for a benign reason it can name. |
+| `outcomeKind: "noop"` | The action RAN, and every step skipped — an empty target set.        |
+
+`noop` comes with an explanation (`error` holds the benign reason), so a caller
+can reassure the user. `outcomeKind` comes with none — the preconditions were
+already satisfied, or the controls were not on screen — so a caller should treat
+it as "no matching targets" and re-check state rather than reassure. An action
+that declares NO steps is neither: it never had targets to skip.
+
 ## Use a static `target` for fixed names
 
 When a step always points at the same element regardless of params, pass a

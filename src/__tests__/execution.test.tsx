@@ -215,6 +215,111 @@ describe('skipIf', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Empty target set — an action that ran but skipped every step interacted with
+// nothing. Nothing failed, so it used to be indistinguishable from a completed
+// run; an agent consuming that result reports changes it never made. It must
+// say so explicitly (`outcomeKind: 'noop'`).
+// ---------------------------------------------------------------------------
+
+describe('empty target set', () => {
+  it('marks a run whose every step was skipped as a noop outcome', async () => {
+    const action = defineAction({ name: 'all_skipped', description: 'All skipped' });
+    const onClick = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        ...action,
+        steps: [
+          { label: 'first', target: 'btn', skipIf: () => true },
+          { label: 'second', target: 'btn', skipIf: () => true },
+        ],
+      });
+      return (
+        <AgentTarget name="btn">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button onClick={onClick}>Go</button>
+        </AgentTarget>
+      );
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+    const result = await act(() => ctx!.execute('all_skipped'));
+
+    expect(onClick).not.toHaveBeenCalled();
+    expect(result.outcomeKind).toBe('noop');
+    // Nothing broke — this is not a failure, and must not be reported as one.
+    expect(result.error).toBeUndefined();
+    // `noop` stays clear: that flag means the action never started.
+    expect(result.noop).toBeUndefined();
+  });
+
+  it('leaves a partially-skipped run a plain success', async () => {
+    const action = defineAction({ name: 'partly_skipped', description: 'Partly skipped' });
+    const onClick = vi.fn();
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({
+        ...action,
+        steps: [
+          { label: 'first', target: 'btn', skipIf: () => true },
+          { label: 'second', target: 'btn' },
+        ],
+      });
+      return (
+        <AgentTarget name="btn">
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button onClick={onClick}>Go</button>
+        </AgentTarget>
+      );
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+    const result = await act(() => ctx!.execute('partly_skipped'));
+
+    // Something really happened, so the caller gets an ordinary success.
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(result.outcomeKind).toBeUndefined();
+    expect(result.error).toBeUndefined();
+  });
+
+  it('leaves a stepless waitFor-only action a plain success', async () => {
+    // An action that declares NO steps is a legitimate pattern (it exists to
+    // await something, not to click). It never had targets to skip, so it is
+    // not an empty target set — only a run that skipped its own steps is.
+    const action = defineAction({ name: 'stepless', description: 'Stepless' });
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    function Harness() {
+      useAgentAction({ ...action, steps: [] });
+      return null;
+    }
+    render(
+      <AgentActionProvider mode="instant">
+        <Harness />
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+    const result = await act(() => ctx!.execute('stepless'));
+
+    expect(result.outcomeKind).toBeUndefined();
+    expect(result.error).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Closure freshness — regression guards for useEffectEvent
 // ---------------------------------------------------------------------------
 
