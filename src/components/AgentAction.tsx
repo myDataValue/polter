@@ -4,7 +4,10 @@ import { useAgentAction } from '../hooks/useAgentAction';
 import { AgentTarget } from './AgentTarget';
 
 interface AgentActionProps
-  extends Pick<ActionDefinition, 'disabledReason' | 'disabledIsNoop' | 'waitFor'> {
+  extends Pick<
+    ActionDefinition,
+    'disabledReason' | 'disabledIsNoop' | 'disabledOutcome' | 'waitFor'
+  > {
   // Param-erased so any concrete action schema is accepted. `any` is load-bearing:
   // the default `z.ZodType<Record<string, unknown>>` would reject a typed schema
   // because `StepDefinition`'s callbacks are contravariant under `strictFunctionTypes`.
@@ -17,6 +20,7 @@ export function AgentAction({
   action,
   disabledReason,
   disabledIsNoop,
+  disabledOutcome,
   waitFor,
   children,
 }: AgentActionProps) {
@@ -24,6 +28,7 @@ export function AgentAction({
     ...action,
     disabledReason,
     disabledIsNoop,
+    disabledOutcome,
     waitFor,
     steps: children ? [{ label: action.description, target: action.name }] : [],
   });

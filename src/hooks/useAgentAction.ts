@@ -49,11 +49,17 @@ export function useAgentAction(...configs: ActionDefinition<any>[]): void {
   }, [registerAction, unregisterAction, getSteps, resolveWaitFor]);
 
   // Re-register whenever the disabled state changes so actionsRef stays in sync.
-  // Both halves are in the key: the reason text AND its noop classification, so a
-  // flip between "blocked" and "nothing to do" re-registers even if a caller ever
-  // reuses one reason string for both.
+  // All three parts are in the key: the reason text AND both classifications, so
+  // a flip between "blocked", "nothing to do" and "outcome unobservable"
+  // re-registers even if a caller ever reuses one reason string across them.
+  // Omitting `disabledOutcome` here would defeat its purpose: an action that
+  // becomes unobservably-busy while keeping its previous reason text would hold
+  // a stale registration, and its dispatch would be classified as a plain
+  // failure — the false "your changes did not apply" this flag exists to stop.
   const disabledKey = configs
-    .map((c) => `${c.disabledReason ?? ''}${c.disabledIsNoop ? '1' : '0'}`)
+    .map(
+      (c) => `${c.disabledReason ?? ''}${c.disabledIsNoop ? '1' : '0'}${c.disabledOutcome ?? ''}`,
+    )
     .join('\0');
   // biome-ignore lint/correctness/useExhaustiveDependencies: grandfathered at Biome adoption — fix and remove over time
   useEffect(buildRegistered, [buildRegistered, disabledKey]);
