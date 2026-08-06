@@ -290,6 +290,15 @@ export function AgentDevTools({ defaultOpen = false, bottomOffset = 0 }: AgentDe
                     data-execution-status={
                       !entry.result ? 'pending' : entry.result.error ? 'failed' : 'succeeded'
                     }
+                    // The resolved `waitFor` value, so a browser-driven
+                    // execute() can read what the ACTION reported — not just
+                    // whether it finished. Dev-only render surface: nothing here
+                    // touches the executor, the resolvers, or ExecutionResult.
+                    data-agent-outcome={
+                      entry.result?.outcome === undefined
+                        ? undefined
+                        : JSON.stringify(entry.result.outcome)
+                    }
                     style={{ padding: '10px 20px', borderBottom: '1px solid #1e293b' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
