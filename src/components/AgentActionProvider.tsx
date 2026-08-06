@@ -213,17 +213,20 @@ export function AgentActionProvider({
     actionsRef.current.set(action.name, action);
 
     // Only bump version if schema-relevant or state-relevant props changed.
-    // `disabledIsNoop` is state-relevant: `availableActions` is memoised on
-    // `version` and is what `useAgentCommandRouter` reads, so a stale flag would
-    // classify a real block as a benign no-op — telling the agent "nothing
-    // happened, do not retry" about a write that genuinely did not apply. That
-    // is reachable whenever a consumer reuses ONE reason string across both
-    // classifications, which the reason text alone cannot distinguish.
+    // Both disabled CLASSIFICATIONS are state-relevant: `availableActions` is
+    // memoised on `version` and is what `useAgentCommandRouter` reads, so a
+    // stale flag would classify a real block as a benign no-op — telling the
+    // agent "nothing happened, do not retry" about a write that genuinely did
+    // not apply — or lose the `unconfirmed` classification and report a busy
+    // control as a failed change. Both are reachable whenever a consumer reuses
+    // ONE reason string across classifications, which the text alone cannot
+    // distinguish.
     if (
       !existing ||
       existing.description !== action.description ||
       existing.disabledReason !== action.disabledReason ||
-      existing.disabledIsNoop !== action.disabledIsNoop
+      existing.disabledIsNoop !== action.disabledIsNoop ||
+      existing.disabledOutcome !== action.disabledOutcome
     ) {
       setVersion((v) => v + 1);
     }
@@ -427,6 +430,24 @@ export function AgentActionProvider({
         throw new Error(postAction.disabledReason);
       }
 
+      // Distinguish "the control was never there" from "the control was there
+      // the whole time, and someone else was using it". Both end the poll with
+      // no element, but they license opposite claims: an ABSENT target provably
+      // received no click, whereas a target that stayed DISABLED for the full
+      // window is usually disabled *because a previous run of this same action
+      // is still working* — so we cannot say whether that earlier work applied.
+      // Reporting the second as "not found" is what let a push that was busy
+      // committing 20 live promotion changes be announced to the client as a
+      // failure that changed nothing.
+      //
+      // `matchCount` (not `seenDisabled` alone) is the discriminator: a target
+      // seen disabled and then REMOVED is a genuine unmount, and stays one.
+      let terminalMatchCount = 0;
+      for (const entry of targetsRef.current.values()) {
+        if (entry.name === name) terminalMatchCount++;
+      }
+      if (seenDisabled && terminalMatchCount > 0) return miss('disabled');
+
       return miss(componentMounted ? 'unmounted' : 'timeout');
     },
     [],
@@ -477,10 +498,17 @@ export function AgentActionProvider({
         // further down deliberately do NOT set this — once steps have started,
         // "it became disabled mid-run" is an ambiguous outcome, and reporting it
         // as a benign no-op could hide a half-applied change.
+        //
+        // `disabledOutcome: 'unconfirmed'` is the third classification: the
+        // action is disabled precisely because an earlier run of it is still
+        // working, so this dispatch changed nothing AND cannot speak for what
+        // that earlier run is doing. It stays a non-success (error is set) but
+        // callers must not turn it into "the change did not apply".
         return {
           actionName,
           error: action.disabledReason,
           noop: action.disabledIsNoop || undefined,
+          outcomeKind: action.disabledOutcome,
           trace: [],
           durationMs: performance.now() - start,
         };
@@ -576,7 +604,22 @@ export function AgentActionProvider({
         if (result.error && !controller.signal.aborted) {
           const currentAction = actionsRef.current.get(actionName);
           if (currentAction?.disabledReason) {
-            result = { ...result, error: currentAction.disabledReason };
+            result = {
+              ...result,
+              error: currentAction.disabledReason,
+              // Adopt `disabledOutcome` with the reason it belongs to. The two
+              // classifications are deliberately NOT symmetric here:
+              // `disabledIsNoop` is withheld mid-run (see the comment further
+              // down) because "nothing happened" could hide a half-applied
+              // change, but `unconfirmed` says the OPPOSITE — the outcome is
+              // ambiguous — which is exactly what a mid-run disable is. Dropping
+              // it here left the reason text without its classification, so the
+              // backend routed a "a push is ALREADY RUNNING … it has NOT failed"
+              // message into the FAILED bucket and announced "those changes did
+              // NOT apply". One flip of the flag mid-execution and the fix was
+              // undone by the very state it exists for.
+              outcomeKind: currentAction.disabledOutcome ?? result.outcomeKind,
+            };
           }
         }
 
@@ -619,6 +662,11 @@ export function AgentActionProvider({
                 // already run, a mid-run disable is ambiguous — it could hide a
                 // half-applied change — so it stays a hard failure.
                 noop: ranStaticSteps ? undefined : upgraded.disabledIsNoop || undefined,
+                // `unconfirmed` is carried in BOTH cases, unlike `noop` above.
+                // It is not a reassurance that can hide a half-applied change —
+                // it is the statement that the outcome is unknown, which is
+                // strictly more true after steps have run than before.
+                outcomeKind: upgraded.disabledOutcome ?? result.outcomeKind,
                 trace: result.trace,
                 durationMs: performance.now() - start,
               };
@@ -719,6 +767,7 @@ export function AgentActionProvider({
         description: a.description,
         disabledReason: a.disabledReason,
         disabledIsNoop: a.disabledIsNoop,
+        disabledOutcome: a.disabledOutcome,
         hasParameters: !!a.parameters,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps

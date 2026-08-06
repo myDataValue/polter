@@ -77,6 +77,27 @@ export interface ActionDefinition<TSchema extends z.ZodType = z.ZodType<Record<s
    */
   readonly disabledIsNoop?: boolean;
   /**
+   * Classifies `disabledReason` as an outcome the caller genuinely CANNOT
+   * observe, rather than a block it can assert did not happen.
+   *
+   * The third shape alongside `disabledIsNoop`, for the case where the action
+   * is disabled precisely *because a previous run of it is still working*:
+   *
+   * - absent (default) — the pre-execution short-circuit reports a plain
+   *   disabled failure, exactly as before. Nothing about existing actions
+   *   changes.
+   * - `'unconfirmed'` — the dispatch touched nothing, but earlier work it
+   *   cannot see may be applying changes right now. The result carries
+   *   `outcomeKind: 'unconfirmed'` so a caller reports "outcome unknown"
+   *   instead of asserting the change did not apply.
+   *
+   * Mutually exclusive with `disabledIsNoop` in practice: "nothing to do" and
+   * "something may be happening that I can't see" are opposite claims. Set at
+   * most one. Structural by design — callers must never infer this by matching
+   * on the reason text.
+   */
+  readonly disabledOutcome?: 'unconfirmed';
+  /**
    * Awaited after all steps complete. Holds the action open until async work
    * triggered by a step click finishes.
    *
@@ -163,7 +184,13 @@ export interface AgentTargetEntry extends TargetDefinition {
 export interface RegisteredAction<TSchema extends z.ZodType = z.ZodType<Record<string, unknown>>>
   extends Pick<
     ActionDefinition<TSchema>,
-    'name' | 'description' | 'parameters' | 'navigateTo' | 'disabledReason' | 'disabledIsNoop'
+    | 'name'
+    | 'description'
+    | 'parameters'
+    | 'navigateTo'
+    | 'disabledReason'
+    | 'disabledIsNoop'
+    | 'disabledOutcome'
   > {
   /** Returns the current steps with fresh closures (via useEffectEvent). */
   readonly resolveSteps: () => StepDefinition<z.infer<TSchema>>[];
@@ -251,8 +278,23 @@ export interface ExecutionResult {
    * give — the steps' preconditions were already satisfied, or their controls
    * were not on screen — so a caller must treat it as "no matching targets;
    * nothing was executed" and re-check state, never as a completed action.
+   *
+   * `"unconfirmed"` is the third shape, and it is about what the executor could
+   * not OBSERVE rather than what it did. This run clicked nothing, but a
+   * *previous* run of the same action may still be working — so neither "it
+   * applied" nor "it did not apply" is a statement the executor is entitled to
+   * make. `error` is still set (this is not a success), but a caller must
+   * report the outcome as unknown and re-check state instead of declaring a
+   * failure.
+   *
+   * Emitted by exactly two producers, deliberately: a target that stayed
+   * DISABLED for the whole resolve window while remaining registered (someone
+   * else is using it), and the pre-execution short-circuit for an action that
+   * declares `disabledOutcome: 'unconfirmed'`. A target that is genuinely
+   * ABSENT never gets this — that stays the hard "not found" failure, because
+   * an unmounted control provably received no click.
    */
-  readonly outcomeKind?: 'noop';
+  readonly outcomeKind?: 'noop' | 'unconfirmed';
   readonly trace: readonly StepTrace[];
   readonly durationMs: number;
   /** Value the action's `waitFor` promise resolved to, if any. Lets an action
@@ -267,6 +309,8 @@ export interface AvailableAction {
   readonly disabledReason?: string;
   /** `disabledReason` is a benign nothing-to-do state — see `ActionDefinition.disabledIsNoop`. */
   readonly disabledIsNoop?: boolean;
+  /** `disabledReason` means the outcome is unobservable — see `ActionDefinition.disabledOutcome`. */
+  readonly disabledOutcome?: 'unconfirmed';
   readonly hasParameters: boolean;
 }
 

@@ -640,9 +640,30 @@ export async function executeAction(
         // pending) returned the previous run's waitFor outcome as if it were
         // fresh (PRO-475).
         fx.cleanup();
-        const reason = targetName
-          ? `Target "${targetName}" for action "${action.name}" not found for step "${step.label}"`
-          : `target not found for step "${step.label}"`;
+        // A target that stayed DISABLED for the whole resolve window is a
+        // different fact from one that was never there, and only the second
+        // licenses "nothing happened". A disabled control is typically busy
+        // running work someone else started, so this run clicked nothing AND
+        // cannot report on that work — say exactly that, and let the caller
+        // classify it via `outcomeKind: 'unconfirmed'` below rather than as a
+        // failed change (PRO-475 still owns the genuinely-absent case).
+        const stayedDisabled = resolveDiag?.reason === 'disabled';
+        // Deliberately says what was OBSERVED and nothing more. Two earlier
+        // drafts overstepped: "nothing was clicked by this command" is false
+        // when an earlier step of a multi-step run already clicked, and naming
+        // a previous run as the cause guesses — a control can also be disabled
+        // by validation (an Apply button behind an invalid field). Both would
+        // be the same class of error as the bug being fixed: asserting more
+        // than the executor can see.
+        const reason = stayedDisabled
+          ? `Target "${targetName}" for action "${action.name}" was present but stayed disabled ` +
+            `for ${Math.round(resolveDiag?.elapsedMs ?? 0)}ms at step "${step.label}", so this ` +
+            `step never ran. The control may be busy with earlier work of the same kind, or ` +
+            `blocked for another reason — either way the outcome is UNKNOWN from here. Re-check ` +
+            `the current state instead of reporting this as applied or as failed.`
+          : targetName
+            ? `Target "${targetName}" for action "${action.name}" not found for step "${step.label}"`
+            : `target not found for step "${step.label}"`;
         log('step:fail', {
           index: i,
           label: step.label,
@@ -670,6 +691,10 @@ export async function executeAction(
         return {
           actionName: action.name,
           error: reason,
+          // Only the stayed-disabled case is unobservable. An absent target
+          // provably received no click, so it keeps the bare hard failure and
+          // no outcomeKind — weakening that would undo PRO-475.
+          outcomeKind: stayedDisabled ? 'unconfirmed' : undefined,
           trace: stepTraces,
           durationMs: performance.now() - executionStart,
         };

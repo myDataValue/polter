@@ -449,6 +449,49 @@ already satisfied, or the controls were not on screen — so a caller should tre
 it as "no matching targets" and re-check state rather than reassure. An action
 that declares NO steps is neither: it never had targets to skip.
 
+### When the outcome is unknowable: `outcomeKind: "unconfirmed"`
+
+Both cases above are things polter OBSERVED. There is a third case, and it is
+about what it could not observe.
+
+A target that is **present but disabled** is usually disabled because a previous
+run of the same action is still working — a push mid-flight, a form mid-submit.
+If it never enables inside the resolve window, this run clicked nothing, but it
+also cannot speak for the work already underway. Reporting that as "not found"
+is a lie by omission: it reads as "nothing happened", when something may be
+happening right now.
+
+So the executor separates the two misses:
+
+| Resolve outcome                 | Result                                                      |
+| ------------------------------- | ----------------------------------------------------------- |
+| Target ABSENT                   | Hard failure, no `outcomeKind` — it provably took no click. |
+| Target present, stayed DISABLED | Hard failure **plus** `outcomeKind: "unconfirmed"`.         |
+
+```ts
+const result = await execute("push_changes");
+if (result.outcomeKind === "unconfirmed") {
+  // This dispatch changed nothing, but earlier work may be applying right now.
+  // Report the outcome as UNKNOWN — never as failed, never as applied.
+}
+```
+
+An action can also declare the same classification for its own disabled state,
+for the case where it knows it is busy:
+
+```tsx
+useAgentAction({
+  ...pushChanges,
+  disabledReason: isPushing ? "A push is already running." : undefined,
+  disabledOutcome: isPushing ? "unconfirmed" : undefined,
+});
+```
+
+`disabledIsNoop` and `disabledOutcome` are opposite claims — "there was nothing
+to do" versus "something may be happening I cannot see" — so set at most one.
+Keep `unconfirmed` rare: an agent told the outcome is unknown will hedge, and an
+action that hedges about ordinary failures is worse than one that fails cleanly.
+
 ## Use a static `target` for fixed names
 
 When a step always points at the same element regardless of params, pass a
