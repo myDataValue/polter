@@ -736,6 +736,79 @@ describe('waitFor', () => {
     expect(result.outcome).toEqual({ applied: true, confirmationShown: false, propertyCount: 1 });
   });
 
+  it('reports a REJECTED waitFor as an error and carries no outcome', async () => {
+    // The half of the completion contract every "fail the action when the run
+    // fails" wiring leans on: an action whose flow rejects its doneRef must
+    // reach the agent as a FAILED envelope, never as a bare success with no
+    // outcome. Nothing in the repo pinned this before.
+    const action = defineAction({ name: 'wait_reject', description: 'Wait reject' });
+    let reject: (reason: unknown) => void;
+    const promise = new Promise<unknown>((_res, rej) => {
+      reject = rej;
+    });
+    // Detached catch: mirrors createSettlableDoneRef, so a rejection with no
+    // agent attached is not an unhandled rejection. It must NOT consume the
+    // rejection the executor observes.
+    promise.catch(() => undefined);
+    const promiseRef = { current: promise };
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={action} waitFor={promiseRef}>
+          {/** biome-ignore lint/a11y/useButtonType: grandfathered at Biome adoption — fix and remove over time */}
+          <button>Go</button>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+    const exec = act(() => ctx!.execute('wait_reject').then((r) => r));
+    // biome-ignore lint/style/noNonNullAssertion: grandfathered at Biome adoption — fix and remove over time
+    reject!(new Error('Stream closed'));
+    const result = await exec;
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('Stream closed');
+    expect(result.outcome).toBeUndefined();
+  });
+
+  it('reports an ABORT during the waitFor as a cancelled run with no outcome', async () => {
+    // The boundary the Airbnb outcome contract created: that action's waitFor now
+    // holds a REAL backend run (a recommendation stream), so for the first time
+    // the wait can outlive the user's patience or the backend's dispatched
+    // UI-command budget. An abort while it is pending must surface as a failed,
+    // cancelled envelope — never as a bare success carrying a stale/absent
+    // outcome, which is the exact fabrication shape the contract exists to stop.
+    const action = defineAction({ name: 'wait_abort', description: 'Wait abort' });
+    // Never settles: the run is still in flight when the abort lands.
+    const promiseRef = { current: new Promise<unknown>(() => undefined) };
+    let ctx: ReturnType<typeof useAgentActions> | null = null;
+    render(
+      <AgentActionProvider mode="instant">
+        <AgentAction action={action} waitFor={promiseRef}>
+          {/** biome-ignore lint/a11y/useButtonType: matches this suite's existing harness buttons */}
+          <button>Go</button>
+        </AgentAction>
+        <TestConsumer onContext={(c) => (ctx = c)} />
+      </AgentActionProvider>,
+    );
+
+    let exec!: Promise<ExecutionResult>;
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: provider mounted above
+      exec = ctx!.execute('wait_abort');
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      // biome-ignore lint/style/noNonNullAssertion: provider mounted above
+      ctx!.abortExecution();
+    });
+
+    const result = await exec;
+    expect(result.error).toBe('Execution cancelled');
+    expect(result.outcome).toBeUndefined();
+  });
+
   it('cancels an in-flight waitFor when a new execution starts', async () => {
     const action = defineAction({ name: 'wait_ref', description: 'Wait ref' });
     let resolve: () => void;
